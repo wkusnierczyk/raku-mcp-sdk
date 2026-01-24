@@ -82,6 +82,35 @@ jobs:
           raku -I. t/01-types.rakutest
           raku -I. t/02-jsonrpc.rakutest
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Install dependencies
+        run: zef install --deps-only .
+
+      - name: Install RaCoCo
+        run: zef install App::RaCoCo
+
+      - name: Generate coverage report
+        run: make coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report
+
   # ----------------------------------------------------------------------------
   # Build Job - Verify the module builds correctly
   # ----------------------------------------------------------------------------

@@ -348,6 +348,22 @@ Cleaning
 - `FILE=<path>` - Specify file for `test-file` target
 - `EXAMPLE=<name>` - Specify example for `run-example` target
 
+### Coverage Prerequisites
+
+The coverage report uses RaCoCo. If `racoco` is not on your PATH, add the
+Raku site bin directory:
+
+```bash
+export PATH="$(brew --prefix rakudo-star)/share/perl6/site/bin:$PATH"
+```
+
+Then run:
+
+```bash
+make coverage
+# report: coverage-report/index.html
+```
+
 ## Architecture
 
 ```
