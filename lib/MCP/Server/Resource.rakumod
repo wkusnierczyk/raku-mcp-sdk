@@ -150,9 +150,8 @@ sub resource(--> ResourceBuilder) is export {
 
 #| Create a resource from a file
 sub file-resource(IO::Path $path, Str :$uri, Str :$name --> RegisteredResource) is export {
-    resource()
-        .from-file($path)
-        .uri($_ with $uri)
-        .name($_ with $name)
-        .build
+    my $builder = resource().from-file($path);
+    $builder.uri($_) with $uri;
+    $builder.name($_) with $name;
+    $builder.build
 }

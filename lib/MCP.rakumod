@@ -3,15 +3,15 @@ use v6.d;
 unit module MCP;
 
 # Re-export all MCP modules
-use MCP::Types;
-use MCP::JSONRPC;
+need MCP::Types;
+need MCP::JSONRPC;
 use MCP::Transport::Base;
-use MCP::Transport::Stdio;
-use MCP::Server;
-use MCP::Server::Tool;
-use MCP::Server::Resource;
-use MCP::Server::Prompt;
-use MCP::Client;
+need MCP::Transport::Stdio;
+need MCP::Server;
+need MCP::Server::Tool;
+need MCP::Server::Resource;
+need MCP::Server::Prompt;
+need MCP::Client;
 
 # Re-export commonly used symbols
 our constant PROTOCOL_VERSION is export = MCP::Types::LATEST_PROTOCOL_VERSION;
@@ -31,10 +31,6 @@ sub StdioTransport(|c) is export { MCP::Transport::Stdio::StdioTransport.new(|c)
 # Re-export client
 sub Client(|c) is export { MCP::Client::Client.new(|c) }
 
-# Re-export builders
-sub tool is export { MCP::Server::Tool::tool() }
-sub resource is export { MCP::Server::Resource::resource() }
-sub prompt is export { MCP::Server::Prompt::prompt() }
 
 # Re-export log levels
 constant Debug is export = MCP::Types::Debug;

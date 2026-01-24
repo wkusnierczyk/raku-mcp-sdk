@@ -221,7 +221,7 @@ build: validate build-precompile
 build-precompile: $(RAKU_FILES)
 	$(call log-info,Precompiling modules...)
 	$(Q)$(RAKU) -I$(SOURCE_DIR) -e 'use $(PROJECT_NAME)' 2>/dev/null || \
-		$(RAKU) -c $(SOURCE_DIR)/$(PROJECT_NAME)$(RAKU_EXT)
+		$(RAKU) -I$(SOURCE_DIR) -c $(SOURCE_DIR)/$(PROJECT_NAME)$(RAKU_EXT)
 	$(call log-success,Precompilation complete)
 
 .PHONY: test

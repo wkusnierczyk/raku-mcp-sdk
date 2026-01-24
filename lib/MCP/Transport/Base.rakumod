@@ -20,7 +20,7 @@ role Transport is export {
 }
 
 #| Exception for transport errors
-class X::Transport is Exception is export {
+class X::Transport is Exception {
     has Str $.message is required;
     has $.cause;
     
@@ -28,11 +28,11 @@ class X::Transport is Exception is export {
 }
 
 #| Exception for connection errors
-class X::Transport::Connection is X::Transport is export {
+class X::Transport::Connection is X::Transport {
     method message(--> Str) { "Connection error: {callsame}" }
 }
 
 #| Exception for send errors
-class X::Transport::Send is X::Transport is export {
+class X::Transport::Send is X::Transport {
     method message(--> Str) { "Send error: {callsame}" }
 }

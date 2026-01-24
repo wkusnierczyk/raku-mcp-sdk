@@ -3,9 +3,21 @@ use v6.d;
 unit module MCP::Client;
 
 use MCP::Types;
-use MCP::JSONRPC;
+need MCP::JSONRPC;
 use MCP::Transport::Base;
 use JSON::Fast;
+
+#| Exception for client errors
+class X::MCP::Client::Error is Exception {
+    has MCP::JSONRPC::Error $.error is required;
+    method message(--> Str) { $!error.message }
+}
+
+#| Exception for timeout
+class X::MCP::Client::Timeout is Exception {
+    has Str $.method is required;
+    method message(--> Str) { "Request timed out: $!method" }
+}
 
 #| MCP Client implementation
 class Client is export {
@@ -264,16 +276,4 @@ class Client is export {
             }
         }
     }
-}
-
-#| Exception for client errors
-class X::MCP::Client::Error is Exception is export {
-    has MCP::JSONRPC::Error $.error is required;
-    method message(--> Str) { $!error.message }
-}
-
-#| Exception for timeout
-class X::MCP::Client::Timeout is Exception is export {
-    has Str $.method is required;
-    method message(--> Str) { "Request timed out: $!method" }
 }

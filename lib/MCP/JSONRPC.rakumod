@@ -145,7 +145,7 @@ sub parse-message(Str $json --> Message) is export {
         } else {
             return Notification.from-hash(%h);
         }
-    } elsif %h<result>:exists || %h<error>:exists {
+    } elsif (%h<result>:exists) || (%h<error>:exists) {
         return Response.from-hash(%h);
     } else {
         die "Invalid JSON-RPC message structure";

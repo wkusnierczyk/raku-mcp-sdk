@@ -3,12 +3,18 @@ use v6.d;
 unit module MCP::Server;
 
 use MCP::Types;
-use MCP::JSONRPC;
+need MCP::JSONRPC;
 use MCP::Transport::Base;
 use MCP::Server::Tool;
 use MCP::Server::Resource;
 use MCP::Server::Prompt;
 use JSON::Fast;
+
+#| Exception for MCP JSON-RPC errors
+class X::MCP::JSONRPC is Exception is export {
+    has MCP::JSONRPC::Error $.error is required;
+    method message(--> Str) { $!error.message }
+}
 
 #| MCP Server implementation
 class Server is export {
@@ -143,7 +149,7 @@ class Server is export {
         my $error;
         
         try {
-            $result = self!dispatch-request($req);
+            $result = self.dispatch-request($req);
             
             CATCH {
                 when X::MCP::JSONRPC {
@@ -167,39 +173,39 @@ class Server is export {
     }
     
     #| Dispatch request to appropriate handler using multi-dispatch
-    multi method !dispatch-request($req where *.method eq 'initialize') {
+    multi method dispatch-request($req where *.method eq 'initialize') {
         self!handle-initialize($req.params);
     }
     
-    multi method !dispatch-request($req where *.method eq 'ping') {
+    multi method dispatch-request($req where *.method eq 'ping') {
         {}  # Empty response for ping
     }
     
-    multi method !dispatch-request($req where *.method eq 'tools/list') {
+    multi method dispatch-request($req where *.method eq 'tools/list') {
         self!list-tools($req.params);
     }
     
-    multi method !dispatch-request($req where *.method eq 'tools/call') {
+    multi method dispatch-request($req where *.method eq 'tools/call') {
         self!call-tool($req.params);
     }
     
-    multi method !dispatch-request($req where *.method eq 'resources/list') {
+    multi method dispatch-request($req where *.method eq 'resources/list') {
         self!list-resources($req.params);
     }
     
-    multi method !dispatch-request($req where *.method eq 'resources/read') {
+    multi method dispatch-request($req where *.method eq 'resources/read') {
         self!read-resource($req.params);
     }
     
-    multi method !dispatch-request($req where *.method eq 'prompts/list') {
+    multi method dispatch-request($req where *.method eq 'prompts/list') {
         self!list-prompts($req.params);
     }
     
-    multi method !dispatch-request($req where *.method eq 'prompts/get') {
+    multi method dispatch-request($req where *.method eq 'prompts/get') {
         self!get-prompt($req.params);
     }
     
-    multi method !dispatch-request($req) {
+    multi method dispatch-request($req) {
         die X::MCP::JSONRPC.new(
             error => MCP::JSONRPC::Error.from-code(
                 MCP::JSONRPC::MethodNotFound,
@@ -374,10 +380,4 @@ class Server is export {
             ($message ?? (message => $message) !! Empty),
         });
     }
-}
-
-#| Exception for MCP JSON-RPC errors
-class X::MCP::JSONRPC is Exception is export {
-    has MCP::JSONRPC::Error $.error is required;
-    method message(--> Str) { $!error.message }
 }
