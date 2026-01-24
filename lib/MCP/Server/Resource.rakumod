@@ -46,9 +46,6 @@ class RegisteredResource is export {
             when MCP::Types::ResourceContents {
                 return [$result];
             }
-            when Positional {
-                return $result.Array;
-            }
             when Str {
                 return [MCP::Types::ResourceContents.new(
                     uri => $!uri,
@@ -56,12 +53,15 @@ class RegisteredResource is export {
                     text => $result
                 )];
             }
-            when Blob {
+            when Blob | Buf {
                 return [MCP::Types::ResourceContents.new(
                     uri => $!uri,
                     mimeType => $!mimeType // 'application/octet-stream',
                     blob => $result
                 )];
+            }
+            when Positional {
+                return $result.Array;
             }
             default {
                 return [MCP::Types::ResourceContents.new(
@@ -103,8 +103,8 @@ class ResourceBuilder is export {
         self
     }
 
-    method annotations(@audience, Num :$priority --> ResourceBuilder) {
-        $!annotations = MCP::Types::Annotations.new(:@audience, :$priority);
+    method annotations(@audience, Real :$priority --> ResourceBuilder) {
+        $!annotations = MCP::Types::Annotations.new(:@audience, priority => $priority.Num);
         self
     }
 

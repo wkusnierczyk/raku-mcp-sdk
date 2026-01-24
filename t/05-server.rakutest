@@ -46,9 +46,10 @@ subtest 'Server dispatch and handlers', {
         name => 'About',
         reader => { 'about' }
     );
+    my %arg = name => 'name', required => True;
     $server.add-prompt(
         name => 'greet',
-        arguments => [ { name => 'name', required => True } ],
+        arguments => [ %arg.item ],
         generator => -> :%params { "Hi %params<name>" }
     );
 

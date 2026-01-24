@@ -35,16 +35,36 @@ class RegisteredPrompt is export {
     #| Generate the prompt messages
     method get(%arguments --> Array) {
         my $result;
-        my @params = &!generator.signature.params;
-        my $expects-params = @params.grep({ .named && .name eq 'params' }).elems > 0;
-        my $accepts-named = @params.grep({ .named && (.slurpy || .name ne 'params') }).elems > 0;
-        if @params.elems == 0 {
-            $result = &!generator();
-        } elsif $expects-params {
+        my $called = False;
+        try {
             $result = &!generator(:params(%arguments));
-        } elsif $accepts-named {
-            $result = &!generator(|%arguments);
-        } else {
+            $called = True;
+            CATCH {
+                when X::AdHoc | X::Multi::NoMatch { }
+                default { .rethrow }
+            }
+        }
+        if !$called {
+            try {
+                $result = &!generator(|%arguments);
+                $called = True;
+                CATCH {
+                    when X::AdHoc | X::Multi::NoMatch { }
+                    default { .rethrow }
+                }
+            }
+        }
+        if !$called {
+            try {
+                $result = &!generator(%arguments);
+                $called = True;
+                CATCH {
+                    when X::AdHoc | X::Multi::NoMatch { }
+                    default { .rethrow }
+                }
+            }
+        }
+        if !$called {
             $result = &!generator();
         }
 
@@ -90,22 +110,20 @@ class PromptBuilder is export {
     }
 
     #| Add an argument
-    method argument(Str $name, Str :$description, Bool :$required --> PromptBuilder) {
-        @!arguments.push(MCP::Types::PromptArgument.new(
-            :$name,
-            :$description,
-            :$required,
-        ));
+    method argument(Str $name, :$description?, Bool :$required --> PromptBuilder) {
+        my %args = :$name, :$required;
+        %args<description> = $description if $description.defined;
+        @!arguments.push(MCP::Types::PromptArgument.new(|%args));
         self
     }
 
     #| Add a required argument
-    method required-argument(Str $name, Str :$description --> PromptBuilder) {
+    method required-argument(Str $name, :$description --> PromptBuilder) {
         self.argument($name, :$description, :required)
     }
 
     #| Add an optional argument
-    method optional-argument(Str $name, Str :$description --> PromptBuilder) {
+    method optional-argument(Str $name, :$description --> PromptBuilder) {
         self.argument($name, :$description, :!required)
     }
 

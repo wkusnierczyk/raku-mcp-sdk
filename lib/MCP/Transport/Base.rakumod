@@ -33,7 +33,7 @@ role Transport is export {
 }
 
 #| Exception for transport errors
-class X::Transport is Exception {
+class MCP::Transport::Base::X::Transport is Exception {
     has Str $.message is required;
     has $.cause;
 
@@ -41,11 +41,11 @@ class X::Transport is Exception {
 }
 
 #| Exception for connection errors
-class X::Transport::Connection is X::Transport {
+class MCP::Transport::Base::X::Transport::Connection is MCP::Transport::Base::X::Transport {
     method message(--> Str) { "Connection error: {callsame}" }
 }
 
 #| Exception for send errors
-class X::Transport::Send is X::Transport {
+class MCP::Transport::Base::X::Transport::Send is MCP::Transport::Base::X::Transport {
     method message(--> Str) { "Send error: {callsame}" }
 }

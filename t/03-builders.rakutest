@@ -49,25 +49,25 @@ subtest 'Tool builder and normalization', {
 
     my $direct = RegisteredTool.new(
         name => 'direct',
-        handler => { MCP::Types::CallToolResult.new(content => [MCP::Types::TextContent.new(text => 'hi')]) }
+        handler => -> :%params { MCP::Types::CallToolResult.new(content => [MCP::Types::TextContent.new(text => 'hi')]) }
     );
     ok $direct.call({}).isError ~~ Bool, 'accepts CallToolResult directly';
 
     my $text-tool = RegisteredTool.new(
         name => 'text',
-        handler => { MCP::Types::TextContent.new(text => 'hey') }
+        handler => -> :%params { MCP::Types::TextContent.new(text => 'hey') }
     );
     is $text-tool.call({}).content[0].text, 'hey', 'TextContent normalized';
 
     my $array-tool = RegisteredTool.new(
         name => 'array',
-        handler => { [MCP::Types::TextContent.new(text => 'a'), MCP::Types::TextContent.new(text => 'b')] }
+        handler => -> :%params { [MCP::Types::TextContent.new(text => 'a'), MCP::Types::TextContent.new(text => 'b')] }
     );
     is $array-tool.call({}).content.elems, 2, 'positional normalized to array';
 
     my $fallback-tool = RegisteredTool.new(
         name => 'fallback',
-        handler => { 123 }
+        handler => -> :%params { 123 }
     );
     is $fallback-tool.call({}).content[0].text, '123', 'fallback uses Str';
 

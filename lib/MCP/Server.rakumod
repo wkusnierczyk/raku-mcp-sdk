@@ -122,11 +122,22 @@ class Server is export {
             .description($description // '')
             .generator(&generator);
 
-        for @arguments -> $arg {
-            $builder.argument($arg<name>,
-                description => $arg<description>,
-                required => $arg<required> // False
-            );
+        my @args = @arguments;
+        if @args && @args.all ~~ Pair {
+            @args = [ Hash.new(@args) ];
+        }
+
+        for @args -> $arg {
+            my %a = $arg ~~ Pair ?? { $arg.key => $arg.value } !! $arg;
+            my $arg-name = %a<name>;
+            die "Prompt argument name is required" unless $arg-name.defined;
+            my $req = %a<required> // False;
+            my $desc = %a<description>;
+            if $desc.defined {
+                $builder.argument($arg-name, description => $desc, required => $req);
+            } else {
+                $builder.argument($arg-name, required => $req);
+            }
         }
 
         self.add-prompt($builder.build);
@@ -283,7 +294,7 @@ class Server is export {
     }
 
     #| List tools
-    method !list-tools(%params?) {
+    method !list-tools($params?) {
         {
             tools => %!tools.values.map(*.to-tool.Hash).Array
         }
@@ -311,7 +322,7 @@ class Server is export {
     }
 
     #| List resources
-    method !list-resources(%params?) {
+    method !list-resources($params?) {
         {
             resources => %!resources.values.map(*.to-resource.Hash).Array
         }
@@ -339,7 +350,7 @@ class Server is export {
     }
 
     #| List prompts
-    method !list-prompts(%params?) {
+    method !list-prompts($params?) {
         {
             prompts => %!prompts.values.map(*.to-prompt.Hash).Array
         }

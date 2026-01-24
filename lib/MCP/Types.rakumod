@@ -138,12 +138,11 @@ class Tool is export {
     }
 
     method from-hash(%h --> Tool) {
-        self.new(
-            name => %h<name>,
-            description => %h<description>,
-            inputSchema => %h<inputSchema>,
-            annotations => %h<annotations> ?? ToolAnnotations.new(|%h<annotations>) !! ToolAnnotations
-        )
+        my %args = name => %h<name>;
+        %args<description> = %h<description> if %h<description>.defined;
+        %args<inputSchema> = %h<inputSchema> if %h<inputSchema>.defined;
+        %args<annotations> = %h<annotations> ?? ToolAnnotations.new(|%h<annotations>) !! ToolAnnotations;
+        self.new(|%args)
     }
 }
 
@@ -177,12 +176,10 @@ class Resource is export {
     }
 
     method from-hash(%h --> Resource) {
-        self.new(
-            uri => %h<uri>,
-            name => %h<name>,
-            description => %h<description>,
-            mimeType => %h<mimeType>,
-        )
+        my %args = uri => %h<uri>, name => %h<name>;
+        %args<description> = %h<description> if %h<description>.defined;
+        %args<mimeType> = %h<mimeType> if %h<mimeType>.defined;
+        self.new(|%args)
     }
 }
 
@@ -230,11 +227,10 @@ class Prompt is export {
     }
 
     method from-hash(%h --> Prompt) {
-        self.new(
-            name => %h<name>,
-            description => %h<description>,
-            arguments => (%h<arguments> // []).map({ PromptArgument.new(|$_) }).Array
-        )
+        my %args = name => %h<name>;
+        %args<description> = %h<description> if %h<description>.defined;
+        %args<arguments> = (%h<arguments> // []).map({ PromptArgument.new(|$_) }).Array;
+        self.new(|%args)
     }
 }
 

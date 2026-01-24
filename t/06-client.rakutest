@@ -20,7 +20,14 @@ Covers initialization, request/response handling, and content parsing.
 =end pod
 
 sub respond-to-last(TestTransport::TestTransport $transport, $payload) {
-    my $req = $transport.sent[*-1];
+    my $req;
+    for $transport.sent.reverse -> $msg {
+        if $msg ~~ MCP::JSONRPC::Request {
+            $req = $msg;
+            last;
+        }
+    }
+    die "No request to respond to" unless $req.defined;
     $transport.emit(MCP::JSONRPC::Response.success($req.id, $payload));
 }
 
@@ -32,6 +39,11 @@ subtest 'Client connect and requests', {
     );
 
     my $connect = $client.connect;
+    # Wait for initialize request
+    for ^10 {
+        last if $transport.sent.elems > 0;
+        sleep 0.1;
+    }
     my $init-req = $transport.sent[0];
     isa-ok $init-req, MCP::JSONRPC::Request, 'initialize request sent';
 
@@ -47,45 +59,51 @@ subtest 'Client connect and requests', {
     ok $client.notifications.defined, 'notifications supply available';
 
     my $tools-p = $client.list-tools;
+    my %tool = name => 't', description => 'd', inputSchema => { type => 'object' };
     respond-to-last($transport, {
-        tools => [ { name => 't', description => 'd', inputSchema => { type => 'object' } } ]
+        tools => [ %tool.item ]
     });
     my @tools = await $tools-p;
     is @tools[0].name, 't', 'list-tools returns Tool';
 
     my $call-p = $client.call-tool('add', arguments => { a => 1, b => 2 });
+    my %content = type => 'text', text => 'ok';
     respond-to-last($transport, {
-        content => [ { type => 'text', text => 'ok' } ],
+        content => [ %content.item ],
         isError => False
     });
     my $call = await $call-p;
     is $call.content[0].text, 'ok', 'call-tool parses content';
 
     my $res-p = $client.list-resources;
+    my %resource = uri => 'info://x', name => 'X', mimeType => 'text/plain';
     respond-to-last($transport, {
-        resources => [ { uri => 'info://x', name => 'X', mimeType => 'text/plain' } ]
+        resources => [ %resource.item ]
     });
     my @resources = await $res-p;
     is @resources[0].uri, 'info://x', 'list-resources returns Resource';
 
     my $read-p = $client.read-resource('info://x');
+    my %contents = uri => 'info://x', mimeType => 'text/plain', text => 'hello';
     respond-to-last($transport, {
-        contents => [ { uri => 'info://x', mimeType => 'text/plain', text => 'hello' } ]
+        contents => [ %contents.item ]
     });
     my @contents = await $read-p;
     is @contents[0].text, 'hello', 'read-resource returns contents';
 
     my $prompts-p = $client.list-prompts;
+    my %prompt = name => 'p', description => 'desc', arguments => [];
     respond-to-last($transport, {
-        prompts => [ { name => 'p', description => 'desc', arguments => [] } ]
+        prompts => [ %prompt.item ]
     });
     my @prompts = await $prompts-p;
     is @prompts[0].name, 'p', 'list-prompts returns Prompt';
 
     my $prompt-p = $client.get-prompt('p', arguments => { });
+    my %msg = role => 'user', content => { type => 'text', text => 'hi' };
     respond-to-last($transport, {
         description => 'desc',
-        messages => [ { role => 'user', content => { type => 'text', text => 'hi' } } ]
+        messages => [ %msg.item ]
     });
     my $prompt = await $prompt-p;
     is $prompt<messages>[0].content.text, 'hi', 'get-prompt parses messages';

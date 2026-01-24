@@ -88,37 +88,28 @@ class StdioTransport does MCP::Transport::Base::Transport is export {
     #| Parse a message from the buffer
     #| Returns (message, remaining-buffer) or (Nil, buffer)
     method !parse-message(Str $buffer --> List) {
-        # Look for Content-Length header
-        if $buffer ~~ /^ 'Content-Length:' \s* (\d+) \r?\n (\r?\n) (.*)/ {
-            my $length = $0.Int;
-            my $header-end = $/.to;
-            my $body-start = $header-end;
+        my ($header, $body) = $buffer.split(/\r?\n\r?\n/, 2);
+        return (Nil, $buffer) unless $body.defined;
 
-            # Find the blank line separating headers from body
-            if $buffer ~~ /\r?\n\r?\n/ {
-                $body-start = $/.to;
-                my $available = $buffer.substr($body-start);
+        my $m = $header ~~ /'Content-Length:' \s* (\d+)/;
+        return (Nil, $buffer) unless $m;
+        my $length = $0.Int;
 
-                if $available.chars >= $length {
-                    my $json = $available.substr(0, $length);
-                    my $rest = $available.substr($length);
+        return (Nil, $buffer) if $body.encode('utf-8').elems < $length;
 
-                    try {
-                        my $msg = MCP::JSONRPC::parse-message($json);
-                        return ($msg, $rest);
+        my $json = $body.substr(0, $length);
+        my $rest = $body.substr($length);
 
-                        CATCH {
-                            default {
-                                # Parse error - skip this message
-                                return (Nil, $rest);
-                            }
-                        }
-                    }
+        try {
+            my $msg = parse-message($json);
+            return ($msg, $rest);
+
+            CATCH {
+                default {
+                    return (Nil, $rest);
                 }
             }
         }
-
-        return (Nil, $buffer);
     }
 
     #| Send a message using Content-Length framing
