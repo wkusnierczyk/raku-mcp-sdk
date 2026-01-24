@@ -1,12 +1,22 @@
 # Raku MCP SDK
 
-A Raku (Perl 6) implementation of the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) SDK.
-
-Build MCP servers and clients in Raku to integrate with LLM applications like Claude Desktop, IDEs, and other AI tools.
+// todo make the logo larger
+<table>
+  <tr>
+    <td>
+      <img src="graphics/raku-mcp-sdk.png" alt="logo" width="300" />
+    </td>
+    <td>
+      <p><strong>Raku MCP SDK</strong>: 
+      A Raku (Perl 6) implementation of the <a href="https://modelcontextprotocol.io/">Model Context Protocol (MCP)</a> SDK.</p>
+      <p>Build MCP servers and clients in Raku to integrate with LLM applications like Claude Desktop, IDEs, and other AI tools.</p>
+    </td>
+  </tr>
+</table>
 
 ## Status
 
-🚧 **Work in Progress** - Core functionality is being implemented.
+**Work in Progress**
 
 - [x] Core types
 - [x] JSON-RPC 2.0 layer
@@ -17,19 +27,19 @@ Build MCP servers and clients in Raku to integrate with LLM applications like Cl
 - [ ] Full test coverage
 - [x] Documentation
 
-## Table of Contents
+## Table of contents
 
-// todo use sentence case for all sections, and update toc
 - [Installation](#installation)
-- [Quick Start](#quick-start)
+- [Quick start](#quick-start)
 - [Features](#features)
-- [Protocol Support](#protocol-support)
+- [Protocol support](#protocol-support)
 - [Development](#development)
 - [Architecture](#architecture)
-- [Project Structure](#project-structure)
+- [Project structure](#project-structure)
 - [Contributing](#contributing)
 - [License](#license)
 - [References](#references)
+- [About](#about)
 
 ## Installation
 
@@ -43,9 +53,9 @@ cd raku-mcp-sdk
 zef install .
 ```
 
-## Quick Start
+## Quick start
 
-### Creating a Server
+### Creating a server
 
 ```raku
 use MCP;
@@ -91,7 +101,7 @@ $server.add-resource(
 await $server.serve;
 ```
 
-### Using the Fluent Builder API
+### Using the fluent builder API
 
 ```raku
 use MCP::Server::Tool;
@@ -109,7 +119,7 @@ my $calculator = tool()
 $server.add-tool($calculator);
 ```
 
-### Creating a Client
+### Creating a client
 
 ```raku
 use MCP;
@@ -150,7 +160,7 @@ say @contents[0].text;
 
 ### Tools
 
-Tools are functions that the LLM can call:
+Tools are functions that the LLM can call.
 
 ```raku
 $server.add-tool(
@@ -174,7 +184,7 @@ $server.add-tool(
 
 ### Resources
 
-Resources provide read-only data:
+Resources provide read-only data.
 
 ```raku
 # Static resource
@@ -192,7 +202,7 @@ $server.add-resource(file-resource('data.txt'.IO));
 
 ### Prompts
 
-Prompts are templated message workflows:
+Prompts are templated message workflows.
 
 ```raku
 use MCP::Server::Prompt;
@@ -211,9 +221,9 @@ $server.add-prompt(
 );
 ```
 
-## Protocol Support
+## Protocol support
 
-This SDK implements the MCP specification version 2025-03-26:
+This SDK implements the [MCP specification version 2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26).
 
 - ✅ JSON-RPC 2.0 messaging
 - ✅ Capability negotiation
@@ -346,11 +356,12 @@ Cleaning
 
 ### Environment Variables
 
-// todo convert to a table
-- `V=1` - Enable verbose output
-- `NO_COLOR=1` - Disable colored output
-- `FILE=<path>` - Specify file for `test-file` target
-- `EXAMPLE=<name>` - Specify example for `run-example` target
+| Variable | Description |
+|----------|-------------|
+| `V=1` | Enable verbose output |
+| `NO_COLOR=1` | Disable colored output |
+| `FILE=<path>` | Specify file for `test-file` target |
+| `EXAMPLE=<name>` | Specify example for `run-example` target |
 
 ### Coverage Prerequisites
 
@@ -377,7 +388,7 @@ Regenerate the PNG with `make architecture-diagram`.
 
 ![Architecture diagram](architecture/architecture.png)
 
-## Project Structure
+## Project structure
 
 ```
 MCP/
@@ -410,3 +421,15 @@ MIT License - see LICENSE file.
 - [Official TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 - [Official Python SDK](https://github.com/modelcontextprotocol/python-sdk)
 - [Raku Documentation](https://docs.raku.org/)
+
+## About
+
+```bash
+$ make about
+
+Raku MCP SDK: Raku Implementation of the Model Context Protocol
+├─ version:    0.1.0
+├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
+├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
+└─ licence:    MIT https://opensource.org/licenses/MIT
+```
