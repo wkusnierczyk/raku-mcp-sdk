@@ -1,0 +1,141 @@
+# ==============================================================================
+# GitHub Actions CI/CD Workflow for Raku MCP SDK
+# ==============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  # Raku version to use
+  RAKU_VERSION: '2024.01'
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Lint Job - Check code quality
+  # ----------------------------------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Validate META6.json
+        run: make lint-meta
+
+      - name: Check syntax
+        run: make lint-syntax
+
+  # ----------------------------------------------------------------------------
+  # Test Job - Run test suite
+  # ----------------------------------------------------------------------------
+  test:
+    name: Test (${{ matrix.os }} / Raku ${{ matrix.raku-version }})
+    runs-on: ${{ matrix.os }}
+    needs: lint
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        raku-version: ['2024.01', 'latest']
+        exclude:
+          # Exclude some combinations to reduce CI time
+          - os: windows-latest
+            raku-version: '2024.01'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ matrix.raku-version }}
+
+      - name: Install dependencies
+        run: zef install --deps-only .
+
+      - name: Run tests
+        run: |
+          zef install App::Prove6 || true
+          prove6 -I. -v t/
+
+      - name: Run tests (fallback)
+        if: failure()
+        run: |
+          raku -I. t/01-types.rakutest
+          raku -I. t/02-jsonrpc.rakutest
+
+  # ----------------------------------------------------------------------------
+  # Build Job - Verify the module builds correctly
+  # ----------------------------------------------------------------------------
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Install dependencies
+        run: zef install --deps-only .
+
+      - name: Build module
+        run: |
+          raku -I. -e 'use MCP; say "MCP module loaded successfully"'
+
+      - name: Test installation
+        run: |
+          zef install . --/test
+          raku -e 'use MCP; say "MCP installed and working"'
+
+  # ----------------------------------------------------------------------------
+  # Release Job - Publish to ecosystem (manual trigger only)
+  # ----------------------------------------------------------------------------
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [lint, test, build]
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Install fez
+        run: zef install fez
+
+      - name: Configure fez
+        env:
+          FEZ_TOKEN: ${{ secrets.FEZ_TOKEN }}
+        run: |
+          mkdir -p ~/.config
+          echo "$FEZ_TOKEN" > ~/.fez-config.json
+
+      - name: Upload to Zef ecosystem
+        run: fez upload
+        continue-on-error: true
