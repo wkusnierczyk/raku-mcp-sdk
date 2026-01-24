@@ -76,6 +76,7 @@ subtest 'Tool builder and normalization', {
 };
 
 subtest 'Resource builder and normalization', {
+    $*TMPDIR.mkdir unless $*TMPDIR.e;
     my $resource = resource()
         .uri('info://test')
         .name('Test')
@@ -110,7 +111,7 @@ subtest 'Resource builder and normalization', {
     );
     is $pos.read[0].text, 'one', 'positional preserved';
 
-    my $tmp = "/tmp/mcp-resource-$*PID.txt".IO;
+    my $tmp = $*TMPDIR.add("mcp-resource-$*PID.txt");
     $tmp.spurt("file");
     my $file = file-resource($tmp);
     is $file.mimeType, 'text/plain', 'file-resource guesses mime type';

@@ -25,6 +25,7 @@ Exercises stdio framing and basic transport state handling.
 =end pod
 
 subtest 'StdioTransport parse/send/close', {
+    $*TMPDIR.mkdir unless $*TMPDIR.e;
     my $json = to-json({
         jsonrpc => '2.0',
         id => 1,
@@ -33,7 +34,7 @@ subtest 'StdioTransport parse/send/close', {
     my $length = $json.encode('utf-8').elems;
     my $payload = "Content-Length: $length\r\n\r\n$json";
 
-    my $out-path = "/tmp/mcp-stdio-out-$*PID.txt".IO;
+    my $out-path = $*TMPDIR.add("mcp-stdio-out-$*PID.txt");
     my $out = $out-path.open(:w);
     my $transport = MCP::Transport::Stdio::StdioTransport.new(
         input => $*IN,
