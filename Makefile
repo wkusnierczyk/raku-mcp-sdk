@@ -59,6 +59,8 @@ MI6             := mi6
 FEZ             := fez
 RACOCO          := racoco
 RACOCO_BIN      := $(shell command -v $(RACOCO) 2>/dev/null)
+RACOCO_HOME_BIN := $(shell $(RAKU) -e 'say $$*REPO.repo-chain.grep(*.can("prefix")).first.prefix.Str ~ "/bin"' 2>/dev/null)
+RACOCO_SITE_BIN := $(shell $(RAKU) -e 'say $$*REPO.repo-chain.grep(*.can("prefix")).map(*.prefix.Str).grep({ .contains("/site") })[0] ~ "/bin"' 2>/dev/null)
 MMDC            := mmdc
 MMDC_BIN        := $(shell command -v $(MMDC) 2>/dev/null)
 
@@ -427,14 +429,20 @@ test-quick:
 # coverage: Generate coverage report (if Racoco installed)
 coverage: dependencies-dev build
 	$(call log-info,Generating coverage report...)
-	@if [ -z "$(RACOCO_BIN)" ]; then \
-		$(call log-error,RaCoCo not found on PATH); \
-		$(call log,Add it to PATH or run: PATH="$$PATH:$$($(RAKU) -e 'say $*REPO.repo-chain.grep(*.can("prefix")).map(*.prefix.Str).grep(/site/)[0] ~ "/bin"')"); \
+	@RACOCO_CMD="$(RACOCO_BIN)"; \
+	if [ -z "$$RACOCO_CMD" ]; then RACOCO_CMD="$(RACOCO)"; fi; \
+	if ! command -v "$$RACOCO_CMD" >/dev/null 2>&1; then \
+		if [ -x "$(RACOCO_HOME_BIN)/racoco" ]; then RACOCO_CMD="$(RACOCO_HOME_BIN)/racoco"; fi; \
+		if [ -x "$(RACOCO_SITE_BIN)/racoco" ]; then RACOCO_CMD="$(RACOCO_SITE_BIN)/racoco"; fi; \
+	fi; \
+	if ! command -v "$$RACOCO_CMD" >/dev/null 2>&1 && [ ! -x "$$RACOCO_CMD" ]; then \
+		printf "RaCoCo not found on PATH\\n" >&2; \
+		printf "Try: zef install App::RaCoCo\\n" >&2; \
 		exit 1; \
-	fi
-	$(Q)$(RACOCO_BIN) $(RACOCO_COVERAGE_FLAGS) --html --cache-dir=$(COVERAGE_REPORT) \
+	fi; \
+	"$$RACOCO_CMD" $(RACOCO_COVERAGE_FLAGS) --html --cache-dir=$(COVERAGE_REPORT) \
 		--exec="$(PROVE) $(PROVE_FLAGS) $(TEST_DIR)"
-	$(call log-success,Coverage report generated: $(COVERAGE_REPORT)/index.html)
+	$(call log-success,Coverage report generated: $(COVERAGE_REPORT)/report.html)
 
 # ------------------------------------------------------------------------------
 # Validation

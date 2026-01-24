@@ -19,6 +19,7 @@ Build MCP servers and clients in Raku to integrate with LLM applications like Cl
 
 ## Table of Contents
 
+// todo use sentence case for all sections, and update toc
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Features](#features)
@@ -281,7 +282,7 @@ Testing and coverage
 | `test-verbose` | Run tests with verbose output | Uses `prove6` with `--verbose` |
 | `test-file` | Run a specific test file | `FILE=t/01-types.rakutest` |
 | `test-quick` | Run tests without build | Skips `build` |
-| `coverage` | Generate coverage report | HTML in `coverage-report/index.html`, raw data in `.racoco/` |
+| `coverage` | Generate coverage report | HTML in `coverage-report/report.html`, raw data in `.racoco/` |
 
 Documentation
 
@@ -345,6 +346,7 @@ Cleaning
 
 ### Environment Variables
 
+// todo convert to a table
 - `V=1` - Enable verbose output
 - `NO_COLOR=1` - Disable colored output
 - `FILE=<path>` - Specify file for `test-file` target
@@ -363,56 +365,15 @@ Then run:
 
 ```bash
 make coverage
-# report: coverage-report/index.html
+# report: coverage-report/report.html
 ```
 
 ## Architecture
 
-The diagram below shows how the core components interact. The Mermaid source
-is in `architecture/architecture.mmd` and the rendered image is in
+The diagram below shows how the core components interact. 
+The Mermaid source is in `architecture/architecture.mmd` and the rendered image is in
 `architecture/architecture.png`.
 Regenerate the PNG with `make architecture-diagram`.
-
-```mermaid
-%%{init: {"flowchart": {"curve": "basis"}} }%%
-flowchart LR
-  subgraph Apps[User Applications]
-    AppServer[Server App]
-    AppClient[Client App]
-  end
-
-  subgraph SDK[Raku MCP SDK]
-    MCP[MCP (re-exports)]
-    Server[MCP::Server::Server]
-    Client[MCP::Client::Client]
-    JSONRPC[MCP::JSONRPC]
-    Types[MCP::Types]
-    Builders[Tool/Resource/Prompt Builders]
-    TransportBase[MCP::Transport::Base]
-    TransportStdio[MCP::Transport::Stdio]
-  end
-
-  AppServer --> Server
-  AppClient --> Client
-
-  MCP --> Server
-  MCP --> Client
-  MCP --> Types
-
-  Server --> JSONRPC
-  Client --> JSONRPC
-  JSONRPC --> Types
-
-  Server --> Builders
-  Builders --> Types
-
-  Server --> TransportBase
-  Client --> TransportBase
-  TransportStdio --> TransportBase
-
-  Server <--> |stdio framed messages| TransportStdio
-  Client <--> |stdio framed messages| TransportStdio
-```
 
 ![Architecture diagram](architecture/architecture.png)
 
