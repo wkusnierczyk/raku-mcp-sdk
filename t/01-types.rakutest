@@ -1,0 +1,280 @@
+use v6.d;
+
+=begin pod
+=head1 NAME
+
+01-types.rakutest - Tests for MCP type definitions
+
+=head1 DESCRIPTION
+
+Validates core MCP type constructors and serialization behavior.
+
+=end pod
+
+use Test;
+use lib 'lib';
+
+use MCP::Types;
+
+plan 23;
+
+# Test Implementation
+subtest 'Implementation', {
+    my $impl = Implementation.new(name => 'test', version => '1.0');
+    is $impl.name, 'test', 'name is correct';
+    is $impl.version, '1.0', 'version is correct';
+
+    my %h = $impl.Hash;
+    is %h<name>, 'test', 'Hash has name';
+    is %h<version>, '1.0', 'Hash has version';
+};
+
+# Test TextContent
+subtest 'TextContent', {
+    my $content = TextContent.new(text => 'Hello, World!');
+    is $content.text, 'Hello, World!', 'text is correct';
+    is $content.type, 'text', 'type is text';
+
+    my %h = $content.Hash;
+    is %h<type>, 'text', 'Hash has type';
+    is %h<text>, 'Hello, World!', 'Hash has text';
+};
+
+# Test ImageContent
+subtest 'ImageContent', {
+    my $content = ImageContent.new(data => 'base64data', mimeType => 'image/png');
+    is $content.data, 'base64data', 'data is correct';
+    is $content.mimeType, 'image/png', 'mimeType is correct';
+    is $content.type, 'image', 'type is image';
+};
+
+# Test Tool
+subtest 'Tool', {
+    my $tool = Tool.new(
+        name => 'test_tool',
+        description => 'A test tool',
+        inputSchema => { type => 'object', properties => {} },
+    );
+    is $tool.name, 'test_tool', 'name is correct';
+    is $tool.description, 'A test tool', 'description is correct';
+
+    my %h = $tool.Hash;
+    is %h<name>, 'test_tool', 'Hash has name';
+    is %h<description>, 'A test tool', 'Hash has description';
+};
+
+# Test ToolAnnotations
+subtest 'ToolAnnotations', {
+    my $ann = ToolAnnotations.new(
+        title => 'Test Tool',
+        readOnlyHint => True,
+        destructiveHint => False,
+    );
+    is $ann.title, 'Test Tool', 'title is correct';
+    is $ann.readOnlyHint, True, 'readOnlyHint is correct';
+    is $ann.destructiveHint, False, 'destructiveHint is correct';
+};
+
+# Test CallToolResult
+subtest 'CallToolResult', {
+    my $result = CallToolResult.new(
+        content => [TextContent.new(text => 'Result')],
+        isError => False,
+    );
+    is $result.content.elems, 1, 'has one content item';
+    is $result.isError, False, 'isError is false';
+};
+
+# Test Resource
+subtest 'Resource', {
+    my $res = Resource.new(
+        uri => 'file:///test.txt',
+        name => 'Test File',
+        description => 'A test file',
+        mimeType => 'text/plain',
+    );
+    is $res.uri, 'file:///test.txt', 'uri is correct';
+    is $res.name, 'Test File', 'name is correct';
+    is $res.mimeType, 'text/plain', 'mimeType is correct';
+};
+
+# Test ResourceContents
+subtest 'ResourceContents', {
+    my $contents = ResourceContents.new(
+        uri => 'file:///test.txt',
+        mimeType => 'text/plain',
+        text => 'File contents',
+    );
+    is $contents.uri, 'file:///test.txt', 'uri is correct';
+    is $contents.text, 'File contents', 'text is correct';
+};
+
+# Test PromptArgument
+subtest 'PromptArgument', {
+    my $arg = PromptArgument.new(
+        name => 'topic',
+        description => 'The topic to discuss',
+        required => True,
+    );
+    is $arg.name, 'topic', 'name is correct';
+    is $arg.required, True, 'required is correct';
+};
+
+# Test Prompt
+subtest 'Prompt', {
+    my $prompt = Prompt.new(
+        name => 'explain',
+        description => 'Explain a concept',
+        arguments => [
+            PromptArgument.new(name => 'topic', required => True),
+        ],
+    );
+    is $prompt.name, 'explain', 'name is correct';
+    is $prompt.arguments.elems, 1, 'has one argument';
+};
+
+# Test PromptMessage
+subtest 'PromptMessage', {
+    my $msg = PromptMessage.new(
+        role => 'user',
+        content => TextContent.new(text => 'Hello'),
+    );
+    is $msg.role, 'user', 'role is correct';
+    isa-ok $msg.content, TextContent, 'content is TextContent';
+};
+
+# Test ServerCapabilities
+subtest 'ServerCapabilities', {
+    my $caps = ServerCapabilities.new(
+        tools => ToolsCapability.new(listChanged => True),
+        resources => ResourcesCapability.new(subscribe => True),
+    );
+    ok $caps.tools.defined, 'tools defined';
+    ok $caps.resources.defined, 'resources defined';
+    is $caps.tools.listChanged, True, 'tools.listChanged is true';
+};
+
+# Test ClientCapabilities
+subtest 'ClientCapabilities', {
+    my $caps = ClientCapabilities.new(
+        roots => RootsCapability.new(listChanged => True),
+        sampling => SamplingCapability.new,
+    );
+    ok $caps.roots.defined, 'roots defined';
+    ok $caps.sampling.defined, 'sampling defined';
+};
+
+# Test Progress
+subtest 'Progress', {
+    my $progress = Progress.new(
+        progressToken => 'task-1',
+        progress => 50e0,
+        total => 100e0,
+        message => 'Processing...',
+    );
+    is $progress.progressToken, 'task-1', 'token is correct';
+    is $progress.progress, 50e0, 'progress is correct';
+    is $progress.total, 100e0, 'total is correct';
+};
+
+# Test LogLevel
+subtest 'LogLevel', {
+    is Debug.value, 'debug', 'Debug value';
+    is Info.value, 'info', 'Info value';
+    is Warning.value, 'warning', 'Warning value';
+    is Error.value, 'error', 'Error value';
+};
+
+# Test LogEntry
+subtest 'LogEntry', {
+    my $entry = LogEntry.new(
+        level => Info,
+        logger => 'test',
+        data => 'Test message',
+    );
+    is $entry.level, Info, 'level is correct';
+    is $entry.logger, 'test', 'logger is correct';
+    is $entry.data, 'Test message', 'data is correct';
+};
+
+# Test Protocol Version Constants
+subtest 'Protocol Constants', {
+    ok LATEST_PROTOCOL_VERSION.defined, 'LATEST_PROTOCOL_VERSION defined';
+    ok SUPPORTED_PROTOCOL_VERSIONS.elems > 0, 'SUPPORTED_PROTOCOL_VERSIONS has items';
+    ok LATEST_PROTOCOL_VERSION (elem) SUPPORTED_PROTOCOL_VERSIONS,
+        'Latest version is in supported list';
+};
+
+# Test Annotations
+subtest 'Annotations', {
+    my $ann = Annotations.new(
+        audience => ['user', 'assistant'],
+        priority => 0.5e0,
+    );
+    is $ann.audience.elems, 2, 'has two audience items';
+    is $ann.priority, 0.5e0, 'priority is correct';
+};
+
+# Test Tool with annotations
+subtest 'Tool with Annotations', {
+    my $ann = ToolAnnotations.new(
+        title => 'Calculator',
+        readOnlyHint => True,
+        idempotentHint => True,
+    );
+    my $tool = Tool.new(
+        name => 'add',
+        description => 'Add numbers',
+        annotations => $ann,
+    );
+    ok $tool.annotations.defined, 'has annotations';
+    is $tool.annotations.title, 'Calculator', 'annotation title correct';
+};
+
+# Test serialization round-trip
+subtest 'Hash serialization', {
+    use JSON::Fast;
+
+    my $tool = Tool.new(
+        name => 'test',
+        description => 'Test tool',
+        inputSchema => { type => 'object', properties => { x => { type => 'number' } } },
+    );
+
+    my $json = to-json($tool.Hash);
+    my %restored = from-json($json);
+
+    is %restored<name>, 'test', 'name survives round-trip';
+    is %restored<description>, 'Test tool', 'description survives round-trip';
+    ok %restored<inputSchema>:exists, 'inputSchema survives round-trip';
+};
+
+# Test empty capabilities
+subtest 'Empty capabilities', {
+    my $caps = ServerCapabilities.new();
+    my %h = $caps.Hash;
+    is %h.keys.elems, 0, 'empty capabilities has no keys';
+};
+
+# Test Content role
+subtest 'Content role', {
+    my $text = TextContent.new(text => 'hello');
+    my $image = ImageContent.new(data => 'abc', mimeType => 'image/png');
+
+    ok $text ~~ Content, 'TextContent does Content role';
+    ok $image ~~ Content, 'ImageContent does Content role';
+};
+
+# Test ResourceContents with blob
+subtest 'ResourceContents with blob', {
+    my $blob = Buf.new(0x48, 0x65, 0x6c, 0x6c, 0x6f);  # "Hello"
+    my $contents = ResourceContents.new(
+        uri => 'file:///binary.bin',
+        mimeType => 'application/octet-stream',
+        blob => $blob,
+    );
+    ok $contents.blob.defined, 'blob is defined';
+    is $contents.blob.elems, 5, 'blob has correct size';
+};
+
+done-testing;

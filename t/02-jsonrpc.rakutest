@@ -1,0 +1,190 @@
+use v6.d;
+
+=begin pod
+=head1 NAME
+
+02-jsonrpc.rakutest - Tests for JSON-RPC message types
+
+=head1 DESCRIPTION
+
+Validates JSON-RPC message serialization, parsing, and error handling.
+
+=end pod
+
+use Test;
+use lib 'lib';
+
+use MCP::JSONRPC;
+use JSON::Fast;
+
+plan 14;
+
+# Test Error codes
+subtest 'Error codes', {
+    is ParseError.value, -32700, 'ParseError code';
+    is InvalidRequest.value, -32600, 'InvalidRequest code';
+    is MethodNotFound.value, -32601, 'MethodNotFound code';
+    is InvalidParams.value, -32602, 'InvalidParams code';
+    is InternalError.value, -32603, 'InternalError code';
+};
+
+# Test Error class
+subtest 'Error class', {
+    my $err = Error.new(code => -32600, message => 'Invalid Request');
+    is $err.code, -32600, 'code is correct';
+    is $err.message, 'Invalid Request', 'message is correct';
+
+    my %h = $err.Hash;
+    is %h<code>, -32600, 'Hash has code';
+    is %h<message>, 'Invalid Request', 'Hash has message';
+};
+
+# Test Error.from-code
+subtest 'Error.from-code', {
+    my $err = Error.from-code(ParseError);
+    is $err.code, -32700, 'code is correct';
+    is $err.message, 'Parse error', 'default message is correct';
+
+    my $err2 = Error.from-code(MethodNotFound, 'Custom message');
+    is $err2.message, 'Custom message', 'custom message works';
+};
+
+# Test Request
+subtest 'Request', {
+    my $req = Request.new(id => 1, method => 'test', params => { foo => 'bar' });
+    is $req.jsonrpc, '2.0', 'jsonrpc is 2.0';
+    is $req.id, 1, 'id is correct';
+    is $req.method, 'test', 'method is correct';
+    is $req.params<foo>, 'bar', 'params are correct';
+
+    my %h = $req.Hash;
+    is %h<jsonrpc>, '2.0', 'Hash has jsonrpc';
+    is %h<id>, 1, 'Hash has id';
+    is %h<method>, 'test', 'Hash has method';
+};
+
+# Test Request with string ID
+subtest 'Request with string ID', {
+    my $req = Request.new(id => 'abc-123', method => 'ping');
+    is $req.id, 'abc-123', 'string id works';
+
+    my %h = $req.Hash;
+    is %h<id>, 'abc-123', 'Hash has string id';
+};
+
+# Test Response success
+subtest 'Response success', {
+    my $resp = Response.success(1, { data => 'ok' });
+    is $resp.id, 1, 'id is correct';
+    is $resp.result<data>, 'ok', 'result is correct';
+    ok !$resp.error.defined, 'no error';
+
+    my %h = $resp.Hash;
+    is %h<jsonrpc>, '2.0', 'Hash has jsonrpc';
+    ok %h<result>:exists, 'Hash has result';
+    ok !(%h<error>:exists), 'Hash has no error';
+};
+
+# Test Response error
+subtest 'Response error', {
+    my $err = Error.new(code => -32600, message => 'Invalid');
+    my $resp = Response.error(1, $err);
+    is $resp.id, 1, 'id is correct';
+    ok !$resp.result.defined, 'no result';
+    ok $resp.error.defined, 'has error';
+    is $resp.error.code, -32600, 'error code is correct';
+
+    my %h = $resp.Hash;
+    ok %h<error>:exists, 'Hash has error';
+    ok !(%h<result>:exists), 'Hash has no result';
+};
+
+# Test Notification
+subtest 'Notification', {
+    my $notif = Notification.new(method => 'progress', params => { percent => 50 });
+    is $notif.jsonrpc, '2.0', 'jsonrpc is 2.0';
+    is $notif.method, 'progress', 'method is correct';
+    is $notif.params<percent>, 50, 'params are correct';
+
+    my %h = $notif.Hash;
+    ok !(%h<id>:exists), 'Hash has no id';
+    is %h<method>, 'progress', 'Hash has method';
+};
+
+# Test parse-message for Request
+subtest 'parse-message Request', {
+    my $json = to-json({
+        jsonrpc => '2.0',
+        id => 1,
+        method => 'test',
+        params => { x => 1 },
+    });
+
+    my $msg = parse-message($json);
+    isa-ok $msg, Request, 'parsed as Request';
+    is $msg.id, 1, 'id is correct';
+    is $msg.method, 'test', 'method is correct';
+};
+
+# Test parse-message for Response
+subtest 'parse-message Response', {
+    my $json = to-json({
+        jsonrpc => '2.0',
+        id => 1,
+        result => { data => 'ok' },
+    });
+
+    my $msg = parse-message($json);
+    isa-ok $msg, Response, 'parsed as Response';
+    is $msg.id, 1, 'id is correct';
+    is $msg.result<data>, 'ok', 'result is correct';
+};
+
+# Test parse-message for Notification
+subtest 'parse-message Notification', {
+    my $json = to-json({
+        jsonrpc => '2.0',
+        method => 'notify',
+        params => {},
+    });
+
+    my $msg = parse-message($json);
+    isa-ok $msg, Notification, 'parsed as Notification';
+    is $msg.method, 'notify', 'method is correct';
+};
+
+# Test to-json method
+subtest 'to-json method', {
+    my $req = Request.new(id => 1, method => 'test');
+    my $json = $req.to-json;
+    ok $json.contains('"jsonrpc"'), 'JSON has jsonrpc';
+    ok $json.contains('"method"'), 'JSON has method';
+
+    my %parsed = from-json($json);
+    is %parsed<id>, 1, 'round-trip preserves id';
+};
+
+# Test IdGenerator
+subtest 'IdGenerator', {
+    my $gen = IdGenerator.new;
+    my $id1 = $gen.next;
+    my $id2 = $gen.next;
+    my $id3 = $gen.next;
+
+    is $id1, 1, 'first id is 1';
+    is $id2, 2, 'second id is 2';
+    is $id3, 3, 'third id is 3';
+    ok $id1 < $id2 < $id3, 'ids are sequential';
+};
+
+# Test X::JSONRPC exception
+subtest 'X::JSONRPC exception', {
+    my $err = Error.new(code => -32600, message => 'Invalid');
+    my $ex = X::JSONRPC.new(error => $err);
+
+    ok $ex ~~ Exception, 'is an Exception';
+    is $ex.message, 'JSON-RPC Error -32600: Invalid', 'message is formatted';
+    is $ex.error.code, -32600, 'error is accessible';
+};
+
+done-testing;

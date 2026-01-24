@@ -1,0 +1,133 @@
+use v6.d;
+use Test;
+use lib 'lib';
+use lib 't/lib';
+
+use MCP::Client;
+use MCP::Types;
+need MCP::JSONRPC;
+need TestTransport;
+
+=begin pod
+=head1 NAME
+
+06-client.rakutest - Tests for client behavior
+
+=head1 DESCRIPTION
+
+Covers initialization, request/response handling, and content parsing.
+
+=end pod
+
+sub respond-to-last(TestTransport::TestTransport $transport, $payload) {
+    my $req;
+    for $transport.sent.reverse -> $msg {
+        if $msg ~~ MCP::JSONRPC::Request {
+            $req = $msg;
+            last;
+        }
+    }
+    die "No request to respond to" unless $req.defined;
+    $transport.emit(MCP::JSONRPC::Response.success($req.id, $payload));
+}
+
+subtest 'Client connect and requests', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport
+    );
+
+    my $connect = $client.connect;
+    # Wait for initialize request
+    for ^10 {
+        last if $transport.sent.elems > 0;
+        sleep 0.1;
+    }
+    my $init-req = $transport.sent[0];
+    isa-ok $init-req, MCP::JSONRPC::Request, 'initialize request sent';
+
+    $transport.emit(MCP::JSONRPC::Response.success($init-req.id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => 'hello'
+    }));
+    await $connect;
+
+    ok $client.server-capabilities.defined, 'server capabilities set';
+    is $client.server-instructions, 'hello', 'server instructions set';
+    ok $client.notifications.defined, 'notifications supply available';
+
+    my $tools-p = $client.list-tools;
+    my %tool = name => 't', description => 'd', inputSchema => { type => 'object' };
+    respond-to-last($transport, {
+        tools => [ %tool.item ]
+    });
+    my @tools = await $tools-p;
+    is @tools[0].name, 't', 'list-tools returns Tool';
+
+    my $call-p = $client.call-tool('add', arguments => { a => 1, b => 2 });
+    my %content = type => 'text', text => 'ok';
+    respond-to-last($transport, {
+        content => [ %content.item ],
+        isError => False
+    });
+    my $call = await $call-p;
+    is $call.content[0].text, 'ok', 'call-tool parses content';
+
+    my $res-p = $client.list-resources;
+    my %resource = uri => 'info://x', name => 'X', mimeType => 'text/plain';
+    respond-to-last($transport, {
+        resources => [ %resource.item ]
+    });
+    my @resources = await $res-p;
+    is @resources[0].uri, 'info://x', 'list-resources returns Resource';
+
+    my $read-p = $client.read-resource('info://x');
+    my %contents = uri => 'info://x', mimeType => 'text/plain', text => 'hello';
+    respond-to-last($transport, {
+        contents => [ %contents.item ]
+    });
+    my @contents = await $read-p;
+    is @contents[0].text, 'hello', 'read-resource returns contents';
+
+    my $prompts-p = $client.list-prompts;
+    my %prompt = name => 'p', description => 'desc', arguments => [];
+    respond-to-last($transport, {
+        prompts => [ %prompt.item ]
+    });
+    my @prompts = await $prompts-p;
+    is @prompts[0].name, 'p', 'list-prompts returns Prompt';
+
+    my $prompt-p = $client.get-prompt('p', arguments => { });
+    my %msg = role => 'user', content => { type => 'text', text => 'hi' };
+    respond-to-last($transport, {
+        description => 'desc',
+        messages => [ %msg.item ]
+    });
+    my $prompt = await $prompt-p;
+    is $prompt<messages>[0].content.text, 'hi', 'get-prompt parses messages';
+
+    my $ping-p = $client.ping;
+    respond-to-last($transport, {});
+    ok await($ping-p), 'ping resolves true';
+
+    my $bad = $client.request('bad');
+    my $bad-req = $transport.sent[*-1];
+    $transport.emit(MCP::JSONRPC::Response.error(
+        $bad-req.id,
+        MCP::JSONRPC::Error.from-code(MCP::JSONRPC::InvalidRequest, 'bad')
+    ));
+    dies-ok { await $bad }, 'error response rejects promise';
+
+    my $note = Promise.new;
+    $client.notifications.tap(-> $n { $note.keep($n) });
+    $transport.emit(MCP::JSONRPC::Notification.new(method => 'note', params => {}));
+    isa-ok await($note), MCP::JSONRPC::Notification, 'notifications emit';
+
+    $transport.clear-sent;
+    $transport.emit(MCP::JSONRPC::Request.new(id => 99, method => 'server/request'));
+    ok $transport.sent.grep(MCP::JSONRPC::Response).elems == 1, 'client responds to server request';
+};
+
+done-testing;

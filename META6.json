@@ -1,0 +1,42 @@
+{
+    "name": "MCP",
+    "description": "Model Context Protocol SDK for Raku - Build MCP servers and clients",
+    "version": "0.1.0",
+    "perl": "6.d",
+    "auth": "github:wkusnierczyk",
+    "license": "MIT",
+    "authors": [
+        "Waclaw Kusnierczyk <waclaw.kusnierczyk@gmail.com>"
+    ],
+    "provides": {
+        "MCP": "lib/MCP.rakumod",
+        "MCP::Types": "lib/MCP/Types.rakumod",
+        "MCP::JSONRPC": "lib/MCP/JSONRPC.rakumod",
+        "MCP::Transport::Base": "lib/MCP/Transport/Base.rakumod",
+        "MCP::Transport::Stdio": "lib/MCP/Transport/Stdio.rakumod",
+        "MCP::Server": "lib/MCP/Server.rakumod",
+        "MCP::Server::Tool": "lib/MCP/Server/Tool.rakumod",
+        "MCP::Server::Resource": "lib/MCP/Server/Resource.rakumod",
+        "MCP::Server::Prompt": "lib/MCP/Server/Prompt.rakumod",
+        "MCP::Client": "lib/MCP/Client.rakumod"
+    },
+    "depends": [
+        "JSON::Fast"
+    ],
+    "test-depends": [
+        "Test",
+        "Test::META"
+    ],
+    "resources": [],
+    "tags": [
+        "mcp",
+        "model-context-protocol",
+        "llm",
+        "ai",
+        "json-rpc",
+        "tools",
+        "claude",
+        "anthropic"
+    ],
+    "source-url": "https://github.com/wkusnierczyk/raku-mcp-sdk.git"
+}

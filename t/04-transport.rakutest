@@ -1,0 +1,90 @@
+use v6.d;
+use Test;
+use lib 'lib';
+
+use MCP::JSONRPC;
+use MCP::Transport::Stdio;
+use MCP::Transport::Base;
+use JSON::Fast;
+
+use MONKEY-TYPING;
+augment class MCP::Transport::Stdio::StdioTransport {
+    method parse-public(Str $buffer) { self!parse-message($buffer) }
+}
+use JSON::Fast;
+
+=begin pod
+=head1 NAME
+
+04-transport.rakutest - Tests for stdio transport
+
+=head1 DESCRIPTION
+
+Exercises stdio framing and basic transport state handling.
+
+=end pod
+
+subtest 'StdioTransport parse/send/close', {
+    $*TMPDIR.mkdir unless $*TMPDIR.e;
+    my $json = to-json({
+        jsonrpc => '2.0',
+        id => 1,
+        method => 'ping',
+    });
+    my $length = $json.encode('utf-8').elems;
+    my $payload = "Content-Length: $length\r\n\r\n$json";
+
+    my $out-path = $*TMPDIR.add("mcp-stdio-out-$*PID.txt");
+    my $out = $out-path.open(:w);
+    my $transport = MCP::Transport::Stdio::StdioTransport.new(
+        input => $*IN,
+        output => $out
+    );
+
+    my ($msg, $rest) = $transport.parse-public($payload);
+    isa-ok $msg, MCP::JSONRPC::Request, 'parsed request';
+    is $msg.method, 'ping', 'method parsed';
+    is $rest, '', 'no remaining buffer';
+
+    my $resp = MCP::JSONRPC::Response.success(1, { ok => True });
+    await $transport.send($resp);
+    $out.close;
+
+    my $out-text = $out-path.slurp;
+    ok $out-text.contains('Content-Length:'), 'output includes content length';
+    ok $out-text.contains('"result"'), 'output includes result';
+
+    ok !$transport.is-connected, 'not connected before start';
+    my $s = $transport.start;
+    ok $transport.is-connected, 'connected after start';
+    await $transport.close;
+    ok !$transport.is-connected, 'not connected after close';
+};
+
+subtest 'StdioTransport ignores invalid JSON', {
+    my $json = '{not-json}';
+    my $length = $json.encode('utf-8').elems;
+    my $payload = "Content-Length: $length\r\n\r\n$json";
+
+    my $transport = MCP::Transport::Stdio::StdioTransport.new(
+        input => $*IN,
+        output => $*OUT
+    );
+
+    my ($msg, $rest) = $transport.parse-public($payload);
+    ok !$msg.defined, 'invalid JSON not emitted';
+    ok $rest.chars >= 0, 'rest returned';
+};
+
+subtest 'Transport error types', {
+    my $err = MCP::Transport::Base::X::Transport.new(message => 'oops');
+    is $err.message, 'oops', 'base transport message';
+
+    my $conn = MCP::Transport::Base::X::Transport::Connection.new(message => 'nope');
+    ok $conn.message.contains('Connection error'), 'connection error prefix';
+
+    my $send = MCP::Transport::Base::X::Transport::Send.new(message => 'nope');
+    ok $send.message.contains('Send error'), 'send error prefix';
+};
+
+done-testing;

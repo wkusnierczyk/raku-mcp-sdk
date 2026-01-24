@@ -1,0 +1,38 @@
+%% MCP SDK architecture overview
+flowchart LR
+  subgraph Apps[User Applications]
+    AppServer[Server App]
+    AppClient[Client App]
+  end
+
+  subgraph SDK[Raku MCP SDK]
+    MCP[MCP (re-exports)]
+    Server[MCP::Server::Server]
+    Client[MCP::Client::Client]
+    JSONRPC[MCP::JSONRPC]
+    Types[MCP::Types]
+    Builders[Tool/Resource/Prompt Builders]
+    TransportBase[MCP::Transport::Base]
+    TransportStdio[MCP::Transport::Stdio]
+  end
+
+  AppServer --> Server
+  AppClient --> Client
+
+  MCP --> Server
+  MCP --> Client
+  MCP --> Types
+
+  Server --> JSONRPC
+  Client --> JSONRPC
+  JSONRPC --> Types
+
+  Server --> Builders
+  Builders --> Types
+
+  Server --> TransportBase
+  Client --> TransportBase
+  TransportStdio --> TransportBase
+
+  Server <--> |stdio framed messages| TransportStdio
+  Client <--> |stdio framed messages| TransportStdio

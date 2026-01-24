@@ -1,0 +1,216 @@
+# ==============================================================================
+# GitHub Actions CI/CD Workflow for Raku MCP SDK
+# ==============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # Raku version to use
+  RAKU_VERSION: '2024.01'
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Lint Job - Check code quality
+  # ----------------------------------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Install dependencies
+        run: zef install --deps-only .
+
+      - name: Validate META6.json
+        run: make lint-meta
+
+      - name: Check syntax
+        run: make lint-syntax
+
+  # ----------------------------------------------------------------------------
+  # Test Job - Run test suite
+  # ----------------------------------------------------------------------------
+  test:
+    name: Test (${{ matrix.os }} / Raku ${{ matrix.raku-version }})
+    runs-on: ${{ matrix.os }}
+    needs: lint
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        raku-version: ['2024.01', 'latest']
+        exclude:
+          # Exclude some combinations to reduce CI time
+          - os: windows-latest
+            raku-version: '2024.01'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ matrix.raku-version }}
+
+      - name: Install dependencies
+        run: zef install --deps-only .
+
+      - name: Run tests
+        run: |
+          zef install App::Prove6 || true
+          prove6 -I. -v t/
+
+      - name: Run tests (fallback)
+        if: failure()
+        run: |
+          raku -I. t/01-types.rakutest
+          raku -I. t/02-jsonrpc.rakutest
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Install dependencies
+        run: zef install --deps-only .
+
+      - name: Install RaCoCo
+        run: zef install App::RaCoCo
+
+      - name: Generate coverage report
+        run: make coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report
+
+  # ----------------------------------------------------------------------------
+  # Architecture Diagram Job - Verify diagram PNG is up to date
+  # ----------------------------------------------------------------------------
+  architecture:
+    name: Architecture Diagram
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Mermaid CLI
+        run: npm install -g @mermaid-js/mermaid-cli
+
+      - name: Generate architecture diagram
+        run: make architecture-diagram
+
+      - name: Commit updated diagram
+        if: github.event_name == 'push'
+        run: |
+          if ! git diff --quiet -- architecture/architecture.png; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add architecture/architecture.png
+            git commit -m "chore: update architecture diagram"
+            git push
+          fi
+
+      - name: Upload diagram artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-diagram
+          path: architecture/architecture.png
+
+  # ----------------------------------------------------------------------------
+  # Build Job - Verify the module builds correctly
+  # ----------------------------------------------------------------------------
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Install dependencies
+        run: zef install --deps-only .
+
+      - name: Build module
+        run: |
+          raku -I. -e 'use MCP; say "MCP module loaded successfully"'
+
+      - name: Test installation
+        run: |
+          zef install . --/test
+          raku -e 'use MCP; say "MCP installed and working"'
+
+  # ----------------------------------------------------------------------------
+  # Release Job - Publish to ecosystem (manual trigger only)
+  # ----------------------------------------------------------------------------
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [lint, test, build]
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Install fez
+        run: zef install fez
+
+      - name: Configure fez
+        env:
+          FEZ_TOKEN: ${{ secrets.FEZ_TOKEN }}
+        run: |
+          mkdir -p ~/.config
+          echo "$FEZ_TOKEN" > ~/.fez-config.json
+
+      - name: Upload to Zef ecosystem
+        run: fez upload
+        continue-on-error: true
