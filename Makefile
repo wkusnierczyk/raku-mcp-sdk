@@ -7,7 +7,7 @@
 #   make              - Show help
 #   make all          - Build the complete project
 #   make test         - Run test suite
-#   make install      - Install the module globally
+#   make install      - Install the module globally on the local host
 #
 # ==============================================================================
 
@@ -147,7 +147,7 @@ endef
 help:
 	$(call log,)
 	$(call log,$(CLR_CYAN)╔══════════════════════════════════════════════════════════════════╗$(CLR_RESET))
-	$(call log,$(CLR_CYAN)║$(CLR_RESET)          $(CLR_GREEN)$(PROJECT_TITLE)$(CLR_RESET) - Build System                           $(CLR_CYAN)║$(CLR_RESET))
+	$(call log,$(CLR_CYAN)║$(CLR_RESET)                  $(CLR_GREEN)$(PROJECT_TITLE)$(CLR_RESET) - Build System                     $(CLR_CYAN)║$(CLR_RESET))
 	$(call log,$(CLR_CYAN)╚══════════════════════════════════════════════════════════════════╝$(CLR_RESET))
 	$(call log,)
 	$(call log,$(CLR_YELLOW)Usage:$(CLR_RESET) make [target])
