@@ -92,6 +92,15 @@ else
     Q :=
 endif
 
+# Version command args (allow: make version 1.2.3 "Description")
+VERSION_INPUT := $(word 2, $(MAKECMDGOALS))
+VERSION_DESC  := $(wordlist 3, 999, $(MAKECMDGOALS))
+ifneq ($(VERSION_INPUT),)
+    VERSION_NEW := $(VERSION_INPUT)
+    VERSION_DESC := $(strip $(VERSION_DESC))
+    $(foreach word,$(wordlist 2, 999, $(MAKECMDGOALS)),$(eval $(word):;@:))
+endif
+
 # ------------------------------------------------------------------------------
 # Diagnostic Functions (output to stderr)
 # ------------------------------------------------------------------------------
@@ -562,7 +571,22 @@ ci-full: dependencies-dev lint test coverage
 
 .PHONY: version
 version:
+ifneq ($(VERSION_NEW),)
+	@if [ -z "$(VERSION_DESC)" ]; then \
+		$(call log-error,Description is required); \
+		$(call log,Usage: make version 1.2.3 "Description"); \
+		exit 1; \
+	fi
+	$(call log-info,Updating project version to $(VERSION_NEW)...)
+	$(Q)perl -0pi -e 's/^VERSION\\s*:=\\s*.*/VERSION         := $(VERSION_NEW)/m' Makefile
+	$(Q)perl -0pi -e 's/"version"\\s*:\\s*"[^"]*"/"version": "$(VERSION_NEW)"/' $(META_FILE)
+	$(call log-success,Version updated in Makefile and $(META_FILE))
+	$(call log-info,Creating git tag $(VERSION_NEW)...)
+	$(Q)git tag -a "$(VERSION_NEW)" -m "$(VERSION_DESC)"
+	$(call log-success,Tag created locally: $(VERSION_NEW))
+else
 	$(call log,$(PROJECT_NAME) v$(VERSION))
+endif
 
 .PHONY: bump-patch
 bump-patch:
