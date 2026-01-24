@@ -25,6 +25,7 @@ Build MCP servers and clients in Raku to integrate with LLM applications like Cl
 - [Protocol Support](#protocol-support)
 - [Development](#development)
 - [Architecture](#architecture)
+- [Project Structure](#project-structure)
 - [Contributing](#contributing)
 - [License](#license)
 - [References](#references)
@@ -288,6 +289,7 @@ Documentation
 |--------|-------------|-------|
 | `docs` | Generate text docs into `docs/` | Uses `raku --doc=Text` per module |
 | `docs-serve` | Serve docs (placeholder) | Not implemented |
+| `architecture-diagram` | Build architecture PNG | Renders `architecture/architecture.mmd` to `architecture/architecture.png` |
 
 Distribution and release
 
@@ -365,6 +367,56 @@ make coverage
 ```
 
 ## Architecture
+
+The diagram below shows how the core components interact. The Mermaid source
+is in `architecture/architecture.mmd` and the rendered image is in
+`architecture/architecture.png`.
+Regenerate the PNG with `make architecture-diagram`.
+
+```mermaid
+%%{init: {"flowchart": {"curve": "basis"}} }%%
+flowchart LR
+  subgraph Apps[User Applications]
+    AppServer[Server App]
+    AppClient[Client App]
+  end
+
+  subgraph SDK[Raku MCP SDK]
+    MCP[MCP (re-exports)]
+    Server[MCP::Server::Server]
+    Client[MCP::Client::Client]
+    JSONRPC[MCP::JSONRPC]
+    Types[MCP::Types]
+    Builders[Tool/Resource/Prompt Builders]
+    TransportBase[MCP::Transport::Base]
+    TransportStdio[MCP::Transport::Stdio]
+  end
+
+  AppServer --> Server
+  AppClient --> Client
+
+  MCP --> Server
+  MCP --> Client
+  MCP --> Types
+
+  Server --> JSONRPC
+  Client --> JSONRPC
+  JSONRPC --> Types
+
+  Server --> Builders
+  Builders --> Types
+
+  Server --> TransportBase
+  Client --> TransportBase
+  TransportStdio --> TransportBase
+
+  Server <--> |stdio framed messages| TransportStdio
+  Client <--> |stdio framed messages| TransportStdio
+```
+
+![Architecture diagram](architecture/architecture.png)
+
+## Project Structure
 
 ```
 MCP/

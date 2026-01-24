@@ -34,6 +34,9 @@ BUILD_DIR       := .build
 DIST_DIR        := dist
 COVERAGE_DIR    := .racoco
 COVERAGE_REPORT := coverage-report
+ARCH_DIR        := architecture
+ARCH_MMD        := $(ARCH_DIR)/architecture.mmd
+ARCH_PNG        := $(ARCH_DIR)/architecture.png
 
 # File patterns
 RAKU_EXT        := .rakumod
@@ -56,6 +59,8 @@ MI6             := mi6
 FEZ             := fez
 RACOCO          := racoco
 RACOCO_BIN      := $(shell command -v $(RACOCO) 2>/dev/null)
+MMDC            := mmdc
+MMDC_BIN        := $(shell command -v $(MMDC) 2>/dev/null)
 
 # Tool options
 RAKU_FLAGS      := -I$(SOURCE_DIR)
@@ -63,6 +68,7 @@ PROVE_FLAGS     := -I. -v
 ZEF_FLAGS       := --deps-only
 RACOCO_FLAGS    := -l
 RACOCO_COVERAGE_FLAGS :=
+MMDC_FLAGS      :=
 
 # Installation options
 INSTALL_GLOBAL  := --/test
@@ -188,6 +194,7 @@ help:
 	$(call log,  $(CLR_GREEN)dist$(CLR_RESET)                 Create distribution tarball)
 	$(call log,  $(CLR_GREEN)release$(CLR_RESET)              Release to Zef ecosystem)
 	$(call log,  $(CLR_GREEN)docs$(CLR_RESET)                 Generate documentation)
+	$(call log,  $(CLR_GREEN)architecture-diagram$(CLR_RESET) Build architecture diagram PNG)
 	$(call log,)
 	$(call log,$(CLR_YELLOW)Utility Targets:$(CLR_RESET))
 	$(call log,  $(CLR_GREEN)about$(CLR_RESET)                Show project information)
@@ -519,6 +526,20 @@ docs:
 docs-serve: docs
 	$(call log-info,Starting documentation server...)
 	$(call log-warning,Not yet implemented)
+
+.PHONY: architecture-diagram
+# architecture-diagram: Build PNG from architecture/architecture.mmd
+architecture-diagram: $(ARCH_PNG)
+	$(call log-success,Architecture diagram generated)
+
+$(ARCH_PNG): $(ARCH_MMD)
+	$(call log-info,Generating architecture diagram...)
+	$(Q)mkdir -p $(ARCH_DIR)
+	$(Q)if [ -z "$(MMDC_BIN)" ]; then \
+		echo "mmdc not found. Install @mermaid-js/mermaid-cli or set MMDC."; \
+		exit 1; \
+	fi
+	$(Q)$(MMDC) $(MMDC_FLAGS) -i $(ARCH_MMD) -o $(ARCH_PNG)
 
 # ------------------------------------------------------------------------------
 # Utility Targets
