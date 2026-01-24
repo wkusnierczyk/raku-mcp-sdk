@@ -12,7 +12,7 @@ class RegisteredResource is export {
     has Str $.mimeType;
     has MCP::Types::Annotations $.annotations;
     has &.reader is required;
-    
+
     #| Get the Resource definition for listing
     method to-resource(--> MCP::Types::Resource) {
         MCP::Types::Resource.new(
@@ -23,11 +23,11 @@ class RegisteredResource is export {
             annotations => $!annotations,
         )
     }
-    
+
     #| Read the resource contents
     method read(--> Array) {
         my $result = &!reader();
-        
+
         # Normalize result to array of ResourceContents
         given $result {
             when MCP::Types::ResourceContents {
@@ -69,37 +69,37 @@ class ResourceBuilder is export {
     has Str $!mimeType;
     has MCP::Types::Annotations $!annotations;
     has &!reader;
-    
+
     method uri(Str $uri --> ResourceBuilder) {
         $!uri = $uri;
         self
     }
-    
+
     method name(Str $name --> ResourceBuilder) {
         $!name = $name;
         self
     }
-    
+
     method description(Str $desc --> ResourceBuilder) {
         $!description = $desc;
         self
     }
-    
+
     method mimeType(Str $mime --> ResourceBuilder) {
         $!mimeType = $mime;
         self
     }
-    
+
     method annotations(@audience, Num :$priority --> ResourceBuilder) {
         $!annotations = MCP::Types::Annotations.new(:@audience, :$priority);
         self
     }
-    
+
     method reader(&reader --> ResourceBuilder) {
         &!reader = &reader;
         self
     }
-    
+
     #| Helper for file-based resources
     method from-file(IO::Path $path --> ResourceBuilder) {
         $!uri //= "file://{$path.absolute}";
@@ -108,7 +108,7 @@ class ResourceBuilder is export {
         &!reader = { $path.slurp };
         self
     }
-    
+
     method !guess-mime-type(IO::Path $path --> Str) {
         given $path.extension.lc {
             when 'txt'  { 'text/plain' }
@@ -126,12 +126,12 @@ class ResourceBuilder is export {
             default     { 'application/octet-stream' }
         }
     }
-    
+
     method build(--> RegisteredResource) {
         die "Resource URI is required" unless $!uri;
         die "Resource name is required" unless $!name;
         die "Resource reader is required" unless &!reader;
-        
+
         RegisteredResource.new(
             uri => $!uri,
             name => $!name,

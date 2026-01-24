@@ -10,11 +10,11 @@ our constant SUPPORTED_PROTOCOL_VERSIONS is export = <2025-03-26 2024-11-05>;
 class Implementation is export {
     has Str $.name is required;
     has Str $.version is required;
-    
+
     method Hash(--> Hash) {
         { name => $!name, version => $!version }
     }
-    
+
     method from-hash(%h --> Implementation) {
         self.new(name => %h<name>, version => %h<version>)
     }
@@ -24,7 +24,7 @@ class Implementation is export {
 class Annotations is export {
     has @.audience;      # Intended audience (user, assistant)
     has Num $.priority;  # Importance hint 0.0-1.0
-    
+
     method Hash(--> Hash) {
         my %h;
         %h<audience> = @!audience if @!audience;
@@ -40,7 +40,7 @@ class ToolAnnotations is export {
     has Bool $.destructiveHint;
     has Bool $.idempotentHint;
     has Bool $.openWorldHint;
-    
+
     method Hash(--> Hash) {
         my %h;
         %h<title> = $_ with $!title;
@@ -62,15 +62,15 @@ role Content is export {
 class TextContent does Content is export {
     has Str $.text is required;
     has Annotations $.annotations;
-    
+
     method type(--> Str) { 'text' }
-    
+
     method Hash(--> Hash) {
         my %h = type => 'text', text => $!text;
         %h<annotations> = $!annotations.Hash if $!annotations;
         %h
     }
-    
+
     method from-hash(%h --> TextContent) {
         self.new(
             text => %h<text>,
@@ -84,9 +84,9 @@ class ImageContent does Content is export {
     has Str $.data is required;      # base64 encoded
     has Str $.mimeType is required;
     has Annotations $.annotations;
-    
+
     method type(--> Str) { 'image' }
-    
+
     method Hash(--> Hash) {
         my %h = type => 'image', data => $!data, mimeType => $!mimeType;
         %h<annotations> = $!annotations.Hash if $!annotations;
@@ -98,9 +98,9 @@ class ImageContent does Content is export {
 class EmbeddedResource does Content is export {
     has $.resource is required;  # ResourceContents
     has Annotations $.annotations;
-    
+
     method type(--> Str) { 'resource' }
-    
+
     method Hash(--> Hash) {
         my %h = type => 'resource', resource => $!resource.Hash;
         %h<annotations> = $!annotations.Hash if $!annotations;
@@ -114,7 +114,7 @@ class Tool is export {
     has Str $.description;
     has Hash $.inputSchema;
     has ToolAnnotations $.annotations;
-    
+
     method Hash(--> Hash) {
         my %h = name => $!name;
         %h<description> = $_ with $!description;
@@ -122,7 +122,7 @@ class Tool is export {
         %h<annotations> = $!annotations.Hash if $!annotations;
         %h
     }
-    
+
     method from-hash(%h --> Tool) {
         self.new(
             name => %h<name>,
@@ -137,7 +137,7 @@ class Tool is export {
 class CallToolResult is export {
     has @.content;   # Array of Content objects
     has Bool $.isError = False;
-    
+
     method Hash(--> Hash) {
         {
             content => @!content.map(*.Hash).Array,
@@ -153,7 +153,7 @@ class Resource is export {
     has Str $.description;
     has Str $.mimeType;
     has Annotations $.annotations;
-    
+
     method Hash(--> Hash) {
         my %h = uri => $!uri, name => $!name;
         %h<description> = $_ with $!description;
@@ -161,7 +161,7 @@ class Resource is export {
         %h<annotations> = $!annotations.Hash if $!annotations;
         %h
     }
-    
+
     method from-hash(%h --> Resource) {
         self.new(
             uri => %h<uri>,
@@ -178,7 +178,7 @@ class ResourceContents is export {
     has Str $.mimeType;
     has Str $.text;
     has Blob $.blob;
-    
+
     method Hash(--> Hash) {
         my %h = uri => $!uri;
         %h<mimeType> = $_ with $!mimeType;
@@ -193,7 +193,7 @@ class PromptArgument is export {
     has Str $.name is required;
     has Str $.description;
     has Bool $.required = False;
-    
+
     method Hash(--> Hash) {
         my %h = name => $!name;
         %h<description> = $_ with $!description;
@@ -207,14 +207,14 @@ class Prompt is export {
     has Str $.name is required;
     has Str $.description;
     has @.arguments;  # Array of PromptArgument
-    
+
     method Hash(--> Hash) {
         my %h = name => $!name;
         %h<description> = $_ with $!description;
         %h<arguments> = @!arguments.map(*.Hash).Array if @!arguments;
         %h
     }
-    
+
     method from-hash(%h --> Prompt) {
         self.new(
             name => %h<name>,
@@ -228,12 +228,12 @@ class Prompt is export {
 class PromptMessage is export {
     has Str $.role is required where * ~~ any(<user assistant>);
     has $.content is required;  # Content or array of Content
-    
+
     method Hash(--> Hash) {
         {
             role => $!role,
-            content => $!content ~~ Positional 
-                ?? $!content.map(*.Hash).Array 
+            content => $!content ~~ Positional
+                ?? $!content.map(*.Hash).Array
                 !! $!content.Hash
         }
     }
@@ -246,7 +246,7 @@ class LoggingCapability is export {
 
 class PromptsCapability is export {
     has Bool $.listChanged;
-    
+
     method Hash(--> Hash) {
         my %h;
         %h<listChanged> = $_ with $!listChanged;
@@ -257,7 +257,7 @@ class PromptsCapability is export {
 class ResourcesCapability is export {
     has Bool $.subscribe;
     has Bool $.listChanged;
-    
+
     method Hash(--> Hash) {
         my %h;
         %h<subscribe> = $_ with $!subscribe;
@@ -268,7 +268,7 @@ class ResourcesCapability is export {
 
 class ToolsCapability is export {
     has Bool $.listChanged;
-    
+
     method Hash(--> Hash) {
         my %h;
         %h<listChanged> = $_ with $!listChanged;
@@ -283,7 +283,7 @@ class ServerCapabilities is export {
     has PromptsCapability $.prompts;
     has ResourcesCapability $.resources;
     has ToolsCapability $.tools;
-    
+
     method Hash(--> Hash) {
         my %h;
         %h<experimental> = {} if $!experimental;
@@ -293,7 +293,7 @@ class ServerCapabilities is export {
         %h<tools> = $!tools.Hash if $!tools;
         %h
     }
-    
+
     method from-hash(%h --> ServerCapabilities) {
         self.new(
             experimental => %h<experimental>.defined,
@@ -308,7 +308,7 @@ class ServerCapabilities is export {
 #| Client capabilities sub-types
 class RootsCapability is export {
     has Bool $.listChanged;
-    
+
     method Hash(--> Hash) {
         my %h;
         %h<listChanged> = $_ with $!listChanged;
@@ -330,7 +330,7 @@ class ClientCapabilities is export {
     has RootsCapability $.roots;
     has SamplingCapability $.sampling;
     has ElicitationCapability $.elicitation;
-    
+
     method Hash(--> Hash) {
         my %h;
         %h<experimental> = {} if $!experimental;
@@ -347,7 +347,7 @@ class Progress is export {
     has Num $.progress is required;
     has Num $.total;
     has Str $.message;
-    
+
     method Hash(--> Hash) {
         my %h = progressToken => $!progressToken, progress => $!progress;
         %h<total> = $_ with $!total;
@@ -373,7 +373,7 @@ class LogEntry is export {
     has LogLevel $.level is required;
     has Str $.logger;
     has $.data is required;  # Any JSON-serializable data
-    
+
     method Hash(--> Hash) {
         my %h = level => $!level.value, data => $!data;
         %h<logger> = $_ with $!logger;

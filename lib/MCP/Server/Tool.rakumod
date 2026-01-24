@@ -11,7 +11,7 @@ class RegisteredTool is export {
     has Hash $.inputSchema;
     has MCP::Types::ToolAnnotations $.annotations;
     has &.handler is required;
-    
+
     #| Get the Tool definition for listing
     method to-tool(--> MCP::Types::Tool) {
         MCP::Types::Tool.new(
@@ -21,11 +21,11 @@ class RegisteredTool is export {
             annotations => $!annotations,
         )
     }
-    
+
     #| Call the tool with given arguments
     method call(%arguments --> MCP::Types::CallToolResult) {
         my $result = &!handler(%arguments);
-        
+
         # Normalize result to CallToolResult
         given $result {
             when MCP::Types::CallToolResult {
@@ -58,22 +58,22 @@ class ToolBuilder is export {
     has Hash $!inputSchema = { type => 'object', properties => {}, required => [] };
     has MCP::Types::ToolAnnotations $!annotations;
     has &!handler;
-    
+
     method name(Str $name --> ToolBuilder) {
         $!name = $name;
         self
     }
-    
+
     method description(Str $desc --> ToolBuilder) {
         $!description = $desc;
         self
     }
-    
+
     method schema(Hash $schema --> ToolBuilder) {
         $!inputSchema = $schema;
         self
     }
-    
+
     #| Add a string parameter
     method string-param(Str $name, Str :$description, Bool :$required --> ToolBuilder) {
         $!inputSchema<properties>{$name} = {
@@ -83,7 +83,7 @@ class ToolBuilder is export {
         $!inputSchema<required>.push($name) if $required;
         self
     }
-    
+
     #| Add a number parameter
     method number-param(Str $name, Str :$description, Bool :$required --> ToolBuilder) {
         $!inputSchema<properties>{$name} = {
@@ -93,7 +93,7 @@ class ToolBuilder is export {
         $!inputSchema<required>.push($name) if $required;
         self
     }
-    
+
     #| Add an integer parameter
     method integer-param(Str $name, Str :$description, Bool :$required --> ToolBuilder) {
         $!inputSchema<properties>{$name} = {
@@ -103,7 +103,7 @@ class ToolBuilder is export {
         $!inputSchema<required>.push($name) if $required;
         self
     }
-    
+
     #| Add a boolean parameter
     method boolean-param(Str $name, Str :$description, Bool :$required --> ToolBuilder) {
         $!inputSchema<properties>{$name} = {
@@ -113,7 +113,7 @@ class ToolBuilder is export {
         $!inputSchema<required>.push($name) if $required;
         self
     }
-    
+
     #| Add an array parameter
     method array-param(Str $name, Str :$description, Hash :$items, Bool :$required --> ToolBuilder) {
         $!inputSchema<properties>{$name} = {
@@ -124,7 +124,7 @@ class ToolBuilder is export {
         $!inputSchema<required>.push($name) if $required;
         self
     }
-    
+
     #| Set annotations
     method annotations(
         Str :$title,
@@ -142,16 +142,16 @@ class ToolBuilder is export {
         );
         self
     }
-    
+
     method handler(&handler --> ToolBuilder) {
         &!handler = &handler;
         self
     }
-    
+
     method build(--> RegisteredTool) {
         die "Tool name is required" unless $!name;
         die "Tool handler is required" unless &!handler;
-        
+
         RegisteredTool.new(
             name => $!name,
             description => $!description,

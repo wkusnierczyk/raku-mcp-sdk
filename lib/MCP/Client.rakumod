@@ -24,29 +24,29 @@ class Client is export {
     has MCP::Types::Implementation $.info is required;
     has MCP::Types::ClientCapabilities $.capabilities = MCP::Types::ClientCapabilities.new;
     has MCP::Transport::Base::Transport $.transport is required;
-    
+
     # State
     has Bool $!initialized = False;
     has MCP::Types::ServerCapabilities $!server-capabilities;
     has Str $!protocol-version;
     has Str $!server-instructions;
     has MCP::JSONRPC::IdGenerator $!id-gen = MCP::JSONRPC::IdGenerator.new;
-    
+
     # Pending requests
     has %!pending-requests;  # id => Promise vow
-    
+
     # Incoming message supply
     has Supply $!incoming;
     has Supplier $!notifications;
-    
+
     #| Connect and initialize the client
     method connect(--> Promise) {
         start {
             $!notifications = Supplier.new;
-            
+
             # Start transport and message handling
             $!incoming = $!transport.start;
-            
+
             # Start message handler in background
             start {
                 react {
@@ -55,14 +55,14 @@ class Client is export {
                     }
                 }
             }
-            
+
             # Perform initialization handshake
             await self!initialize;
-            
+
             True
         }
     }
-    
+
     #| Initialize the connection
     method !initialize(--> Promise) {
         self.request('initialize', {
@@ -75,14 +75,14 @@ class Client is export {
             $!server-capabilities = MCP::Types::ServerCapabilities.from-hash($result<capabilities>);
             $!server-instructions = $result<instructions>;
             $!initialized = True;
-            
+
             # Send initialized notification
             self.notify('initialized');
-            
+
             $result
         })
     }
-    
+
     #| Handle incoming messages
     method !handle-message($msg) {
         given $msg {
@@ -97,7 +97,7 @@ class Client is export {
             }
         }
     }
-    
+
     #| Handle response to our requests
     method !handle-response(MCP::JSONRPC::Response $resp) {
         if %!pending-requests{$resp.id}:exists {
@@ -109,7 +109,7 @@ class Client is export {
             }
         }
     }
-    
+
     #| Handle incoming requests from server (sampling, etc.)
     method !handle-request(MCP::JSONRPC::Request $req) {
         # Handle server-initiated requests
@@ -121,29 +121,29 @@ class Client is export {
         my $response = MCP::JSONRPC::Response.error($req.id, $error);
         $!transport.send($response);
     }
-    
+
     #| Get server capabilities
     method server-capabilities(--> MCP::Types::ServerCapabilities) {
         $!server-capabilities
     }
-    
+
     #| Get server instructions
     method server-instructions(--> Str) {
         $!server-instructions
     }
-    
+
     #| Get notifications supply
     method notifications(--> Supply) {
         $!notifications.Supply
     }
-    
+
     #| List available tools
     method list-tools(--> Promise) {
         self.request('tools/list').then(-> $p {
             $p.result<tools>.map({ MCP::Types::Tool.from-hash($_) }).Array
         })
     }
-    
+
     #| Call a tool
     method call-tool(Str $name, :%arguments --> Promise) {
         self.request('tools/call', {
@@ -158,14 +158,14 @@ class Client is export {
             )
         })
     }
-    
+
     #| List available resources
     method list-resources(--> Promise) {
         self.request('resources/list').then(-> $p {
             $p.result<resources>.map({ MCP::Types::Resource.from-hash($_) }).Array
         })
     }
-    
+
     #| Read a resource
     method read-resource(Str $uri --> Promise) {
         self.request('resources/read', { uri => $uri }).then(-> $p {
@@ -178,24 +178,24 @@ class Client is export {
             }).Array
         })
     }
-    
+
     #| Subscribe to resource updates
     method subscribe-resource(Str $uri --> Promise) {
         self.request('resources/subscribe', { uri => $uri })
     }
-    
+
     #| Unsubscribe from resource updates
     method unsubscribe-resource(Str $uri --> Promise) {
         self.request('resources/unsubscribe', { uri => $uri })
     }
-    
+
     #| List available prompts
     method list-prompts(--> Promise) {
         self.request('prompts/list').then(-> $p {
             $p.result<prompts>.map({ MCP::Types::Prompt.from-hash($_) }).Array
         })
     }
-    
+
     #| Get a prompt with arguments
     method get-prompt(Str $name, :%arguments --> Promise) {
         self.request('prompts/get', {
@@ -213,43 +213,43 @@ class Client is export {
             }
         })
     }
-    
+
     #| Ping the server
     method ping(--> Promise) {
         self.request('ping').then({ True })
     }
-    
+
     #| Send a request
     method request(Str $method, $params? --> Promise) {
         my $id = $!id-gen.next;
         my $p = Promise.new;
         %!pending-requests{$id} = $p.vow;
-        
+
         my $request = MCP::JSONRPC::Request.new(:$id, :$method, :$params);
         $!transport.send($request);
-        
+
         # Add timeout
-        my $timeout = Promise.in(30).then({ 
+        my $timeout = Promise.in(30).then({
             if %!pending-requests{$id}:exists {
                 my $vow = %!pending-requests{$id}:delete;
                 $vow.break(X::MCP::Client::Timeout.new(method => $method));
             }
         });
-        
+
         $p
     }
-    
+
     #| Send a notification
     method notify(Str $method, $params?) {
         my $notification = MCP::JSONRPC::Notification.new(:$method, :$params);
         $!transport.send($notification);
     }
-    
+
     #| Close the connection
     method close(--> Promise) {
         $!transport.close
     }
-    
+
     #| Parse content from response
     method !parse-content($content) {
         given $content<type> {

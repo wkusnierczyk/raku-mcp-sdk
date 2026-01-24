@@ -21,7 +21,7 @@ subtest 'Error class', {
     my $err = Error.new(code => -32600, message => 'Invalid Request');
     is $err.code, -32600, 'code is correct';
     is $err.message, 'Invalid Request', 'message is correct';
-    
+
     my %h = $err.Hash;
     is %h<code>, -32600, 'Hash has code';
     is %h<message>, 'Invalid Request', 'Hash has message';
@@ -32,7 +32,7 @@ subtest 'Error.from-code', {
     my $err = Error.from-code(ParseError);
     is $err.code, -32700, 'code is correct';
     is $err.message, 'Parse error', 'default message is correct';
-    
+
     my $err2 = Error.from-code(MethodNotFound, 'Custom message');
     is $err2.message, 'Custom message', 'custom message works';
 };
@@ -44,7 +44,7 @@ subtest 'Request', {
     is $req.id, 1, 'id is correct';
     is $req.method, 'test', 'method is correct';
     is $req.params<foo>, 'bar', 'params are correct';
-    
+
     my %h = $req.Hash;
     is %h<jsonrpc>, '2.0', 'Hash has jsonrpc';
     is %h<id>, 1, 'Hash has id';
@@ -55,7 +55,7 @@ subtest 'Request', {
 subtest 'Request with string ID', {
     my $req = Request.new(id => 'abc-123', method => 'ping');
     is $req.id, 'abc-123', 'string id works';
-    
+
     my %h = $req.Hash;
     is %h<id>, 'abc-123', 'Hash has string id';
 };
@@ -66,7 +66,7 @@ subtest 'Response success', {
     is $resp.id, 1, 'id is correct';
     is $resp.result<r>, 'ok', 'result is correct';
     ok !$resp.error.defined, 'no error';
-    
+
     my %h = $resp.Hash;
     is %h<jsonrpc>, '2.0', 'Hash has jsonrpc';
     ok %h<r>:exists, 'Hash has result';
@@ -81,7 +81,7 @@ subtest 'Response error', {
     ok !$resp.result.defined, 'no result';
     ok $resp.error.defined, 'has error';
     is $resp.error.code, -32600, 'error code is correct';
-    
+
     my %h = $resp.Hash;
     ok %h<e>:exists, 'Hash has error';
     ok !(%h<r>:exists), 'Hash has no result';
@@ -93,7 +93,7 @@ subtest 'Notification', {
     is $notif.jsonrpc, '2.0', 'jsonrpc is 2.0';
     is $notif.method, 'progress', 'method is correct';
     is $notif.params<percent>, 50, 'params are correct';
-    
+
     my %h = $notif.Hash;
     ok !(%h<id>:exists), 'Hash has no id';
     is %h<method>, 'progress', 'Hash has method';
@@ -107,7 +107,7 @@ subtest 'parse-message Request', {
         method => 'test',
         params => { x => 1 },
     });
-    
+
     my $msg = parse-message($json);
     isa-ok $msg, Request, 'parsed as Request';
     is $msg.id, 1, 'id is correct';
@@ -121,7 +121,7 @@ subtest 'parse-message Response', {
         id => 1,
         result => { data => 'ok' },
     });
-    
+
     my $msg = parse-message($json);
     isa-ok $msg, Response, 'parsed as Response';
     is $msg.id, 1, 'id is correct';
@@ -135,7 +135,7 @@ subtest 'parse-message Notification', {
         method => 'notify',
         params => {},
     });
-    
+
     my $msg = parse-message($json);
     isa-ok $msg, Notification, 'parsed as Notification';
     is $msg.method, 'notify', 'method is correct';
@@ -147,7 +147,7 @@ subtest 'to-json method', {
     my $json = $req.to-json;
     ok $json.contains('"jsonrpc"'), 'JSON has jsonrpc';
     ok $json.contains('"method"'), 'JSON has method';
-    
+
     my %parsed = from-json($json);
     is %parsed<id>, 1, 'round-trip preserves id';
 };
@@ -158,7 +158,7 @@ subtest 'IdGenerator', {
     my $id1 = $gen.next;
     my $id2 = $gen.next;
     my $id3 = $gen.next;
-    
+
     is $id1, 1, 'first id is 1';
     is $id2, 2, 'second id is 2';
     is $id3, 3, 'third id is 3';
@@ -169,7 +169,7 @@ subtest 'IdGenerator', {
 subtest 'X::JSONRPC exception', {
     my $err = Error.new(code => -32600, message => 'Invalid');
     my $ex = X::JSONRPC.new(error => $err);
-    
+
     ok $ex ~~ Exception, 'is an Exception';
     is $ex.message, 'JSON-RPC Error -32600: Invalid', 'message is formatted';
     is $ex.error.code, -32600, 'error is accessible';

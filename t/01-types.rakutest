@@ -11,7 +11,7 @@ subtest 'Implementation', {
     my $impl = Implementation.new(name => 'test', version => '1.0');
     is $impl.name, 'test', 'name is correct';
     is $impl.version, '1.0', 'version is correct';
-    
+
     my %h = $impl.Hash;
     is %h<name>, 'test', 'Hash has name';
     is %h<version>, '1.0', 'Hash has version';
@@ -22,7 +22,7 @@ subtest 'TextContent', {
     my $content = TextContent.new(text => 'Hello, World!');
     is $content.text, 'Hello, World!', 'text is correct';
     is $content.type, 'text', 'type is text';
-    
+
     my %h = $content.Hash;
     is %h<type>, 'text', 'Hash has type';
     is %h<text>, 'Hello, World!', 'Hash has text';
@@ -45,7 +45,7 @@ subtest 'Tool', {
     );
     is $tool.name, 'test_tool', 'name is correct';
     is $tool.description, 'A test tool', 'description is correct';
-    
+
     my %h = $tool.Hash;
     is %h<name>, 'test_tool', 'Hash has name';
     is %h<description>, 'A test tool', 'Hash has description';
@@ -189,7 +189,7 @@ subtest 'LogEntry', {
 subtest 'Protocol Constants', {
     ok LATEST_PROTOCOL_VERSION.defined, 'LATEST_PROTOCOL_VERSION defined';
     ok SUPPORTED_PROTOCOL_VERSIONS.elems > 0, 'SUPPORTED_PROTOCOL_VERSIONS has items';
-    ok LATEST_PROTOCOL_VERSION (elem) SUPPORTED_PROTOCOL_VERSIONS, 
+    ok LATEST_PROTOCOL_VERSION (elem) SUPPORTED_PROTOCOL_VERSIONS,
         'Latest version is in supported list';
 };
 
@@ -222,16 +222,16 @@ subtest 'Tool with Annotations', {
 # Test serialization round-trip
 subtest 'Hash serialization', {
     use JSON::Fast;
-    
+
     my $tool = Tool.new(
         name => 'test',
         description => 'Test tool',
         inputSchema => { type => 'object', properties => { x => { type => 'number' } } },
     );
-    
+
     my $json = to-json($tool.Hash);
     my %restored = from-json($json);
-    
+
     is %restored<name>, 'test', 'name survives round-trip';
     is %restored<description>, 'Test tool', 'description survives round-trip';
     ok %restored<inputSchema>:exists, 'inputSchema survives round-trip';
@@ -248,7 +248,7 @@ subtest 'Empty capabilities', {
 subtest 'Content role', {
     my $text = TextContent.new(text => 'hello');
     my $image = ImageContent.new(data => 'abc', mimeType => 'image/png');
-    
+
     ok $text ~~ Content, 'TextContent does Content role';
     ok $image ~~ Content, 'ImageContent does Content role';
 };

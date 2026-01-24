@@ -8,13 +8,13 @@ use MCP::JSONRPC;
 role Transport is export {
     #| Start the transport and return a Supply of incoming messages
     method start(--> Supply) { ... }
-    
+
     #| Send a message through the transport
     method send(MCP::JSONRPC::Message $msg --> Promise) { ... }
-    
+
     #| Close the transport
     method close(--> Promise) { ... }
-    
+
     #| Check if the transport is currently connected
     method is-connected(--> Bool) { ... }
 }
@@ -23,7 +23,7 @@ role Transport is export {
 class X::Transport is Exception {
     has Str $.message is required;
     has $.cause;
-    
+
     method message(--> Str) { $!message }
 }
 

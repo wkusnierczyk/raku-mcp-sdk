@@ -10,7 +10,7 @@ class RegisteredPrompt is export {
     has Str $.description;
     has @.arguments;  # Array of PromptArgument
     has &.generator is required;
-    
+
     #| Get the Prompt definition for listing
     method to-prompt(--> MCP::Types::Prompt) {
         MCP::Types::Prompt.new(
@@ -19,11 +19,11 @@ class RegisteredPrompt is export {
             arguments => @!arguments,
         )
     }
-    
+
     #| Generate the prompt messages
     method get(%arguments --> Array) {
         my $result = &!generator(%arguments);
-        
+
         # Normalize to array of PromptMessage
         given $result {
             when MCP::Types::PromptMessage {
@@ -54,17 +54,17 @@ class PromptBuilder is export {
     has Str $!description;
     has @!arguments;
     has &!generator;
-    
+
     method name(Str $name --> PromptBuilder) {
         $!name = $name;
         self
     }
-    
+
     method description(Str $desc --> PromptBuilder) {
         $!description = $desc;
         self
     }
-    
+
     #| Add an argument
     method argument(Str $name, Str :$description, Bool :$required --> PromptBuilder) {
         @!arguments.push(MCP::Types::PromptArgument.new(
@@ -74,26 +74,26 @@ class PromptBuilder is export {
         ));
         self
     }
-    
+
     #| Add a required argument
     method required-argument(Str $name, Str :$description --> PromptBuilder) {
         self.argument($name, :$description, :required)
     }
-    
+
     #| Add an optional argument
     method optional-argument(Str $name, Str :$description --> PromptBuilder) {
         self.argument($name, :$description, :!required)
     }
-    
+
     method generator(&generator --> PromptBuilder) {
         &!generator = &generator;
         self
     }
-    
+
     method build(--> RegisteredPrompt) {
         die "Prompt name is required" unless $!name;
         die "Prompt generator is required" unless &!generator;
-        
+
         RegisteredPrompt.new(
             name => $!name,
             description => $!description,

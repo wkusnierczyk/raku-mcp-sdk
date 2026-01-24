@@ -21,26 +21,26 @@ class Server is export {
     has MCP::Types::Implementation $.info is required;
     has MCP::Transport::Base::Transport $.transport is required;
     has Str $.instructions;
-    
+
     # Registered handlers
     has %!tools;      # name => RegisteredTool
-    has %!resources;  # uri => RegisteredResource  
+    has %!resources;  # uri => RegisteredResource
     has %!prompts;    # name => RegisteredPrompt
-    
+
     # State
     has Bool $!initialized = False;
     has MCP::Types::ClientCapabilities $!client-capabilities;
     has Str $!protocol-version;
     has MCP::JSONRPC::IdGenerator $!id-gen = MCP::JSONRPC::IdGenerator.new;
-    
+
     # Pending request handlers for bidirectional communication
     has %!pending-requests;  # id => Promise vow
-    
+
     #| Add a tool to the server
     multi method add-tool(MCP::Server::Tool::RegisteredTool $tool) {
         %!tools{$tool.name} = $tool;
     }
-    
+
     #| Add a tool using named parameters
     multi method add-tool(
         Str :$name!,
@@ -56,12 +56,12 @@ class Server is export {
             .build;
         self.add-tool($tool);
     }
-    
+
     #| Add a resource to the server
     multi method add-resource(MCP::Server::Resource::RegisteredResource $resource) {
         %!resources{$resource.uri} = $resource;
     }
-    
+
     #| Add a resource using named parameters
     multi method add-resource(
         Str :$uri!,
@@ -79,12 +79,12 @@ class Server is export {
             .build;
         self.add-resource($resource);
     }
-    
+
     #| Add a prompt to the server
     multi method add-prompt(MCP::Server::Prompt::RegisteredPrompt $prompt) {
         %!prompts{$prompt.name} = $prompt;
     }
-    
+
     #| Add a prompt using named parameters
     multi method add-prompt(
         Str :$name!,
@@ -96,17 +96,17 @@ class Server is export {
             .name($name)
             .description($description // '')
             .generator(&generator);
-        
+
         for @arguments -> $arg {
-            $builder.argument($arg<name>, 
+            $builder.argument($arg<name>,
                 description => $arg<description>,
                 required => $arg<required> // False
             );
         }
-        
+
         self.add-prompt($builder.build);
     }
-    
+
     #| Get server capabilities based on registered handlers
     method capabilities(--> MCP::Types::ServerCapabilities) {
         MCP::Types::ServerCapabilities.new(
@@ -116,7 +116,7 @@ class Server is export {
             logging => MCP::Types::LoggingCapability.new,
         )
     }
-    
+
     #| Start serving requests
     method serve(--> Promise) {
         start {
@@ -127,7 +127,7 @@ class Server is export {
             }
         }
     }
-    
+
     #| Handle incoming message
     method !handle-message($msg) {
         given $msg {
@@ -142,15 +142,15 @@ class Server is export {
             }
         }
     }
-    
+
     #| Handle incoming request
     method !handle-request(MCP::JSONRPC::Request $req) {
         my $result;
         my $error;
-        
+
         try {
             $result = self.dispatch-request($req);
-            
+
             CATCH {
                 when X::MCP::JSONRPC {
                     $error = $_.error;
@@ -163,48 +163,48 @@ class Server is export {
                 }
             }
         }
-        
+
         # Send response
-        my $response = $error 
+        my $response = $error
             ?? MCP::JSONRPC::Response.error($req.id, $error)
             !! MCP::JSONRPC::Response.success($req.id, $result);
-        
+
         $!transport.send($response);
     }
-    
+
     #| Dispatch request to appropriate handler using multi-dispatch
     multi method dispatch-request($req where *.method eq 'initialize') {
         self!handle-initialize($req.params);
     }
-    
+
     multi method dispatch-request($req where *.method eq 'ping') {
         {}  # Empty response for ping
     }
-    
+
     multi method dispatch-request($req where *.method eq 'tools/list') {
         self!list-tools($req.params);
     }
-    
+
     multi method dispatch-request($req where *.method eq 'tools/call') {
         self!call-tool($req.params);
     }
-    
+
     multi method dispatch-request($req where *.method eq 'resources/list') {
         self!list-resources($req.params);
     }
-    
+
     multi method dispatch-request($req where *.method eq 'resources/read') {
         self!read-resource($req.params);
     }
-    
+
     multi method dispatch-request($req where *.method eq 'prompts/list') {
         self!list-prompts($req.params);
     }
-    
+
     multi method dispatch-request($req where *.method eq 'prompts/get') {
         self!get-prompt($req.params);
     }
-    
+
     multi method dispatch-request($req) {
         die X::MCP::JSONRPC.new(
             error => MCP::JSONRPC::Error.from-code(
@@ -213,13 +213,13 @@ class Server is export {
             )
         );
     }
-    
+
     #| Handle initialize request
     method !handle-initialize(%params) {
         $!protocol-version = %params<protocolVersion>;
         $!client-capabilities = MCP::Types::ClientCapabilities.new; # Parse from params
         $!initialized = True;
-        
+
         {
             protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
             capabilities => self.capabilities.Hash,
@@ -227,7 +227,7 @@ class Server is export {
             ($!instructions ?? (instructions => $!instructions) !! Empty),
         }
     }
-    
+
     #| Handle initialized notification
     method !handle-notification(MCP::JSONRPC::Notification $notif) {
         given $notif.method {
@@ -244,7 +244,7 @@ class Server is export {
             }
         }
     }
-    
+
     #| Handle response to our requests
     method !handle-response(MCP::JSONRPC::Response $resp) {
         if %!pending-requests{$resp.id}:exists {
@@ -256,14 +256,14 @@ class Server is export {
             }
         }
     }
-    
+
     #| List tools
     method !list-tools(%params?) {
         {
             tools => %!tools.values.map(*.to-tool.Hash).Array
         }
     }
-    
+
     #| Call a tool
     method !call-tool(%params) {
         my $name = %params<name> // die X::MCP::JSONRPC.new(
@@ -272,26 +272,26 @@ class Server is export {
                 "Missing required parameter: name"
             )
         );
-        
+
         my $tool = %!tools{$name} // die X::MCP::JSONRPC.new(
             error => MCP::JSONRPC::Error.from-code(
                 MCP::JSONRPC::InvalidParams,
                 "Unknown tool: $name"
             )
         );
-        
+
         my %arguments = %params<arguments> // {};
         my $result = $tool.call(%arguments);
         $result.Hash;
     }
-    
+
     #| List resources
     method !list-resources(%params?) {
         {
             resources => %!resources.values.map(*.to-resource.Hash).Array
         }
     }
-    
+
     #| Read a resource
     method !read-resource(%params) {
         my $uri = %params<uri> // die X::MCP::JSONRPC.new(
@@ -300,26 +300,26 @@ class Server is export {
                 "Missing required parameter: uri"
             )
         );
-        
+
         my $resource = %!resources{$uri} // die X::MCP::JSONRPC.new(
             error => MCP::JSONRPC::Error.from-code(
                 MCP::JSONRPC::InvalidParams,
                 "Unknown resource: $uri"
             )
         );
-        
+
         {
             contents => $resource.read.map(*.Hash).Array
         }
     }
-    
+
     #| List prompts
     method !list-prompts(%params?) {
         {
             prompts => %!prompts.values.map(*.to-prompt.Hash).Array
         }
     }
-    
+
     #| Get a prompt
     method !get-prompt(%params) {
         my $name = %params<name> // die X::MCP::JSONRPC.new(
@@ -328,40 +328,40 @@ class Server is export {
                 "Missing required parameter: name"
             )
         );
-        
+
         my $prompt = %!prompts{$name} // die X::MCP::JSONRPC.new(
             error => MCP::JSONRPC::Error.from-code(
                 MCP::JSONRPC::InvalidParams,
                 "Unknown prompt: $name"
             )
         );
-        
+
         my %arguments = %params<arguments> // {};
-        
+
         {
             description => $prompt.description,
             messages => $prompt.get(%arguments).map(*.Hash).Array
         }
     }
-    
+
     #| Send a request to the client (for sampling, etc.)
     method request(Str $method, $params? --> Promise) {
         my $id = $!id-gen.next;
         my $p = Promise.new;
         %!pending-requests{$id} = $p.vow;
-        
+
         my $request = MCP::JSONRPC::Request.new(:$id, :$method, :$params);
         $!transport.send($request);
-        
+
         $p
     }
-    
+
     #| Send a notification to the client
     method notify(Str $method, $params?) {
         my $notification = MCP::JSONRPC::Notification.new(:$method, :$params);
         $!transport.send($notification);
     }
-    
+
     #| Send a log message
     method log(MCP::Types::LogLevel $level, $data, Str :$logger) {
         self.notify('notifications/message', {
@@ -370,7 +370,7 @@ class Server is export {
             ($logger ?? (logger => $logger) !! Empty),
         });
     }
-    
+
     #| Send a progress notification
     method progress($token, Num $progress, Num :$total, Str :$message) {
         self.notify('notifications/progress', {

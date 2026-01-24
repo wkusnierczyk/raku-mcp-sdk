@@ -15,54 +15,54 @@ class StdioTransport does MCP::Transport::Base::Transport is export {
     has Supplier $!supplier;
     has Bool $!running = False;
     has Lock $!write-lock = Lock.new;
-    
+
     method start(--> Supply) {
         return $!incoming if $!running;
-        
+
         $!running = True;
         $!supplier = Supplier.new;
         $!incoming = $!supplier.Supply;
-        
+
         # Start reading in background
         start {
             self!read-loop();
         }
-        
+
         $!incoming;
     }
-    
+
     method !read-loop() {
         my $buffer = '';
-        
+
         loop {
             last unless $!running;
-            
+
             # Read available data
             my $chunk = self!read-chunk();
             last unless $chunk.defined;
-            
+
             $buffer ~= $chunk;
-            
+
             # Try to parse complete messages
             while $!running {
                 my ($msg, $rest) = self!parse-message($buffer);
                 last unless $msg.defined;
-                
+
                 $!supplier.emit($msg);
                 $buffer = $rest;
             }
         }
-        
+
         $!supplier.done unless $!supplier.done;
     }
-    
+
     method !read-chunk(--> Str) {
         try {
             # Read line by line for header parsing
             my $line = $!input.get;
             return Str unless $line.defined;
             return $line ~ "\n";
-            
+
             CATCH {
                 default {
                     return Str;
@@ -70,7 +70,7 @@ class StdioTransport does MCP::Transport::Base::Transport is export {
             }
         }
     }
-    
+
     #| Parse a message from the buffer
     #| Returns (message, remaining-buffer) or (Nil, buffer)
     method !parse-message(Str $buffer --> List) {
@@ -79,20 +79,20 @@ class StdioTransport does MCP::Transport::Base::Transport is export {
             my $length = $0.Int;
             my $header-end = $/.to;
             my $body-start = $header-end;
-            
+
             # Find the blank line separating headers from body
             if $buffer ~~ /\r?\n\r?\n/ {
                 $body-start = $/.to;
                 my $available = $buffer.substr($body-start);
-                
+
                 if $available.chars >= $length {
                     my $json = $available.substr(0, $length);
                     my $rest = $available.substr($length);
-                    
+
                     try {
                         my $msg = MCP::JSONRPC::parse-message($json);
                         return ($msg, $rest);
-                        
+
                         CATCH {
                             default {
                                 # Parse error - skip this message
@@ -103,17 +103,17 @@ class StdioTransport does MCP::Transport::Base::Transport is export {
                 }
             }
         }
-        
+
         return (Nil, $buffer);
     }
-    
+
     method send(MCP::JSONRPC::Message $msg --> Promise) {
         start {
             $!write-lock.protect: {
                 my $json = $msg.to-json;
                 my $bytes = $json.encode('utf-8');
                 my $length = $bytes.elems;
-                
+
                 # Write header
                 $!output.print("Content-Length: $length\r\n\r\n");
                 # Write body
@@ -122,14 +122,14 @@ class StdioTransport does MCP::Transport::Base::Transport is export {
             }
         }
     }
-    
+
     method close(--> Promise) {
         start {
             $!running = False;
             $!supplier.done if $!supplier;
         }
     }
-    
+
     method is-connected(--> Bool) {
         $!running
     }
