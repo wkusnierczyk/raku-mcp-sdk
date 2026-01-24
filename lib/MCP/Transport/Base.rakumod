@@ -3,6 +3,18 @@ use v6.d;
 #| Base transport role and transport error types
 unit module MCP::Transport::Base;
 
+=begin pod
+=head1 NAME
+
+MCP::Transport::Base - Transport role and error types
+
+=head1 DESCRIPTION
+
+Defines the transport interface used by MCP client/server implementations
+and the associated exception hierarchy.
+
+=end pod
+
 use MCP::JSONRPC;
 
 #| Base role for all MCP transports

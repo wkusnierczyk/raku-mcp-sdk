@@ -3,6 +3,30 @@ use v6.d;
 #| MCP client implementation and convenience APIs
 unit module MCP::Client;
 
+=begin pod
+=head1 NAME
+
+MCP::Client - MCP client implementation
+
+=head1 SYNOPSIS
+
+    use MCP::Client;
+    use MCP::Transport::Stdio;
+    use MCP::Types;
+
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'my-client', version => '0.1'),
+        transport => MCP::Transport::Stdio::StdioTransport.new
+    );
+    await $client.connect;
+
+=head1 DESCRIPTION
+
+Provides a high-level MCP client that performs initialization, sends requests,
+and parses typed responses for tools, resources, and prompts.
+
+=end pod
+
 use MCP::Types;
 need MCP::JSONRPC;
 use MCP::Transport::Base;

@@ -3,6 +3,18 @@ use v6.d;
 #| Stdio transport implementation with LSP-style framing
 unit module MCP::Transport::Stdio;
 
+=begin pod
+=head1 NAME
+
+MCP::Transport::Stdio - Stdio transport implementation
+
+=head1 DESCRIPTION
+
+Implements MCP transport over stdin/stdout using Content-Length framing.
+Useful for CLI tools and embedding in subprocess pipelines.
+
+=end pod
+
 use MCP::JSONRPC;
 use MCP::Transport::Base;
 use JSON::Fast;

@@ -3,6 +3,30 @@ use v6.d;
 #| MCP server implementation and request dispatch
 unit module MCP::Server;
 
+=begin pod
+=head1 NAME
+
+MCP::Server - MCP server implementation
+
+=head1 SYNOPSIS
+
+    use MCP::Server;
+    use MCP::Transport::Stdio;
+    use MCP::Types;
+
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => MCP::Transport::Stdio::StdioTransport.new
+    );
+    await $server.serve;
+
+=head1 DESCRIPTION
+
+Implements the MCP server-side protocol: initialization, request dispatch,
+tool/resource/prompt registration, and JSON-RPC message handling.
+
+=end pod
+
 use MCP::Types;
 need MCP::JSONRPC;
 use MCP::Transport::Base;

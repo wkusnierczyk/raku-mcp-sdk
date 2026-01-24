@@ -3,6 +3,18 @@ use v6.d;
 #| Resource registration helpers and builder DSL
 unit module MCP::Server::Resource;
 
+=begin pod
+=head1 NAME
+
+MCP::Server::Resource - Resource registration helpers
+
+=head1 DESCRIPTION
+
+Provides a builder-style DSL and wrapper class for registering MCP resources,
+including file-backed helpers.
+
+=end pod
+
 use MCP::Types;
 
 #| Wrapper class for a registered resource with its reader

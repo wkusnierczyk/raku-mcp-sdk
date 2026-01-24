@@ -3,6 +3,19 @@ use v6.d;
 #| Core MCP data types and capability structures
 unit module MCP::Types;
 
+=begin pod
+=head1 NAME
+
+MCP::Types - Core MCP data types
+
+=head1 DESCRIPTION
+
+Defines MCP protocol data structures (content types, tools, resources, prompts,
+capabilities, and logging). These types are used by both clients and servers
+for serialization and validation.
+
+=end pod
+
 #| Protocol versions
 our constant LATEST_PROTOCOL_VERSION is export = "2025-03-26";
 our constant SUPPORTED_PROTOCOL_VERSIONS is export = <2025-03-26 2024-11-05>;

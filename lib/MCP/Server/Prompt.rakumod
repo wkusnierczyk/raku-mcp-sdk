@@ -3,6 +3,17 @@ use v6.d;
 #| Prompt registration helpers and builder DSL
 unit module MCP::Server::Prompt;
 
+=begin pod
+=head1 NAME
+
+MCP::Server::Prompt - Prompt registration helpers
+
+=head1 DESCRIPTION
+
+Provides a builder-style DSL and wrapper class for registering MCP prompts.
+
+=end pod
+
 use MCP::Types;
 
 #| Wrapper class for a registered prompt with its generator

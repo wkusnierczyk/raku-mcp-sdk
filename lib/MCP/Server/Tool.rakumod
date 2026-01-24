@@ -3,6 +3,17 @@ use v6.d;
 #| Tool registration helpers and builder DSL
 unit module MCP::Server::Tool;
 
+=begin pod
+=head1 NAME
+
+MCP::Server::Tool - Tool registration helpers
+
+=head1 DESCRIPTION
+
+Provides a builder-style DSL and wrapper class for registering MCP tools.
+
+=end pod
+
 use MCP::Types;
 
 #| Wrapper class for a registered tool with its handler

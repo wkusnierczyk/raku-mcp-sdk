@@ -5,6 +5,10 @@ use v6.d;
 
 02-jsonrpc.rakutest - Tests for JSON-RPC message types
 
+=head1 DESCRIPTION
+
+Validates JSON-RPC message serialization, parsing, and error handling.
+
 =end pod
 
 use Test;

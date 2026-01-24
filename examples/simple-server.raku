@@ -6,6 +6,15 @@ use v6.d;
 
 simple-server - Minimal MCP server example using stdio transport
 
+=head1 DESCRIPTION
+
+Demonstrates a small MCP server that exposes a handful of tools, resources,
+and prompts. The server communicates over stdio using JSON-RPC messages.
+
+=head1 USAGE
+
+    make run-example EXAMPLE=simple-server
+
 =end pod
 
 # Simple MCP Server Example

@@ -3,6 +3,25 @@ use v6.d;
 #| Top-level convenience exports for the MCP SDK
 unit module MCP;
 
+=begin pod
+=head1 NAME
+
+MCP - Top-level convenience exports for the MCP SDK
+
+=head1 SYNOPSIS
+
+    use MCP;
+
+    my $server = Server.new(...);
+    my $client = Client.new(...);
+
+=head1 DESCRIPTION
+
+Re-exports core MCP types, builders, and transport classes to reduce the number
+of explicit module imports required in typical usage.
+
+=end pod
+
 # Re-export all MCP modules
 need MCP::Types;
 need MCP::JSONRPC;

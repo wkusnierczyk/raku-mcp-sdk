@@ -5,6 +5,10 @@ use v6.d;
 
 01-types.rakutest - Tests for MCP type definitions
 
+=head1 DESCRIPTION
+
+Validates core MCP type constructors and serialization behavior.
+
 =end pod
 
 use Test;
