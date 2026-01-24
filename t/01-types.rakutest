@@ -4,7 +4,7 @@ use lib 'lib';
 
 use MCP::Types;
 
-plan 25;
+plan 23;
 
 # Test Implementation
 subtest 'Implementation', {

@@ -5,7 +5,7 @@ use lib 'lib';
 use MCP::JSONRPC;
 use JSON::Fast;
 
-plan 15;
+plan 14;
 
 # Test Error codes
 subtest 'Error codes', {
@@ -62,15 +62,15 @@ subtest 'Request with string ID', {
 
 # Test Response success
 subtest 'Response success', {
-    my $resp = Response.success(1, { result => 'ok' });
+    my $resp = Response.success(1, { data => 'ok' });
     is $resp.id, 1, 'id is correct';
-    is $resp.result<r>, 'ok', 'result is correct';
+    is $resp.result<data>, 'ok', 'result is correct';
     ok !$resp.error.defined, 'no error';
 
     my %h = $resp.Hash;
     is %h<jsonrpc>, '2.0', 'Hash has jsonrpc';
-    ok %h<r>:exists, 'Hash has result';
-    ok !(%h<e>:exists), 'Hash has no error';
+    ok %h<result>:exists, 'Hash has result';
+    ok !(%h<error>:exists), 'Hash has no error';
 };
 
 # Test Response error
@@ -83,8 +83,8 @@ subtest 'Response error', {
     is $resp.error.code, -32600, 'error code is correct';
 
     my %h = $resp.Hash;
-    ok %h<e>:exists, 'Hash has error';
-    ok !(%h<r>:exists), 'Hash has no result';
+    ok %h<error>:exists, 'Hash has error';
+    ok !(%h<result>:exists), 'Hash has no result';
 };
 
 # Test Notification

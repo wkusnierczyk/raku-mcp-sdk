@@ -80,11 +80,11 @@ class Request does Message is export {
 class Response does Message is export {
     has $.id is required;  # Str or Int, matches request
     has $.result;          # Any JSON value
-    has Error $.error;     # Error object if failed
+    has $.error;  # Error object if failed
 
     method Hash(--> Hash) {
         my %h = jsonrpc => $!jsonrpc, id => $!id;
-        if $!error {
+        if $!error.defined {
             %h<error> = $!error.Hash;
         } else {
             %h<result> = $!result;
@@ -93,7 +93,7 @@ class Response does Message is export {
     }
 
     method from-hash(%h --> Response) {
-        my $error = %h<error> ?? Error.from-hash(%h<error>) !! Error;
+        my $error = %h<error>:exists ?? Error.from-hash(%h<error>) !! Nil;
         self.new(
             id => %h<id>,
             result => %h<result>,
@@ -107,7 +107,9 @@ class Response does Message is export {
     }
 
     #| Create an error response
-    method error($id, Error $error --> Response) {
+    proto method error(|) {*}
+    multi method error(::?CLASS:D:) { $!error }
+    multi method error(::?CLASS:U: $id, Error $error --> Response) {
         self.new(:$id, :$error)
     }
 }
