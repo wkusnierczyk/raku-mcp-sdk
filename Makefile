@@ -310,7 +310,7 @@ lint-syntax: $(RAKU_FILES)
 	$(call log-info,Checking syntax...)
 	$(Q)for file in $(RAKU_FILES); do \
 		printf "  $(CLR_CYAN)•$(CLR_RESET) Checking %s\n" "$$file" >&2; \
-		$(RAKU) -c "$$file" || exit 1; \
+		$(RAKU) -I$(SOURCE_DIR) -c "$$file" || exit 1; \
 	done
 	$(call log-success,Syntax check passed)
 
@@ -318,7 +318,7 @@ lint-syntax: $(RAKU_FILES)
 lint-meta: $(META_FILE)
 	$(call log-info,Validating META6.json...)
 	$(Q)$(RAKU) -e 'use JSON::Fast; my $$m = from-json(slurp "$(META_FILE)"); \
-		die "Missing name" unless $$m<n>; \
+		die "Missing name" unless $$m<name>; \
 		die "Missing version" unless $$m<version>; \
 		die "Missing provides" unless $$m<provides>;' >&2
 	$(call log-success,META6.json is valid)

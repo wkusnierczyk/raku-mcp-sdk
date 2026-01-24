@@ -5,7 +5,7 @@ unit module MCP;
 # Re-export all MCP modules
 need MCP::Types;
 need MCP::JSONRPC;
-use MCP::Transport::Base;
+need MCP::Transport::Base;
 need MCP::Transport::Stdio;
 need MCP::Server;
 need MCP::Server::Tool;
@@ -17,23 +17,29 @@ need MCP::Client;
 our constant PROTOCOL_VERSION is export = MCP::Types::LATEST_PROTOCOL_VERSION;
 
 # Re-export types
-sub Implementation(|c) is export { MCP::Types::Implementation.new(|c) }
-sub TextContent(|c) is export { MCP::Types::TextContent.new(|c) }
-sub ImageContent(|c) is export { MCP::Types::ImageContent.new(|c) }
-sub Tool(|c) is export { MCP::Types::Tool.new(|c) }
-sub Resource(|c) is export { MCP::Types::Resource.new(|c) }
-sub Prompt(|c) is export { MCP::Types::Prompt.new(|c) }
-
-# Re-export server components
-sub Server(|c) is export { MCP::Server::Server.new(|c) }
-sub StdioTransport(|c) is export { MCP::Transport::Stdio::StdioTransport.new(|c) }
-
-# Re-export client
-sub Client(|c) is export { MCP::Client::Client.new(|c) }
-
+constant Implementation is export = MCP::Types::Implementation;
+constant TextContent is export = MCP::Types::TextContent;
+constant ImageContent is export = MCP::Types::ImageContent;
+constant Tool is export = MCP::Types::Tool;
+constant Resource is export = MCP::Types::Resource;
+constant Prompt is export = MCP::Types::Prompt;
 
 # Re-export log levels
 constant Debug is export = MCP::Types::Debug;
 constant Info is export = MCP::Types::Info;
 constant Warning is export = MCP::Types::Warning;
 constant Error is export = MCP::Types::Error;
+
+# Re-export server components
+constant Server is export = MCP::Server::Server;
+constant Transport is export = MCP::Transport::Base::Transport;
+constant StdioTransport is export = MCP::Transport::Stdio::StdioTransport;
+
+# Re-export client
+constant Client is export = MCP::Client::Client;
+
+# Re-export builders
+sub tool is export { MCP::Server::Tool::tool() }
+sub resource is export { MCP::Server::Resource::resource() }
+sub file-resource(|c) is export { MCP::Server::Resource::file-resource(|c) }
+sub prompt is export { MCP::Server::Prompt::prompt() }
