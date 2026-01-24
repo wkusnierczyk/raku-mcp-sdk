@@ -105,12 +105,12 @@ class PromptBuilder is export {
 }
 
 #| Convenience function to create a prompt builder
-sub prompt(--> PromptBuilder) is export {
+our sub prompt(--> PromptBuilder) is export {
     PromptBuilder.new
 }
 
 #| Helper to create a simple user message
-sub user-message(Str $text --> MCP::Types::PromptMessage) is export {
+our sub user-message(Str $text --> MCP::Types::PromptMessage) is export {
     MCP::Types::PromptMessage.new(
         role => 'user',
         content => MCP::Types::TextContent.new(:$text)
@@ -118,7 +118,7 @@ sub user-message(Str $text --> MCP::Types::PromptMessage) is export {
 }
 
 #| Helper to create a simple assistant message
-sub assistant-message(Str $text --> MCP::Types::PromptMessage) is export {
+our sub assistant-message(Str $text --> MCP::Types::PromptMessage) is export {
     MCP::Types::PromptMessage.new(
         role => 'assistant',
         content => MCP::Types::TextContent.new(:$text)

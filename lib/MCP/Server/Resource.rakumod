@@ -145,12 +145,12 @@ class ResourceBuilder is export {
 }
 
 #| Convenience function to create a resource builder
-sub resource(--> ResourceBuilder) is export {
+our sub resource(--> ResourceBuilder) is export {
     ResourceBuilder.new
 }
 
 #| Create a resource from a file
-sub file-resource(IO::Path $path, Str :$uri, Str :$name --> RegisteredResource) is export {
+our sub file-resource(IO::Path $path, Str :$uri, Str :$name --> RegisteredResource) is export {
     my $builder = resource().from-file($path);
     $builder.uri($_) with $uri;
     $builder.name($_) with $name;

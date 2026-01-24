@@ -12,12 +12,8 @@ simple-server - Minimal MCP server example using stdio transport
 # This server provides basic tools and resources
 
 use lib 'lib';
-use MCP;
 use MCP::Types;
 use MCP::Server;
-use MCP::Server::Tool;
-use MCP::Server::Resource;
-use MCP::Server::Prompt;
 use MCP::Transport::Stdio;
 
 # Create the server
@@ -203,9 +199,14 @@ $server.add-prompt(
         my $topic = %params<topic>;
         my $level = %params<level> // 'intermediate';
         
-        MCP::Server::Prompt::user-message(
-            "Please explain $topic at a $level level. Include examples where helpful."
-        )
+        [
+            MCP::Types::PromptMessage.new(
+                role => 'user',
+                content => MCP::Types::TextContent.new(
+                    text => "Please explain $topic at a $level level. Include examples where helpful."
+                )
+            )
+        ]
     }
 );
 

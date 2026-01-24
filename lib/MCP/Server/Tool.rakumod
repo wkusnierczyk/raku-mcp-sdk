@@ -164,6 +164,6 @@ class ToolBuilder is export {
 }
 
 #| Convenience function to create a tool builder
-sub tool(--> ToolBuilder) is export {
+our sub tool(--> ToolBuilder) is export {
     ToolBuilder.new
 }
