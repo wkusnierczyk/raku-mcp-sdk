@@ -11,6 +11,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   # Raku version to use
   RAKU_VERSION: '2024.01'
@@ -110,6 +113,46 @@ jobs:
         with:
           name: coverage-report
           path: coverage-report
+
+  # ----------------------------------------------------------------------------
+  # Architecture Diagram Job - Verify diagram PNG is up to date
+  # ----------------------------------------------------------------------------
+  architecture:
+    name: Architecture Diagram
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Mermaid CLI
+        run: npm install -g @mermaid-js/mermaid-cli
+
+      - name: Generate architecture diagram
+        run: make architecture-diagram
+
+      - name: Commit updated diagram
+        if: github.event_name == 'push'
+        run: |
+          if ! git diff --quiet -- architecture/architecture.png; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add architecture/architecture.png
+            git commit -m "chore: update architecture diagram"
+            git push
+          fi
+
+      - name: Upload diagram artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-diagram
+          path: architecture/architecture.png
 
   # ----------------------------------------------------------------------------
   # Build Job - Verify the module builds correctly
