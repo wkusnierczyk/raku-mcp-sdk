@@ -153,6 +153,7 @@ endef
 # ------------------------------------------------------------------------------
 
 .PHONY: help
+# help: Show Makefile usage and targets
 help:
 	$(call log,)
 	$(call log,$(CLR_CYAN)╔══════════════════════════════════════════════════════════════════╗$(CLR_RESET))
@@ -205,6 +206,7 @@ help:
 # ------------------------------------------------------------------------------
 
 .PHONY: about
+# about: Show project metadata from Makefile variables
 about:
 	$(call log,)
 	$(call log,$(PROJECT_TITLE): $(PROJECT_DESC))
@@ -219,14 +221,17 @@ about:
 # ------------------------------------------------------------------------------
 
 .PHONY: all
+# all: Install deps, build, and test
 all: dependencies build test
 	$(call log-success,Build complete)
 
 .PHONY: build
+# build: Validate metadata and precompile modules
 build: validate build-precompile
 	$(call log-success,Build successful)
 
 .PHONY: build-precompile
+# build-precompile: Precompile the main module
 build-precompile: $(RAKU_FILES)
 	$(call log-info,Precompiling modules...)
 	$(Q)$(RAKU) -I$(SOURCE_DIR) -e 'use $(PROJECT_NAME)' 2>/dev/null || \
@@ -234,18 +239,21 @@ build-precompile: $(RAKU_FILES)
 	$(call log-success,Precompilation complete)
 
 .PHONY: test
+# test: Build and run the test suite
 test: build
 	$(call log-info,Running tests...)
 	$(Q)$(PROVE) $(PROVE_FLAGS) $(TEST_DIR)
 	$(call log-success,All tests passed)
 
 .PHONY: install
+# install: Build and install module globally
 install: build
 	$(call log-info,Installing $(PROJECT_NAME)...)
 	$(Q)$(ZEF) install . $(INSTALL_GLOBAL)
 	$(call log-success,Installation complete)
 
 .PHONY: clean
+# clean: Remove build, coverage, and dist artifacts
 clean: clean-build clean-coverage clean-dist
 	$(call log-success,Clean complete)
 
@@ -254,6 +262,7 @@ clean: clean-build clean-coverage clean-dist
 # ------------------------------------------------------------------------------
 
 .PHONY: clean-build
+# clean-build: Remove build and precomp artifacts
 clean-build:
 	$(call log-info,Cleaning build artifacts...)
 	$(Q)rm -rf $(BUILD_DIR)
@@ -262,12 +271,14 @@ clean-build:
 	$(Q)find . -name '.precomp' -type d -exec rm -rf {} + 2>/dev/null || true
 
 .PHONY: clean-coverage
+# clean-coverage: Remove coverage reports
 clean-coverage:
 	$(call log-info,Cleaning coverage data...)
 	$(Q)rm -rf $(COVERAGE_DIR)
 	$(Q)rm -rf coverage-report
 
 .PHONY: clean-dist
+# clean-dist: Remove distribution artifacts
 clean-dist:
 	$(call log-info,Cleaning distribution artifacts...)
 	$(Q)rm -rf $(DIST_DIR)
@@ -275,6 +286,7 @@ clean-dist:
 	$(Q)rm -f $(PROJECT_NAME)-*.tar.gz
 
 .PHONY: clean-all
+# clean-all: Remove all build artifacts including docs build output
 clean-all: clean
 	$(call log-info,Deep cleaning...)
 	$(Q)rm -rf $(DOCS_DIR)/_build
@@ -285,12 +297,14 @@ clean-all: clean
 # ------------------------------------------------------------------------------
 
 .PHONY: dependencies
+# dependencies: Install runtime dependencies
 dependencies: $(META_FILE)
 	$(call log-info,Installing dependencies...)
 	$(Q)$(ZEF) install $(ZEF_FLAGS) .
 	$(call log-success,Dependencies installed)
 
 .PHONY: dependencies-dev
+# dependencies-dev: Install development-only dependencies
 dependencies-dev: dependencies
 	$(call log-info,Installing development dependencies...)
 	$(Q)$(ZEF) install App::Prove6 || true
@@ -300,6 +314,7 @@ dependencies-dev: dependencies
 	$(call log-success,Development dependencies installed)
 
 .PHONY: dependencies-update
+# dependencies-update: Update installed dependencies
 dependencies-update:
 	$(call log-info,Updating dependencies...)
 	$(Q)$(ZEF) update
@@ -311,10 +326,12 @@ dependencies-update:
 # ------------------------------------------------------------------------------
 
 .PHONY: lint
+# lint: Run syntax and metadata checks
 lint: lint-syntax lint-meta
 	$(call log-success,Linting complete)
 
 .PHONY: lint-syntax
+# lint-syntax: Compile-check all source files
 lint-syntax: $(RAKU_FILES)
 	$(call log-info,Checking syntax...)
 	$(Q)for file in $(RAKU_FILES); do \
@@ -324,6 +341,7 @@ lint-syntax: $(RAKU_FILES)
 	$(call log-success,Syntax check passed)
 
 .PHONY: lint-meta
+# lint-meta: Validate META6.json required fields
 lint-meta: $(META_FILE)
 	$(call log-info,Validating META6.json...)
 	$(Q)$(RAKU) -e 'use JSON::Fast; my $$m = from-json(slurp "$(META_FILE)"); \
@@ -333,6 +351,7 @@ lint-meta: $(META_FILE)
 	$(call log-success,META6.json is valid)
 
 .PHONY: format
+# format: Show formatting guidance and check for common issues
 format:
 	$(call log-info,Formatting code...)
 	$(call log-warning,Raku does not have a standard formatter yet.)
@@ -351,6 +370,7 @@ format:
 	$(call log-success,Format check complete)
 
 .PHONY: format-fix
+# format-fix: Remove trailing whitespace from sources/tests
 format-fix:
 	$(call log-info,Fixing formatting issues...)
 	$(Q)for file in $(RAKU_FILES) $(TEST_FILES); do \
@@ -363,6 +383,7 @@ format-fix:
 	$(call log-success,Formatting fixes applied)
 
 .PHONY: check
+# check: Run lint and tests
 check: lint test
 	$(call log-success,All checks passed)
 
@@ -371,11 +392,13 @@ check: lint test
 # ------------------------------------------------------------------------------
 
 .PHONY: test-verbose
+# test-verbose: Run tests with verbose output
 test-verbose: build
 	$(call log-info,Running tests (verbose)...)
 	$(Q)$(PROVE) $(PROVE_FLAGS) --verbose $(TEST_DIR)
 
 .PHONY: test-file
+# test-file: Run a specific test file (FILE=path)
 test-file: build
 ifndef FILE
 	$(call log-error,FILE not specified)
@@ -386,11 +409,13 @@ endif
 	$(Q)$(RAKU) -I. $(FILE)
 
 .PHONY: test-quick
+# test-quick: Run tests without a build step
 test-quick:
 	$(call log-info,Running quick tests...)
 	$(Q)$(PROVE) -I. $(TEST_DIR)
 
 .PHONY: coverage
+# coverage: Generate coverage report (if Racoco installed)
 coverage: dependencies-dev build
 	$(call log-info,Generating coverage report...)
 	$(Q)$(RACOCO) $(RACOCO_FLAGS) --html 2>/dev/null || \
@@ -402,10 +427,12 @@ coverage: dependencies-dev build
 # ------------------------------------------------------------------------------
 
 .PHONY: validate
+# validate: Validate META6.json and provides entries
 validate: validate-meta validate-provides
 	$(call log-success,Validation complete)
 
 .PHONY: validate-meta
+# validate-meta: Validate required META6.json fields
 validate-meta: $(META_FILE)
 	$(call log-info,Validating META6.json...)
 	$(Q)$(RAKU) -MJSON::Fast -e ' \
@@ -416,6 +443,7 @@ validate-meta: $(META_FILE)
 		}' >&2
 
 .PHONY: validate-provides
+# validate-provides: Validate META6.json provides paths
 validate-provides: $(META_FILE)
 	$(call log-info,Validating provides entries...)
 	$(Q)$(RAKU) -MJSON::Fast -e ' \
@@ -430,6 +458,7 @@ validate-provides: $(META_FILE)
 # ------------------------------------------------------------------------------
 
 .PHONY: dist
+# dist: Create a source distribution tarball
 dist: clean validate
 	$(call log-info,Creating distribution...)
 	$(Q)mkdir -p $(DIST_DIR)
@@ -443,6 +472,7 @@ dist: clean validate
 	$(call log-success,Distribution created: $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION).tar.gz)
 
 .PHONY: release
+# release: Interactive release helper for Zef
 release: check dist
 	$(call log-info,Releasing to ecosystem...)
 	$(call log,$(CLR_YELLOW)Choose release method:$(CLR_RESET))
@@ -464,6 +494,7 @@ release: check dist
 # ------------------------------------------------------------------------------
 
 .PHONY: docs
+# docs: Generate text documentation into docs/
 docs:
 	$(call log-info,Generating documentation...)
 	$(Q)mkdir -p $(DOCS_DIR)
@@ -477,6 +508,7 @@ docs:
 	$(call log-success,Documentation generated)
 
 .PHONY: docs-serve
+# docs-serve: Start documentation server (not implemented)
 docs-serve: docs
 	$(call log-info,Starting documentation server...)
 	$(call log-warning,Not yet implemented)
@@ -486,11 +518,13 @@ docs-serve: docs
 # ------------------------------------------------------------------------------
 
 .PHONY: repl
+# repl: Start REPL with the project loaded
 repl:
 	$(call log-info,Starting REPL with $(PROJECT_NAME) loaded...)
 	$(Q)$(RAKU) -I$(SOURCE_DIR) -M$(PROJECT_NAME)
 
 .PHONY: run-example
+# run-example: Run an example (EXAMPLE=name)
 run-example:
 ifndef EXAMPLE
 	$(call log,$(CLR_YELLOW)Available examples:$(CLR_RESET))
@@ -505,6 +539,7 @@ else
 endif
 
 .PHONY: info
+# info: Show toolchain versions and project stats
 info:
 	$(call log-header,Toolchain Information)
 	@$(RAKU) --version 2>/dev/null | head -1 | xargs -I{} printf "  Raku:   %s\n" "{}" >&2 || printf "  Raku:   not found\n" >&2
@@ -518,6 +553,7 @@ info:
 	$(call log,)
 
 .PHONY: list-modules
+# list-modules: List module files in lib/
 list-modules:
 	$(call log-header,Modules in $(SOURCE_DIR))
 	@for file in $(RAKU_FILES); do \
@@ -525,6 +561,7 @@ list-modules:
 	done
 
 .PHONY: list-tests
+# list-tests: List test files in t/
 list-tests:
 	$(call log-header,Tests in $(TEST_DIR))
 	@for file in $(TEST_FILES); do \
@@ -536,18 +573,21 @@ list-tests:
 # ------------------------------------------------------------------------------
 
 .PHONY: install-local
+# install-local: Build and install module locally (home)
 install-local: build
 	$(call log-info,Installing $(PROJECT_NAME) locally...)
 	$(Q)$(ZEF) install . $(INSTALL_LOCAL)
 	$(call log-success,Local installation complete)
 
 .PHONY: install-force
+# install-force: Force install module (overwrites)
 install-force:
 	$(call log-info,Force installing $(PROJECT_NAME)...)
 	$(Q)$(ZEF) install . --force-install
 	$(call log-success,Force installation complete)
 
 .PHONY: uninstall
+# uninstall: Uninstall the module
 uninstall:
 	$(call log-info,Uninstalling $(PROJECT_NAME)...)
 	$(Q)$(ZEF) uninstall $(PROJECT_NAME) || true
@@ -558,10 +598,12 @@ uninstall:
 # ------------------------------------------------------------------------------
 
 .PHONY: ci
+# ci: Run CI pipeline (deps + lint + test)
 ci: dependencies lint test
 	$(call log-success,CI pipeline complete)
 
 .PHONY: ci-full
+# ci-full: Run full CI pipeline (deps-dev + lint + test + coverage)
 ci-full: dependencies-dev lint test coverage
 	$(call log-success,Full CI pipeline complete)
 
@@ -570,6 +612,7 @@ ci-full: dependencies-dev lint test coverage
 # ------------------------------------------------------------------------------
 
 .PHONY: version
+# version: Show version (or update version when args provided)
 version:
 ifneq ($(VERSION_NEW),)
 	@if [ -z "$(VERSION_DESC)" ]; then \
@@ -589,16 +632,19 @@ else
 endif
 
 .PHONY: bump-patch
+# bump-patch: Placeholder for patch bump
 bump-patch:
 	$(call log-warning,Version bumping not yet implemented)
 	$(call log-step,Edit META6.json manually or use mi6)
 
 .PHONY: bump-minor
+# bump-minor: Placeholder for minor bump
 bump-minor:
 	$(call log-warning,Version bumping not yet implemented)
 	$(call log-step,Edit META6.json manually or use mi6)
 
 .PHONY: bump-major
+# bump-major: Placeholder for major bump
 bump-major:
 	$(call log-warning,Version bumping not yet implemented)
 	$(call log-step,Edit META6.json manually or use mi6)

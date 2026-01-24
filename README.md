@@ -15,7 +15,19 @@ Build MCP servers and clients in Raku to integrate with LLM applications like Cl
 - [x] Client API
 - [ ] HTTP/Streamable HTTP transport
 - [ ] Full test coverage
-- [ ] Documentation
+- [x] Documentation
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [Protocol Support](#protocol-support)
+- [Development](#development)
+- [Architecture](#architecture)
+- [Contributing](#contributing)
+- [License](#license)
+- [References](#references)
 
 ## Installation
 
@@ -224,35 +236,110 @@ make test        # Run test suite
 
 ### Makefile Targets
 
-| Target | Description |
-|--------|-------------|
-| **Primary** | |
-| `all` | Build the complete project (dependencies → build → test) |
-| `build` | Build/compile the project |
-| `test` | Run the test suite |
-| `install` | Install the module globally |
-| `clean` | Remove all build artifacts |
-| **Development** | |
-| `dependencies` | Install project dependencies |
-| `dependencies-dev` | Install development dependencies |
-| `lint` | Run linter/static analysis |
-| `format` | Format source code |
-| `check` | Run all checks (lint + test) |
-| **Testing** | |
-| `test` | Run all tests |
-| `test-verbose` | Run tests with verbose output |
-| `test-file` | Run a specific test (`FILE=t/01-types.rakutest`) |
-| `coverage` | Generate test coverage report |
-| **Distribution** | |
-| `dist` | Create distribution tarball |
-| `release` | Release to Zef ecosystem |
-| `docs` | Generate documentation |
-| **Utility** | |
-| `about` | Show project information |
-| `validate` | Validate META6.json |
-| `repl` | Start REPL with project loaded |
-| `run-example` | Run an example (`EXAMPLE=simple-server`) |
-| `info` | Show toolchain information |
+Primary targets
+
+| Target | Description | Notes |
+|--------|-------------|-------|
+| `all` | Install deps, build, and test | Runs `dependencies → build → test` |
+| `build` | Validate and precompile modules | Runs `validate` then `build-precompile` |
+| `build-precompile` | Precompile the main module | Uses `raku -Ilib -c lib/MCP.rakumod` fallback |
+| `test` | Build and run tests | Depends on `build` |
+| `install` | Install module globally | Uses `zef install . --/test` |
+
+Validation and metadata
+
+| Target | Description | Notes |
+|--------|-------------|-------|
+| `validate` | Validate META6.json and provides entries | Runs `validate-meta` and `validate-provides` |
+| `validate-meta` | Check required META6.json fields | Ensures `name`, `version`, `description`, `provides` |
+| `validate-provides` | Verify `provides` paths exist | Prints each resolved entry |
+
+Dependencies
+
+| Target | Description | Notes |
+|--------|-------------|-------|
+| `dependencies` | Install runtime dependencies | `zef install --deps-only .` |
+| `dependencies-dev` | Install dev dependencies | Includes Prove6, Test::META, Mi6, Racoco |
+| `dependencies-update` | Update dependencies | Runs `zef update` and `zef upgrade` |
+
+Lint and formatting
+
+| Target | Description | Notes |
+|--------|-------------|-------|
+| `lint` | Run syntax + META checks | Runs `lint-syntax` and `lint-meta` |
+| `lint-syntax` | Compile-check source files | Uses `raku -Ilib -c` |
+| `lint-meta` | Validate META6.json | Requires JSON::Fast |
+| `format` | Format guidance and whitespace scan | Non-destructive |
+| `format-fix` | Remove trailing whitespace | Applies to source + tests |
+| `check` | Run lint + tests | Equivalent to `lint test` |
+
+Testing and coverage
+
+| Target | Description | Notes |
+|--------|-------------|-------|
+| `test-verbose` | Run tests with verbose output | Uses `prove6` with `--verbose` |
+| `test-file` | Run a specific test file | `FILE=t/01-types.rakutest` |
+| `test-quick` | Run tests without build | Skips `build` |
+| `coverage` | Generate coverage report | Requires Racoco, otherwise skips |
+
+Documentation
+
+| Target | Description | Notes |
+|--------|-------------|-------|
+| `docs` | Generate text docs into `docs/` | Uses `raku --doc=Text` per module |
+| `docs-serve` | Serve docs (placeholder) | Not implemented |
+
+Distribution and release
+
+| Target | Description | Notes |
+|--------|-------------|-------|
+| `dist` | Create source tarball | Writes to `dist/` |
+| `release` | Interactive release helper | Prompts for `fez upload` |
+
+Utilities and examples
+
+| Target | Description | Notes |
+|--------|-------------|-------|
+| `about` | Show project info | Prints metadata from Makefile |
+| `repl` | Start REPL with project loaded | `raku -Ilib -MMCP` |
+| `run-example` | Run example by name | `EXAMPLE=simple-server` |
+| `info` | Show toolchain + stats | Raku/Zef/Prove versions |
+| `list-modules` | List module files | From `lib/` |
+| `list-tests` | List test files | From `t/` |
+
+Install/uninstall
+
+| Target | Description | Notes |
+|--------|-------------|-------|
+| `install-local` | Install to home | Uses `zef install . --to=home` |
+| `install-force` | Force install | Uses `zef install . --force-install` |
+| `uninstall` | Uninstall module | `zef uninstall MCP` |
+
+CI helpers
+
+| Target | Description | Notes |
+|--------|-------------|-------|
+| `ci` | CI pipeline | `dependencies → lint → test` |
+| `ci-full` | Full CI pipeline | `dependencies-dev → lint → test → coverage` |
+
+Version management
+
+| Target | Description | Notes |
+|--------|-------------|-------|
+| `version` | Show or update project version | `make version 1.2.3 "Release description"` updates Makefile + META6.json and creates a local annotated tag |
+| `bump-patch` | Patch bump placeholder | Not implemented |
+| `bump-minor` | Minor bump placeholder | Not implemented |
+| `bump-major` | Major bump placeholder | Not implemented |
+
+Cleaning
+
+| Target | Description | Notes |
+|--------|-------------|-------|
+| `clean` | Remove build/coverage/dist | Runs clean-build/clean-coverage/clean-dist |
+| `clean-build` | Remove precomp/build dirs | Removes `.precomp` and `.build` |
+| `clean-coverage` | Remove coverage output | Removes `.racoco` and `coverage-report` |
+| `clean-dist` | Remove tarballs/dist dir | Removes `dist/` and `*.tar.gz` |
+| `clean-all` | Deep clean | Also removes docs build output |
 
 ### Environment Variables
 
