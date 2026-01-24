@@ -1,0 +1,375 @@
+# ==============================================================================
+# GitHub Actions - Release on Tag Workflow
+# ==============================================================================
+# Triggered when a version tag (v*.*.*) is pushed.
+# Runs full CI, creates a GitHub release (draft first for immutable releases),
+# and publishes to Zef ecosystem.
+#
+# Usage:
+#   git tag v0.1.0
+#   git push origin v0.1.0
+#
+# Note: This workflow supports GitHub's immutable releases feature.
+#       It creates a draft release first, uploads assets, then publishes.
+#
+# ==============================================================================
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'  # Pre-release tags like v1.0.0-beta.1
+
+env:
+  RAKU_VERSION: '2024.01'
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Validate - Ensure tag matches META6.json version
+  # ----------------------------------------------------------------------------
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      prerelease: ${{ steps.extract.outputs.prerelease }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: extract
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
+
+          # Check if this is a pre-release
+          if [[ "$TAG_VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "Tag version: ${TAG_VERSION}" >&2
+
+      - name: Validate version matches META6.json
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          META_VERSION=$(grep -oP '"version"\s*:\s*"\K[^"]+' META6.json)
+
+          echo "Tag version:  ${TAG_VERSION}" >&2
+          echo "META version: ${META_VERSION}" >&2
+
+          if [[ "$TAG_VERSION" != "$META_VERSION" ]]; then
+            echo "::error::Version mismatch! Tag: v${TAG_VERSION}, META6.json: ${META_VERSION}"
+            exit 1
+          fi
+
+          echo "✓ Version validated: ${TAG_VERSION}" >&2
+
+  # ----------------------------------------------------------------------------
+  # Test - Run full test suite
+  # ----------------------------------------------------------------------------
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: validate
+
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Install dependencies
+        run: zef install --deps-only .
+
+      - name: Run tests
+        run: |
+          zef install App::Prove6 || true
+          prove6 -I. -v t/
+
+  # ----------------------------------------------------------------------------
+  # Build - Create distribution archive
+  # ----------------------------------------------------------------------------
+  build:
+    name: Build Distribution
+    runs-on: ubuntu-latest
+    needs: [validate, test]
+    outputs:
+      artifact_name: ${{ steps.archive.outputs.artifact_name }}
+      archive_filename: ${{ steps.archive.outputs.archive_filename }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Validate META6.json
+        run: |
+          raku -MJSON::Fast -e '
+            my %meta = from-json(slurp "META6.json");
+            for <name version description provides> -> $field {
+              die "Missing required field: $field" unless %meta{$field};
+            }
+            say "✓ META6.json is valid";
+          '
+
+      - name: Create distribution archive
+        id: archive
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          ARTIFACT_NAME="MCP-${VERSION}"
+          ARCHIVE_FILENAME="${ARTIFACT_NAME}.tar.gz"
+
+          mkdir -p dist
+          tar --exclude='dist' \
+              --exclude='.git' \
+              --exclude='.github' \
+              --exclude='.precomp' \
+              --exclude='.racoco' \
+              --exclude='*.tar.gz' \
+              -czvf "dist/${ARCHIVE_FILENAME}" .
+
+          echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
+          echo "archive_filename=${ARCHIVE_FILENAME}" >> "$GITHUB_OUTPUT"
+          echo "✓ Created dist/${ARCHIVE_FILENAME}" >&2
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.archive.outputs.artifact_name }}
+          path: dist/*.tar.gz
+          retention-days: 5
+
+  # ----------------------------------------------------------------------------
+  # Release - Create GitHub Release (draft → upload assets → publish)
+  # ----------------------------------------------------------------------------
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate, build]
+    outputs:
+      release_id: ${{ steps.create_draft.outputs.release_id }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for changelog generation
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: dist/
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION="v${{ needs.validate.outputs.version }}"
+
+          # Try to get changes since last tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [[ -n "$PREV_TAG" ]]; then
+            echo "Generating changelog from ${PREV_TAG} to ${VERSION}" >&2
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" "${PREV_TAG}..HEAD" 2>/dev/null || echo "")
+          else
+            echo "No previous tag found, using recent commits" >&2
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" -10 2>/dev/null || echo "")
+          fi
+
+          # Write to file for multiline output
+          {
+            echo "## What's Changed"
+            echo ""
+            if [[ -n "$CHANGELOG" ]]; then
+              echo "$CHANGELOG"
+            else
+              echo "- Initial release"
+            fi
+            echo ""
+            echo "## Installation"
+            echo ""
+            echo "\`\`\`bash"
+            echo "zef install MCP"
+            echo "\`\`\`"
+          } > changelog.md
+
+          cat changelog.md >&2
+
+      # Step 1: Create draft release (for immutable releases)
+      - name: Create draft release
+        id: create_draft
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          PRERELEASE="${{ needs.validate.outputs.prerelease }}"
+
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/releases" \
+            -d @- << EOF
+          {
+            "tag_name": "v${VERSION}",
+            "name": "Release v${VERSION}",
+            "body": $(jq -Rs . < changelog.md),
+            "draft": true,
+            "prerelease": ${PRERELEASE}
+          }
+          EOF
+          )
+
+          RELEASE_ID=$(echo "$RESPONSE" | jq -r '.id')
+          UPLOAD_URL=$(echo "$RESPONSE" | jq -r '.upload_url' | sed 's/{?name,label}//')
+
+          if [[ "$RELEASE_ID" == "null" || -z "$RELEASE_ID" ]]; then
+            echo "::error::Failed to create draft release"
+            echo "$RESPONSE" >&2
+            exit 1
+          fi
+
+          echo "release_id=${RELEASE_ID}" >> "$GITHUB_OUTPUT"
+          echo "upload_url=${UPLOAD_URL}" >> "$GITHUB_OUTPUT"
+          echo "✓ Created draft release with ID: ${RELEASE_ID}" >&2
+
+      # Step 2: Upload assets to draft release
+      - name: Upload release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          UPLOAD_URL="${{ steps.create_draft.outputs.upload_url }}"
+          ARCHIVE_FILENAME="${{ needs.build.outputs.archive_filename }}"
+
+          echo "Uploading ${ARCHIVE_FILENAME}..." >&2
+
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/gzip" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${UPLOAD_URL}?name=${ARCHIVE_FILENAME}" \
+            --data-binary "@dist/${ARCHIVE_FILENAME}")
+
+          ASSET_ID=$(echo "$RESPONSE" | jq -r '.id')
+
+          if [[ "$ASSET_ID" == "null" || -z "$ASSET_ID" ]]; then
+            echo "::error::Failed to upload asset"
+            echo "$RESPONSE" >&2
+            exit 1
+          fi
+
+          echo "✓ Uploaded asset with ID: ${ASSET_ID}" >&2
+
+      # Step 3: Publish the release (remove draft status)
+      - name: Publish release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_ID="${{ steps.create_draft.outputs.release_id }}"
+
+          RESPONSE=$(curl -s -X PATCH \
+            -H "Authorization: token ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/${RELEASE_ID}" \
+            -d '{"draft": false}')
+
+          PUBLISHED=$(echo "$RESPONSE" | jq -r '.draft')
+
+          if [[ "$PUBLISHED" != "false" ]]; then
+            echo "::error::Failed to publish release"
+            echo "$RESPONSE" >&2
+            exit 1
+          fi
+
+          echo "✓ Release published successfully" >&2
+
+  # ----------------------------------------------------------------------------
+  # Publish - Upload to Zef Ecosystem
+  # ----------------------------------------------------------------------------
+  publish:
+    name: Publish to Zef
+    runs-on: ubuntu-latest
+    needs: [validate, release]
+    if: needs.validate.outputs.prerelease == 'false'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Install fez
+        run: zef install fez
+
+      - name: Configure fez
+        env:
+          FEZ_CONFIG: ${{ secrets.FEZ_CONFIG }}
+        run: |
+          if [[ -z "$FEZ_CONFIG" ]]; then
+            echo "::warning::FEZ_CONFIG secret not set, skipping publish"
+            exit 0
+          fi
+
+          mkdir -p ~/.config
+          echo "$FEZ_CONFIG" > ~/.fez-config.json
+          chmod 600 ~/.fez-config.json
+
+      - name: Publish to Zef ecosystem
+        env:
+          FEZ_CONFIG: ${{ secrets.FEZ_CONFIG }}
+        run: |
+          if [[ -z "$FEZ_CONFIG" ]]; then
+            echo "::warning::Skipping publish - FEZ_CONFIG not configured"
+            exit 0
+          fi
+
+          echo "Publishing v${{ needs.validate.outputs.version }} to Zef ecosystem..." >&2
+          fez upload
+          echo "✓ Successfully published to Zef ecosystem" >&2
+
+  # ----------------------------------------------------------------------------
+  # Summary - Post-release summary
+  # ----------------------------------------------------------------------------
+  summary:
+    name: Release Summary
+    runs-on: ubuntu-latest
+    needs: [validate, release, publish]
+    if: always() && needs.release.result == 'success'
+
+    steps:
+      - name: Print summary
+        run: |
+          echo "## Release Summary" >&2
+          echo "" >&2
+          echo "Version:    v${{ needs.validate.outputs.version }}" >&2
+          echo "Prerelease: ${{ needs.validate.outputs.prerelease }}" >&2
+          echo "Release:    ${{ needs.release.result }}" >&2
+          echo "Publish:    ${{ needs.publish.result || 'skipped' }}" >&2
+          echo "" >&2
+          echo "✓ Release workflow completed" >&2
