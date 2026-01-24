@@ -104,10 +104,11 @@ endif
 
 # Version command args (allow: make version 1.2.3 "Description")
 VERSION_INPUT := $(word 2, $(MAKECMDGOALS))
-VERSION_DESC  := $(wordlist 3, 999, $(MAKECMDGOALS))
+VERSION_ARGS_DESC := $(wordlist 3, 999, $(MAKECMDGOALS))
+# Allow passing VERSION_NEW/VERSION_DESC via variables, or via positional args.
+VERSION_NEW ?= $(VERSION_INPUT)
+VERSION_DESC ?= $(strip $(VERSION_ARGS_DESC))
 ifneq ($(VERSION_INPUT),)
-    VERSION_NEW := $(VERSION_INPUT)
-    VERSION_DESC := $(strip $(VERSION_DESC))
     $(foreach word,$(wordlist 2, 999, $(MAKECMDGOALS)),$(eval $(word):;@:))
 endif
 
