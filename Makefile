@@ -660,9 +660,9 @@ ifneq ($(VERSION_NEW),)
 	$(Q)perl -0pi -e 's/^VERSION\\s*:=\\s*.*/VERSION         := $(VERSION_NEW)/m' Makefile
 	$(Q)perl -0pi -e 's/"version"\\s*:\\s*"[^"]*"/"version": "$(VERSION_NEW)"/' $(META_FILE)
 	$(call log-success,Version updated in Makefile and $(META_FILE))
-	$(call log-info,Creating git tag $(VERSION_NEW)...)
-	$(Q)git tag -a "$(VERSION_NEW)" -m "$(VERSION_DESC)"
-	$(call log-success,Tag created locally: $(VERSION_NEW))
+	$(call log-info,Creating git tag v$(VERSION_NEW)...)
+	$(Q)git tag -a "v$(VERSION_NEW)" -m "$(VERSION_DESC)"
+	$(call log-success,Tag created locally: v$(VERSION_NEW))
 else
 	$(call log,$(PROJECT_NAME) v$(VERSION))
 endif
