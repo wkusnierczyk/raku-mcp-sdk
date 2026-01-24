@@ -55,12 +55,14 @@ PROVE           := prove6
 MI6             := mi6
 FEZ             := fez
 RACOCO          := racoco
+RACOCO_BIN      := $(shell command -v $(RACOCO) 2>/dev/null)
 
 # Tool options
 RAKU_FLAGS      := -I$(SOURCE_DIR)
 PROVE_FLAGS     := -I. -v
 ZEF_FLAGS       := --deps-only
 RACOCO_FLAGS    := -l
+RACOCO_COVERAGE_FLAGS :=
 
 # Installation options
 INSTALL_GLOBAL  := --/test
@@ -418,8 +420,13 @@ test-quick:
 # coverage: Generate coverage report (if Racoco installed)
 coverage: dependencies-dev build
 	$(call log-info,Generating coverage report...)
-	$(Q)$(RACOCO) $(RACOCO_FLAGS) --html=$(COVERAGE_REPORT) 2>/dev/null || \
-		($(call log-warning,RaCoCo not available - skipping coverage); true)
+	@if [ -z "$(RACOCO_BIN)" ]; then \
+		$(call log-error,RaCoCo not found on PATH); \
+		$(call log,Add it to PATH or run: PATH="$$PATH:$$($(RAKU) -e 'say $*REPO.repo-chain.grep(*.can("prefix")).map(*.prefix.Str).grep(/site/)[0] ~ "/bin"')"); \
+		exit 1; \
+	fi
+	$(Q)$(RACOCO_BIN) $(RACOCO_COVERAGE_FLAGS) --html --cache-dir=$(COVERAGE_REPORT) \
+		--exec="$(PROVE) $(PROVE_FLAGS) $(TEST_DIR)"
 	$(call log-success,Coverage report generated: $(COVERAGE_REPORT)/index.html)
 
 # ------------------------------------------------------------------------------
