@@ -74,14 +74,20 @@ jobs:
   # Test - Run full test suite
   # ----------------------------------------------------------------------------
   test:
-    name: Test (${{ matrix.os }})
+    name: Test (${{ matrix.os }} / Raku ${{ matrix.raku-version }})
     runs-on: ${{ matrix.os }}
     needs: validate
 
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            raku-version: '2024.01'
+          - os: macos-latest
+            raku-version: '2024.01'
+          - os: windows-latest
+            raku-version: 'latest'
 
     steps:
       - name: Checkout repository
@@ -90,7 +96,7 @@ jobs:
       - name: Setup Raku
         uses: Raku/setup-raku@v1
         with:
-          raku-version: ${{ env.RAKU_VERSION }}
+          raku-version: ${{ matrix.raku-version }}
 
       - name: Install dependencies
         run: zef install --deps-only .
