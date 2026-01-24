@@ -458,8 +458,13 @@ release: check dist
 docs:
 	$(call log-info,Generating documentation...)
 	$(Q)mkdir -p $(DOCS_DIR)
-	$(call log-warning,Documentation generation not yet implemented)
-	$(call log-step,Consider using Pod::To::HTML or similar)
+	$(Q)for file in $(RAKU_FILES); do \
+		out="$(DOCS_DIR)/$${file#$(SOURCE_DIR)/}"; \
+		out="$${out%$(RAKU_EXT)}.txt"; \
+		mkdir -p "$$(dirname "$$out")"; \
+		printf "  $(CLR_CYAN)•$(CLR_RESET) %s\n" "$$out" >&2; \
+		$(RAKU) -I$(SOURCE_DIR) --doc=Text "$$file" > "$$out"; \
+	done
 	$(call log-success,Documentation generated)
 
 .PHONY: docs-serve

@@ -1,5 +1,6 @@
 use v6.d;
 
+#| JSON-RPC 2.0 message types and parsing helpers
 unit module MCP::JSONRPC;
 
 use JSON::Fast;

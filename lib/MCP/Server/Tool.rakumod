@@ -1,5 +1,6 @@
 use v6.d;
 
+#| Tool registration helpers and builder DSL
 unit module MCP::Server::Tool;
 
 use MCP::Types;

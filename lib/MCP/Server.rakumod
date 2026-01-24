@@ -1,5 +1,6 @@
 use v6.d;
 
+#| MCP server implementation and request dispatch
 unit module MCP::Server;
 
 use MCP::Types;

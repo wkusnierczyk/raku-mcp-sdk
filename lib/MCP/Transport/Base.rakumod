@@ -1,5 +1,6 @@
 use v6.d;
 
+#| Base transport role and transport error types
 unit module MCP::Transport::Base;
 
 use MCP::JSONRPC;

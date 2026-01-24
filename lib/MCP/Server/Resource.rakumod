@@ -1,5 +1,6 @@
 use v6.d;
 
+#| Resource registration helpers and builder DSL
 unit module MCP::Server::Resource;
 
 use MCP::Types;

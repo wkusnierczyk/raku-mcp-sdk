@@ -1,6 +1,13 @@
 #!/usr/bin/env raku
 use v6.d;
 
+=begin pod
+=head1 NAME
+
+simple-server - Minimal MCP server example using stdio transport
+
+=end pod
+
 # Simple MCP Server Example
 # This server provides basic tools and resources
 

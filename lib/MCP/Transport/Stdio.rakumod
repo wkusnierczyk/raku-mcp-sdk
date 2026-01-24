@@ -1,5 +1,6 @@
 use v6.d;
 
+#| Stdio transport implementation with LSP-style framing
 unit module MCP::Transport::Stdio;
 
 use MCP::JSONRPC;
@@ -16,6 +17,7 @@ class StdioTransport does MCP::Transport::Base::Transport is export {
     has Bool $!running = False;
     has Lock $!write-lock = Lock.new;
 
+    #| Start the transport and return a Supply of incoming messages
     method start(--> Supply) {
         return $!incoming if $!running;
 
@@ -107,6 +109,7 @@ class StdioTransport does MCP::Transport::Base::Transport is export {
         return (Nil, $buffer);
     }
 
+    #| Send a message using Content-Length framing
     method send(MCP::JSONRPC::Message $msg --> Promise) {
         start {
             $!write-lock.protect: {
@@ -123,6 +126,7 @@ class StdioTransport does MCP::Transport::Base::Transport is export {
         }
     }
 
+    #| Stop the transport and complete the supply
     method close(--> Promise) {
         start {
             $!running = False;
@@ -130,6 +134,7 @@ class StdioTransport does MCP::Transport::Base::Transport is export {
         }
     }
 
+    #| Report whether the transport is running
     method is-connected(--> Bool) {
         $!running
     }

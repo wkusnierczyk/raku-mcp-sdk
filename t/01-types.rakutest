@@ -1,4 +1,12 @@
 use v6.d;
+
+=begin pod
+=head1 NAME
+
+01-types.rakutest - Tests for MCP type definitions
+
+=end pod
+
 use Test;
 use lib 'lib';
 

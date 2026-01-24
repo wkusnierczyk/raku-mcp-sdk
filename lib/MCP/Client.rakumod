@@ -1,5 +1,6 @@
 use v6.d;
 
+#| MCP client implementation and convenience APIs
 unit module MCP::Client;
 
 use MCP::Types;

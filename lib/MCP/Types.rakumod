@@ -1,5 +1,6 @@
 use v6.d;
 
+#| Core MCP data types and capability structures
 unit module MCP::Types;
 
 #| Protocol versions

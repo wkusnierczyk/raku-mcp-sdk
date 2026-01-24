@@ -1,5 +1,6 @@
 use v6.d;
 
+#| Prompt registration helpers and builder DSL
 unit module MCP::Server::Prompt;
 
 use MCP::Types;

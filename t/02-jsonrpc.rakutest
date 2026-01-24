@@ -1,4 +1,12 @@
 use v6.d;
+
+=begin pod
+=head1 NAME
+
+02-jsonrpc.rakutest - Tests for JSON-RPC message types
+
+=end pod
+
 use Test;
 use lib 'lib';
 
