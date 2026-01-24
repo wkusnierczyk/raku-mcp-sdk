@@ -32,6 +32,9 @@ jobs:
         with:
           raku-version: ${{ env.RAKU_VERSION }}
 
+      - name: Install dependencies
+        run: zef install --deps-only .
+
       - name: Validate META6.json
         run: make lint-meta
 
