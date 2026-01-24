@@ -13,6 +13,10 @@
   </tr>
 </table>
 
+> **Why Raku**?  
+> [Raku](https://raku.org/) is a expressive, multi-paradigm language with strong concurrency tools, a flexible type system, and modern Unicode support. It is well suited for building protocol-first infrastructure where clarity, safety, and rapid iteration matter.
+
+
 ## Status
 
 **Work in Progress**
