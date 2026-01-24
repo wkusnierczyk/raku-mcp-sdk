@@ -36,7 +36,19 @@ class RegisteredTool is export {
 
     #| Call the tool with given arguments
     method call(%arguments --> MCP::Types::CallToolResult) {
-        my $result = &!handler(%arguments);
+        my $result;
+        my @params = &!handler.signature.params;
+        my $expects-params = @params.grep({ .named && .name eq 'params' }).elems > 0;
+        my $accepts-named = @params.grep({ .named && (.slurpy || .name ne 'params') }).elems > 0;
+        if @params.elems == 0 {
+            $result = &!handler();
+        } elsif $expects-params {
+            $result = &!handler(:params(%arguments));
+        } elsif $accepts-named {
+            $result = &!handler(|%arguments);
+        } else {
+            $result = &!handler();
+        }
 
         # Normalize result to CallToolResult
         given $result {

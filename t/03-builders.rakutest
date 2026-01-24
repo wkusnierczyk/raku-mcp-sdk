@@ -1,0 +1,156 @@
+use v6.d;
+use Test;
+use lib 'lib';
+use lib 't/lib';
+
+use MCP::Types;
+use MCP::Server::Tool;
+use MCP::Server::Resource;
+use MCP::Server::Prompt;
+
+=begin pod
+=head1 NAME
+
+03-builders.rakutest - Tests for builder DSLs and registered wrappers
+
+=head1 DESCRIPTION
+
+Covers tool/resource/prompt builders and normalization logic.
+
+=end pod
+
+subtest 'Tool builder and normalization', {
+    my $built = tool()
+        .name('calc')
+        .description('calculator')
+        .string-param('a', description => 'first', :required)
+        .number-param('b', description => 'second')
+        .integer-param('c')
+        .boolean-param('d')
+        .array-param('e', items => { type => 'string' }, :required)
+        .annotations(title => 'Calc', :readOnly, :idempotent)
+        .handler(-> :%params { "ok: %params<a>" })
+        .build;
+
+    is $built.name, 'calc', 'tool name set';
+    is $built.description, 'calculator', 'tool description set';
+    ok $built.inputSchema<properties><a>:exists, 'string param schema';
+    ok $built.inputSchema<properties><e>:exists, 'array param schema';
+    ok $built.inputSchema<required>.grep('a'), 'required includes a';
+    ok $built.inputSchema<required>.grep('e'), 'required includes e';
+
+    my $tool = $built.to-tool;
+    is $tool.name, 'calc', 'to-tool preserves name';
+    is $tool.annotations.title, 'Calc', 'annotations set';
+
+    my $result = $built.call({ a => 'x' });
+    isa-ok $result, MCP::Types::CallToolResult, 'call returns CallToolResult';
+    is $result.content[0].text, 'ok: x', 'string normalized to TextContent';
+
+    my $direct = RegisteredTool.new(
+        name => 'direct',
+        handler => { MCP::Types::CallToolResult.new(content => [MCP::Types::TextContent.new(text => 'hi')]) }
+    );
+    ok $direct.call({}).isError ~~ Bool, 'accepts CallToolResult directly';
+
+    my $text-tool = RegisteredTool.new(
+        name => 'text',
+        handler => { MCP::Types::TextContent.new(text => 'hey') }
+    );
+    is $text-tool.call({}).content[0].text, 'hey', 'TextContent normalized';
+
+    my $array-tool = RegisteredTool.new(
+        name => 'array',
+        handler => { [MCP::Types::TextContent.new(text => 'a'), MCP::Types::TextContent.new(text => 'b')] }
+    );
+    is $array-tool.call({}).content.elems, 2, 'positional normalized to array';
+
+    my $fallback-tool = RegisteredTool.new(
+        name => 'fallback',
+        handler => { 123 }
+    );
+    is $fallback-tool.call({}).content[0].text, '123', 'fallback uses Str';
+
+    dies-ok { tool().build }, 'tool requires name';
+    dies-ok { tool().name('x').build }, 'tool requires handler';
+};
+
+subtest 'Resource builder and normalization', {
+    my $resource = resource()
+        .uri('info://test')
+        .name('Test')
+        .description('desc')
+        .mimeType('text/plain')
+        .annotations(['user'], priority => 0.5)
+        .reader({ 'hello' })
+        .build;
+
+    is $resource.to-resource.uri, 'info://test', 'resource uri';
+    is $resource.to-resource.name, 'Test', 'resource name';
+
+    my $contents = $resource.read;
+    is $contents[0].text, 'hello', 'string normalized to ResourceContents';
+
+    my $blob-resource = RegisteredResource.new(
+        uri => 'blob://bin',
+        name => 'Blob',
+        reader => { Buf.new(0x41, 0x42) }
+    );
+    ok $blob-resource.read[0].blob.defined, 'blob normalized';
+
+    my $rc = MCP::Types::ResourceContents.new(
+        uri => 'one://',
+        mimeType => 'text/plain',
+        text => 'one'
+    );
+    my $pos = RegisteredResource.new(
+        uri => 'pos://',
+        name => 'Pos',
+        reader => { [$rc] }
+    );
+    is $pos.read[0].text, 'one', 'positional preserved';
+
+    my $tmp = "/tmp/mcp-resource-$*PID.txt".IO;
+    $tmp.spurt("file");
+    my $file = file-resource($tmp);
+    is $file.mimeType, 'text/plain', 'file-resource guesses mime type';
+    ok $file.uri.starts-with('file://'), 'file-resource sets uri';
+
+    dies-ok { resource().build }, 'resource requires uri';
+    dies-ok { resource().uri('x').build }, 'resource requires name';
+    dies-ok { resource().uri('x').name('y').build }, 'resource requires reader';
+};
+
+subtest 'Prompt builder and normalization', {
+    my $prompt = prompt()
+        .name('p')
+        .description('desc')
+        .argument('topic', description => 't', required => True)
+        .optional-argument('level', description => 'lvl')
+        .generator(-> :%params { "hello %params<topic>" })
+        .build;
+
+    is $prompt.to-prompt.name, 'p', 'prompt name';
+    is $prompt.to-prompt.arguments.elems, 2, 'prompt arguments';
+    is $prompt.get({ topic => 'x' })[0].content.text, 'hello x', 'string normalized to PromptMessage';
+
+    my $pm = MCP::Types::PromptMessage.new(
+        role => 'user',
+        content => MCP::Types::TextContent.new(text => 'hi')
+    );
+    my $p2 = RegisteredPrompt.new(
+        name => 'p2',
+        generator => { $pm }
+    );
+    is $p2.get({})[0].content.text, 'hi', 'PromptMessage preserved';
+
+    my $user = user-message('u');
+    my $assistant = assistant-message('a');
+    is $user.role, 'user', 'user-message role';
+    is $assistant.role, 'assistant', 'assistant-message role';
+
+    dies-ok { prompt().build }, 'prompt requires name';
+    dies-ok { prompt().name('p').build }, 'prompt requires generator';
+};
+
+done-testing;

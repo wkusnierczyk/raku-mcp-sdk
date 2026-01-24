@@ -1,0 +1,99 @@
+use v6.d;
+use Test;
+use lib 'lib';
+
+use MCP::JSONRPC;
+use MCP::Transport::Stdio;
+use MCP::Transport::Base;
+use JSON::Fast;
+use JSON::Fast;
+
+=begin pod
+=head1 NAME
+
+04-transport.rakutest - Tests for stdio transport
+
+=head1 DESCRIPTION
+
+Exercises stdio framing and basic transport state handling.
+
+=end pod
+
+subtest 'StdioTransport start/parse/send/close', {
+    my $json = to-json({
+        jsonrpc => '2.0',
+        id => 1,
+        method => 'ping',
+    });
+    my $length = $json.encode('utf-8').elems;
+    my $payload = "Content-Length: $length\n\n$json";
+
+    my $in-path = "/tmp/mcp-stdio-in-$*PID.txt".IO;
+    my $out-path = "/tmp/mcp-stdio-out-$*PID.txt".IO;
+    $in-path.spurt($payload);
+
+    my $in = $in-path.open(:r);
+    my $out = $out-path.open(:w);
+
+    my $transport = MCP::Transport::Stdio::StdioTransport.new(
+        input => $in,
+        output => $out
+    );
+
+    ok !$transport.is-connected, 'not connected before start';
+    my $supply = $transport.start;
+    ok $transport.is-connected, 'connected after start';
+
+    my $p = Promise.new;
+    $supply.tap(-> $msg { $p.keep($msg) });
+    my $msg = await Promise.anyof($p, Promise.in(1).then({ Nil }));
+    ok $msg.defined, 'received message within timeout';
+    isa-ok $msg, MCP::JSONRPC::Request, 'parsed request';
+    is $msg.method, 'ping', 'method parsed';
+
+    my $resp = MCP::JSONRPC::Response.success(1, { ok => True });
+    await $transport.send($resp);
+    $out.close;
+
+    my $out-text = $out-path.slurp;
+    ok $out-text.contains('Content-Length:'), 'output includes content length';
+    ok $out-text.contains('"result"'), 'output includes result';
+
+    await $transport.close;
+    ok !$transport.is-connected, 'not connected after close';
+};
+
+subtest 'StdioTransport ignores invalid JSON', {
+    my $json = '{not-json}';
+    my $length = $json.encode('utf-8').elems;
+    my $payload = "Content-Length: $length\n\n$json";
+
+    my $in-path = "/tmp/mcp-stdio-bad-$*PID.txt".IO;
+    my $out-path = "/tmp/mcp-stdio-bad-out-$*PID.txt".IO;
+    $in-path.spurt($payload);
+
+    my $transport = MCP::Transport::Stdio::StdioTransport.new(
+        input => $in-path.open(:r),
+        output => $out-path.open(:w)
+    );
+
+    my $supply = $transport.start;
+    my $seen = False;
+    $supply.tap(-> $msg { $seen = True });
+    await Promise.in(0.1);
+    ok !$seen, 'invalid JSON not emitted';
+    await $transport.close;
+};
+
+subtest 'Transport error types', {
+    my $err = MCP::Transport::Base::X::Transport.new(message => 'oops');
+    is $err.message, 'oops', 'base transport message';
+
+    my $conn = MCP::Transport::Base::X::Transport::Connection.new(message => 'nope');
+    ok $conn.message.contains('Connection error'), 'connection error prefix';
+
+    my $send = MCP::Transport::Base::X::Transport::Send.new(message => 'nope');
+    ok $send.message.contains('Send error'), 'send error prefix';
+};
+
+done-testing;

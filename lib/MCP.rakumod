@@ -59,10 +59,22 @@ constant StdioTransport is export = MCP::Transport::Stdio::StdioTransport;
 constant Client is export = MCP::Client::Client;
 
 #| Builder for tool definitions
-sub tool is export { MCP::Server::Tool::tool() }
+sub tool is export {
+    require ::('MCP::Server::Tool');
+    ::('MCP::Server::Tool')::tool()
+}
 #| Builder for resource definitions
-sub resource is export { MCP::Server::Resource::resource() }
+sub resource is export {
+    require ::('MCP::Server::Resource');
+    ::('MCP::Server::Resource')::resource()
+}
 #| Convenience builder for file-backed resources
-sub file-resource(|c) is export { MCP::Server::Resource::file-resource(|c) }
+sub file-resource(|c) is export {
+    require ::('MCP::Server::Resource');
+    ::('MCP::Server::Resource')::file-resource(|c)
+}
 #| Builder for prompt definitions
-sub prompt is export { MCP::Server::Prompt::prompt() }
+sub prompt is export {
+    require ::('MCP::Server::Prompt');
+    ::('MCP::Server::Prompt')::prompt()
+}

@@ -34,7 +34,19 @@ class RegisteredPrompt is export {
 
     #| Generate the prompt messages
     method get(%arguments --> Array) {
-        my $result = &!generator(%arguments);
+        my $result;
+        my @params = &!generator.signature.params;
+        my $expects-params = @params.grep({ .named && .name eq 'params' }).elems > 0;
+        my $accepts-named = @params.grep({ .named && (.slurpy || .name ne 'params') }).elems > 0;
+        if @params.elems == 0 {
+            $result = &!generator();
+        } elsif $expects-params {
+            $result = &!generator(:params(%arguments));
+        } elsif $accepts-named {
+            $result = &!generator(|%arguments);
+        } else {
+            $result = &!generator();
+        }
 
         # Normalize to array of PromptMessage
         given $result {

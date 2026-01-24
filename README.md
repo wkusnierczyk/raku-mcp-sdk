@@ -280,7 +280,7 @@ Testing and coverage
 | `test-verbose` | Run tests with verbose output | Uses `prove6` with `--verbose` |
 | `test-file` | Run a specific test file | `FILE=t/01-types.rakutest` |
 | `test-quick` | Run tests without build | Skips `build` |
-| `coverage` | Generate coverage report | Requires Racoco, otherwise skips |
+| `coverage` | Generate coverage report | HTML in `coverage-report/index.html`, raw data in `.racoco/` |
 
 Documentation
 

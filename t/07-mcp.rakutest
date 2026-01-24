@@ -1,0 +1,47 @@
+use v6.d;
+use Test;
+use lib 'lib';
+
+use MCP;
+
+=begin pod
+=head1 NAME
+
+07-mcp.rakutest - Tests for MCP re-exports
+
+=head1 DESCRIPTION
+
+Validates the MCP top-level module exports and helpers.
+
+=end pod
+
+subtest 'MCP exports', {
+    ok PROTOCOL_VERSION.defined, 'protocol version exported';
+    is Implementation.^name, 'MCP::Types::Implementation', 'Implementation export';
+    is TextContent.^name, 'MCP::Types::TextContent', 'TextContent export';
+    is Tool.^name, 'MCP::Types::Tool', 'Tool export';
+
+    is Server.^name, 'MCP::Server::Server', 'Server export';
+    is Client.^name, 'MCP::Client::Client', 'Client export';
+
+    my $tool = tool()
+        .name('t')
+        .handler(-> :%params { "ok" })
+        .build;
+    is $tool.name, 't', 'tool builder available';
+
+    my $resource = resource()
+        .uri('info://r')
+        .name('R')
+        .reader({ 'x' })
+        .build;
+    is $resource.uri, 'info://r', 'resource builder available';
+
+    my $prompt = prompt()
+        .name('p')
+        .generator({ 'hi' })
+        .build;
+    is $prompt.name, 'p', 'prompt builder available';
+};
+
+done-testing;

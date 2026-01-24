@@ -1,0 +1,157 @@
+use v6.d;
+use Test;
+use lib 'lib';
+use lib 't/lib';
+
+use MCP::Server;
+use MCP::Types;
+need MCP::JSONRPC;
+use MCP::Server::Tool;
+use MCP::Server::Resource;
+use MCP::Server::Prompt;
+need TestTransport;
+
+=begin pod
+=head1 NAME
+
+05-server.rakutest - Tests for server dispatch and helpers
+
+=head1 DESCRIPTION
+
+Covers request dispatch, handler registration, and outgoing notifications.
+
+=end pod
+
+use MONKEY-TYPING;
+augment class MCP::Server::Server {
+    method handle-message-public($msg) { self!handle-message($msg) }
+    method handle-response-public($msg) { self!handle-response($msg) }
+}
+
+subtest 'Server dispatch and handlers', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport,
+        instructions => 'hello'
+    );
+
+    $server.add-tool(
+        name => 'echo',
+        description => 'Echo',
+        handler => -> :%params { MCP::Types::TextContent.new(text => %params<msg> // '') }
+    );
+    $server.add-resource(
+        uri => 'info://about',
+        name => 'About',
+        reader => { 'about' }
+    );
+    $server.add-prompt(
+        name => 'greet',
+        arguments => [ { name => 'name', required => True } ],
+        generator => -> :%params { "Hi %params<name>" }
+    );
+
+    my $init = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'initialize',
+        params => { protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION }
+    ));
+    is $init<protocolVersion>, MCP::Types::LATEST_PROTOCOL_VERSION, 'initialize returns protocol';
+    is $init<instructions>, 'hello', 'initialize includes instructions';
+
+    my $ping = $server.dispatch-request(MCP::JSONRPC::Request.new(id => 2, method => 'ping'));
+    is-deeply $ping, {}, 'ping response empty';
+
+    my $tools = $server.dispatch-request(MCP::JSONRPC::Request.new(id => 3, method => 'tools/list'));
+    is $tools<tools>[0]<name>, 'echo', 'tools/list includes tool';
+
+    my $tool-res = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 4,
+        method => 'tools/call',
+        params => { name => 'echo', arguments => { msg => 'yo' } }
+    ));
+    is $tool-res<content>[0]<text>, 'yo', 'tools/call returns content';
+
+    dies-ok {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 5,
+            method => 'tools/call',
+            params => { }
+        ));
+    }, 'tools/call requires name';
+
+    dies-ok {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 6,
+            method => 'tools/call',
+            params => { name => 'missing' }
+        ));
+    }, 'tools/call unknown tool';
+
+    my $resources = $server.dispatch-request(MCP::JSONRPC::Request.new(id => 7, method => 'resources/list'));
+    is $resources<resources>[0]<uri>, 'info://about', 'resources/list includes resource';
+
+    my $read = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 8,
+        method => 'resources/read',
+        params => { uri => 'info://about' }
+    ));
+    is $read<contents>[0]<text>, 'about', 'resources/read returns content';
+
+    dies-ok {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 9,
+            method => 'resources/read',
+            params => { }
+        ));
+    }, 'resources/read requires uri';
+
+    my $prompts = $server.dispatch-request(MCP::JSONRPC::Request.new(id => 9, method => 'prompts/list'));
+    is $prompts<prompts>[0]<name>, 'greet', 'prompts/list includes prompt';
+
+    my $prompt = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 10,
+        method => 'prompts/get',
+        params => { name => 'greet', arguments => { name => 'Raku' } }
+    ));
+    is $prompt<messages>[0]<content><text>, 'Hi Raku', 'prompts/get returns message';
+
+    dies-ok {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 11,
+            method => 'prompts/get',
+            params => { }
+        ));
+    }, 'prompts/get requires name';
+
+    dies-ok {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 12,
+            method => 'prompts/get',
+            params => { name => 'missing' }
+        ));
+    }, 'prompts/get unknown prompt';
+
+    dies-ok {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 13,
+            method => 'unknown/method'
+        ));
+    }, 'unknown method raises error';
+
+    my $req-p = $server.request('ping');
+    my $req = $transport.sent[0];
+    $server.handle-response-public(MCP::JSONRPC::Response.success($req.id, { ok => True }));
+    is (await $req-p)<ok>, True, 'server request resolves';
+
+    $server.notify('notifications/message', { msg => 'hi' });
+    $server.log(MCP::Types::Info, 'data', logger => 'test');
+    $server.progress('token', 0.5e0, total => 1e0, message => 'half');
+    ok $transport.sent.grep(MCP::JSONRPC::Notification).elems >= 3, 'notifications sent';
+
+    $server.handle-message-public(MCP::JSONRPC::Notification.new(method => 'initialized'));
+    $server.handle-message-public(MCP::JSONRPC::Notification.new(method => 'cancelled', params => { requestId => 1 }));
+};
+
+done-testing;

@@ -1,7 +1,6 @@
 # ==============================================================================
-# Raku MCP SDK - Makefile
+# Raku MCP SDK
 # ==============================================================================
-# A comprehensive build system for the Raku MCP SDK project.
 #
 # Usage:
 #   make              - Show help
@@ -34,6 +33,7 @@ DOCS_DIR        := docs
 BUILD_DIR       := .build
 DIST_DIR        := dist
 COVERAGE_DIR    := .racoco
+COVERAGE_REPORT := coverage-report
 
 # File patterns
 RAKU_EXT        := .rakumod
@@ -275,7 +275,7 @@ clean-build:
 clean-coverage:
 	$(call log-info,Cleaning coverage data...)
 	$(Q)rm -rf $(COVERAGE_DIR)
-	$(Q)rm -rf coverage-report
+	$(Q)rm -rf $(COVERAGE_REPORT)
 
 .PHONY: clean-dist
 # clean-dist: Remove distribution artifacts
@@ -418,9 +418,9 @@ test-quick:
 # coverage: Generate coverage report (if Racoco installed)
 coverage: dependencies-dev build
 	$(call log-info,Generating coverage report...)
-	$(Q)$(RACOCO) $(RACOCO_FLAGS) --html 2>/dev/null || \
+	$(Q)$(RACOCO) $(RACOCO_FLAGS) --html=$(COVERAGE_REPORT) 2>/dev/null || \
 		($(call log-warning,RaCoCo not available - skipping coverage); true)
-	$(call log-success,Coverage report generated)
+	$(call log-success,Coverage report generated: $(COVERAGE_REPORT)/index.html)
 
 # ------------------------------------------------------------------------------
 # Validation
