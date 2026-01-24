@@ -1,6 +1,5 @@
 # Raku MCP SDK
 
-// todo make the logo larger
 <table>
   <tr>
     <td>
