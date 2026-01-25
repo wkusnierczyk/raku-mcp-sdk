@@ -251,112 +251,75 @@ make test        # Run test suite
 
 ### Makefile Targets
 
-
-#### Primary targets
-
-| Target | Description | Notes |
-|--------|-------------|-------|
-| `all` | Install deps, build, and test | Runs `dependencies → build → test` |
-| `build` | Validate and precompile modules | Runs `validate` then `build-precompile` |
-| `build-precompile` | Precompile the main module | Uses `raku -Ilib -c lib/MCP.rakumod` fallback |
-| `test` | Build and run tests | Depends on `build` |
-| `install` | Install module globally | Uses `zef install . --/test` |
-
-#### Validation and metadata
-
-| Target | Description | Notes |
-|--------|-------------|-------|
-| `validate` | Validate META6.json and provides entries | Runs `validate-meta` and `validate-provides` |
-| `validate-meta` | Check required META6.json fields | Ensures `name`, `version`, `description`, `provides` |
-| `validate-provides` | Verify `provides` paths exist | Prints each resolved entry |
-
-#### Dependencies
-
-| Target | Description | Notes |
-|--------|-------------|-------|
-| `dependencies` | Install runtime dependencies | `zef install --deps-only .` |
-| `dependencies-dev` | Install dev dependencies | Includes Prove6, Test::META, Mi6, Racoco |
-| `dependencies-update` | Update dependencies | Runs `zef update` and `zef upgrade` |
-
-#### Lint and formatting
-
-| Target | Description | Notes |
-|--------|-------------|-------|
-| `lint` | Run syntax + META checks | Runs `lint-syntax` and `lint-meta` |
-| `lint-syntax` | Compile-check source files | Uses `raku -Ilib -c` |
-| `lint-meta` | Validate META6.json | Requires JSON::Fast |
-| `format` | Format guidance and whitespace scan | Non-destructive |
-| `format-fix` | Remove trailing whitespace | Applies to source + tests |
-| `check` | Run lint + tests | Equivalent to `lint test` |
-
-#### Testing and coverage
-
-| Target | Description | Notes |
-|--------|-------------|-------|
-| `test-verbose` | Run tests with verbose output | Uses `prove6` with `--verbose` |
-| `test-file` | Run a specific test file | `FILE=t/01-types.rakutest` |
-| `test-quick` | Run tests without build | Skips `build` |
-| `coverage` | Generate coverage report | HTML in `coverage-report/report.html`, raw data in `.racoco/` |
-
-#### Documentation
-
-| Target | Description | Notes |
-|--------|-------------|-------|
-| `docs` | Generate text docs into `docs/` | Uses `raku --doc=Text` per module |
-| `docs-serve` | Serve docs (placeholder) | Not implemented |
-| `architecture-diagram` | Build architecture PNG | Renders `architecture/architecture.mmd` to `architecture/architecture.png` |
-
-#### Distribution and release
-
-| Target | Description | Notes |
-|--------|-------------|-------|
-| `dist` | Create source tarball | Writes to `dist/` |
-| `release` | Interactive release helper | Prompts for `fez upload` |
-
-#### Utilities and examples
-
-| Target | Description | Notes |
-|--------|-------------|-------|
-| `about` | Show project info | Prints metadata from Makefile |
-| `repl` | Start REPL with project loaded | `raku -Ilib -MMCP` |
-| `run-example` | Run example by name | `EXAMPLE=simple-server` |
-| `info` | Show toolchain + stats | Raku/Zef/Prove versions |
-| `list-modules` | List module files | From `lib/` |
-| `list-tests` | List test files | From `t/` |
-
-#### Install/uninstall
-
-| Target | Description | Notes |
-|--------|-------------|-------|
-| `install-local` | Install to home | Uses `zef install . --to=home` |
-| `install-force` | Force install | Uses `zef install . --force-install` |
-| `uninstall` | Uninstall module | `zef uninstall MCP` |
-
-#### CI helpers
-
-| Target | Description | Notes |
-|--------|-------------|-------|
-| `ci` | CI pipeline | `dependencies → lint → test` |
-| `ci-full` | Full CI pipeline | `dependencies-dev → lint → test → coverage` |
-
-#### Version management
-
-| Target | Description | Notes |
-|--------|-------------|-------|
-| `version` | Show or update project version | `make version 1.2.3 "Release description"` updates Makefile + META6.json and creates a local annotated tag |
-| `bump-patch` | Patch bump placeholder | Not implemented |
-| `bump-minor` | Minor bump placeholder | Not implemented |
-| `bump-major` | Major bump placeholder | Not implemented |
-
-#### Cleaning
-
-| Target | Description | Notes |
-|--------|-------------|-------|
-| `clean` | Remove build/coverage/dist | Runs clean-build/clean-coverage/clean-dist |
-| `clean-build` | Remove precomp/build dirs | Removes `.precomp` and `.build` |
-| `clean-coverage` | Remove coverage output | Removes `.racoco` and `coverage-report` |
-| `clean-dist` | Remove tarballs/dist dir | Removes `dist/` and `*.tar.gz` |
-| `clean-all` | Deep clean | Also removes docs build output |
+<table>
+  <thead>
+    <tr>
+      <th align="left">Target</th>
+      <th align="left">Description</th>
+      <th align="left">Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><th colspan="3" align="left">Primary targets</th></tr>
+    <tr><td><code>all</code></td><td>Install deps, build, and test</td><td>Runs <code>dependencies → build → test</code></td></tr>
+    <tr><td><code>build</code></td><td>Validate and precompile modules</td><td>Runs <code>validate</code> then <code>build-precompile</code></td></tr>
+    <tr><td><code>build-precompile</code></td><td>Precompile the main module</td><td>Uses <code>raku -Ilib -c lib/MCP.rakumod</code> fallback</td></tr>
+    <tr><td><code>test</code></td><td>Build and run tests</td><td>Depends on <code>build</code></td></tr>
+    <tr><td><code>install</code></td><td>Install module globally</td><td>Uses <code>zef install . --/test</code></td></tr>
+    <tr><th colspan="3" align="left">Validation and metadata</th></tr>
+    <tr><td><code>validate</code></td><td>Validate META6.json and provides entries</td><td>Runs <code>validate-meta</code> and <code>validate-provides</code></td></tr>
+    <tr><td><code>validate-meta</code></td><td>Check required META6.json fields</td><td>Ensures <code>name</code>, <code>version</code>, <code>description</code>, <code>provides</code></td></tr>
+    <tr><td><code>validate-provides</code></td><td>Verify <code>provides</code> paths exist</td><td>Prints each resolved entry</td></tr>
+    <tr><th colspan="3" align="left">Dependencies</th></tr>
+    <tr><td><code>dependencies</code></td><td>Install runtime dependencies</td><td><code>zef install --deps-only .</code></td></tr>
+    <tr><td><code>dependencies-dev</code></td><td>Install dev dependencies</td><td>Includes Prove6, Test::META, Mi6, Racoco</td></tr>
+    <tr><td><code>dependencies-update</code></td><td>Update dependencies</td><td>Runs <code>zef update</code> and <code>zef upgrade</code></td></tr>
+    <tr><th colspan="3" align="left">Lint and formatting</th></tr>
+    <tr><td><code>lint</code></td><td>Run syntax + META checks</td><td>Runs <code>lint-syntax</code> and <code>lint-meta</code></td></tr>
+    <tr><td><code>lint-syntax</code></td><td>Compile-check source files</td><td>Uses <code>raku -Ilib -c</code></td></tr>
+    <tr><td><code>lint-meta</code></td><td>Validate META6.json</td><td>Requires JSON::Fast</td></tr>
+    <tr><td><code>format</code></td><td>Format guidance and whitespace scan</td><td>Non-destructive</td></tr>
+    <tr><td><code>format-fix</code></td><td>Remove trailing whitespace</td><td>Applies to source + tests</td></tr>
+    <tr><td><code>check</code></td><td>Run lint + tests</td><td>Equivalent to <code>lint test</code></td></tr>
+    <tr><th colspan="3" align="left">Testing and coverage</th></tr>
+    <tr><td><code>test-verbose</code></td><td>Run tests with verbose output</td><td>Uses <code>prove6</code> with <code>--verbose</code></td></tr>
+    <tr><td><code>test-file</code></td><td>Run a specific test file</td><td><code>FILE=t/01-types.rakutest</code></td></tr>
+    <tr><td><code>test-quick</code></td><td>Run tests without build</td><td>Skips <code>build</code></td></tr>
+    <tr><td><code>coverage</code></td><td>Generate coverage report</td><td>HTML in <code>coverage-report/report.html</code>, raw data in <code>.racoco/</code></td></tr>
+    <tr><th colspan="3" align="left">Documentation</th></tr>
+    <tr><td><code>docs</code></td><td>Generate text docs into <code>docs/</code></td><td>Uses <code>raku --doc=Text</code> per module</td></tr>
+    <tr><td><code>docs-serve</code></td><td>Serve docs (placeholder)</td><td>Not implemented</td></tr>
+    <tr><td><code>architecture-diagram</code></td><td>Build architecture PNG</td><td>Renders <code>architecture/architecture.mmd</code> to <code>architecture/architecture.png</code></td></tr>
+    <tr><th colspan="3" align="left">Distribution and release</th></tr>
+    <tr><td><code>dist</code></td><td>Create source tarball</td><td>Writes to <code>dist/</code></td></tr>
+    <tr><td><code>release</code></td><td>Interactive release helper</td><td>Prompts for <code>fez upload</code></td></tr>
+    <tr><th colspan="3" align="left">Utilities and examples</th></tr>
+    <tr><td><code>about</code></td><td>Show project info</td><td>Prints metadata from Makefile</td></tr>
+    <tr><td><code>repl</code></td><td>Start REPL with project loaded</td><td><code>raku -Ilib -MMCP</code></td></tr>
+    <tr><td><code>run-example</code></td><td>Run example by name</td><td><code>EXAMPLE=simple-server</code></td></tr>
+    <tr><td><code>info</code></td><td>Show toolchain + stats</td><td>Raku/Zef/Prove versions</td></tr>
+    <tr><td><code>list-modules</code></td><td>List module files</td><td>From <code>lib/</code></td></tr>
+    <tr><td><code>list-tests</code></td><td>List test files</td><td>From <code>t/</code></td></tr>
+    <tr><th colspan="3" align="left">Install/uninstall</th></tr>
+    <tr><td><code>install-local</code></td><td>Install to home</td><td>Uses <code>zef install . --to=home</code></td></tr>
+    <tr><td><code>install-force</code></td><td>Force install</td><td>Uses <code>zef install . --force-install</code></td></tr>
+    <tr><td><code>uninstall</code></td><td>Uninstall module</td><td><code>zef uninstall MCP</code></td></tr>
+    <tr><th colspan="3" align="left">CI helpers</th></tr>
+    <tr><td><code>ci</code></td><td>CI pipeline</td><td><code>dependencies → lint → test</code></td></tr>
+    <tr><td><code>ci-full</code></td><td>Full CI pipeline</td><td><code>dependencies-dev → lint → test → coverage</code></td></tr>
+    <tr><th colspan="3" align="left">Version management</th></tr>
+    <tr><td><code>version</code></td><td>Show or update project version</td><td><code>make version 1.2.3 "Release description"</code> updates Makefile + META6.json and creates a local annotated tag</td></tr>
+    <tr><td><code>bump-patch</code></td><td>Patch bump placeholder</td><td>Not implemented</td></tr>
+    <tr><td><code>bump-minor</code></td><td>Minor bump placeholder</td><td>Not implemented</td></tr>
+    <tr><td><code>bump-major</code></td><td>Major bump placeholder</td><td>Not implemented</td></tr>
+    <tr><th colspan="3" align="left">Cleaning</th></tr>
+    <tr><td><code>clean</code></td><td>Remove build/coverage/dist</td><td>Runs clean-build/clean-coverage/clean-dist</td></tr>
+    <tr><td><code>clean-build</code></td><td>Remove precomp/build dirs</td><td>Removes <code>.precomp</code> and <code>.build</code></td></tr>
+    <tr><td><code>clean-coverage</code></td><td>Remove coverage output</td><td>Removes <code>.racoco</code> and <code>coverage-report</code></td></tr>
+    <tr><td><code>clean-dist</code></td><td>Remove tarballs/dist dir</td><td>Removes <code>dist/</code> and <code>*.tar.gz</code></td></tr>
+    <tr><td><code>clean-all</code></td><td>Deep clean</td><td>Also removes docs build output</td></tr>
+  </tbody>
+</table>
 
 ### Environment Variables
 
