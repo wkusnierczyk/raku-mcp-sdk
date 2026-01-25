@@ -252,61 +252,106 @@ make test        # Run test suite
 ### Makefile Targets
 
 
+#### Primary targets
+
 | Target | Description | Notes |
 |--------|-------------|-------|
-<tr><th colspan="3" align="left">Primary targets</th></tr>
 | `all` | Install deps, build, and test | Runs `dependencies → build → test` |
 | `build` | Validate and precompile modules | Runs `validate` then `build-precompile` |
 | `build-precompile` | Precompile the main module | Uses `raku -Ilib -c lib/MCP.rakumod` fallback |
 | `test` | Build and run tests | Depends on `build` |
 | `install` | Install module globally | Uses `zef install . --/test` |
-<tr><th colspan="3" align="left">Validation and metadata</th></tr>
+
+#### Validation and metadata
+
+| Target | Description | Notes |
+|--------|-------------|-------|
 | `validate` | Validate META6.json and provides entries | Runs `validate-meta` and `validate-provides` |
 | `validate-meta` | Check required META6.json fields | Ensures `name`, `version`, `description`, `provides` |
 | `validate-provides` | Verify `provides` paths exist | Prints each resolved entry |
-<tr><th colspan="3" align="left">Dependencies</th></tr>
+
+#### Dependencies
+
+| Target | Description | Notes |
+|--------|-------------|-------|
 | `dependencies` | Install runtime dependencies | `zef install --deps-only .` |
 | `dependencies-dev` | Install dev dependencies | Includes Prove6, Test::META, Mi6, Racoco |
 | `dependencies-update` | Update dependencies | Runs `zef update` and `zef upgrade` |
-<tr><th colspan="3" align="left">Lint and formatting</th></tr>
+
+#### Lint and formatting
+
+| Target | Description | Notes |
+|--------|-------------|-------|
 | `lint` | Run syntax + META checks | Runs `lint-syntax` and `lint-meta` |
 | `lint-syntax` | Compile-check source files | Uses `raku -Ilib -c` |
 | `lint-meta` | Validate META6.json | Requires JSON::Fast |
 | `format` | Format guidance and whitespace scan | Non-destructive |
 | `format-fix` | Remove trailing whitespace | Applies to source + tests |
 | `check` | Run lint + tests | Equivalent to `lint test` |
-<tr><th colspan="3" align="left">Testing and coverage</th></tr>
+
+#### Testing and coverage
+
+| Target | Description | Notes |
+|--------|-------------|-------|
 | `test-verbose` | Run tests with verbose output | Uses `prove6` with `--verbose` |
 | `test-file` | Run a specific test file | `FILE=t/01-types.rakutest` |
 | `test-quick` | Run tests without build | Skips `build` |
 | `coverage` | Generate coverage report | HTML in `coverage-report/report.html`, raw data in `.racoco/` |
-<tr><th colspan="3" align="left">Documentation</th></tr>
+
+#### Documentation
+
+| Target | Description | Notes |
+|--------|-------------|-------|
 | `docs` | Generate text docs into `docs/` | Uses `raku --doc=Text` per module |
 | `docs-serve` | Serve docs (placeholder) | Not implemented |
 | `architecture-diagram` | Build architecture PNG | Renders `architecture/architecture.mmd` to `architecture/architecture.png` |
-<tr><th colspan="3" align="left">Distribution and release</th></tr>
+
+#### Distribution and release
+
+| Target | Description | Notes |
+|--------|-------------|-------|
 | `dist` | Create source tarball | Writes to `dist/` |
 | `release` | Interactive release helper | Prompts for `fez upload` |
-<tr><th colspan="3" align="left">Utilities and examples</th></tr>
+
+#### Utilities and examples
+
+| Target | Description | Notes |
+|--------|-------------|-------|
 | `about` | Show project info | Prints metadata from Makefile |
 | `repl` | Start REPL with project loaded | `raku -Ilib -MMCP` |
 | `run-example` | Run example by name | `EXAMPLE=simple-server` |
 | `info` | Show toolchain + stats | Raku/Zef/Prove versions |
 | `list-modules` | List module files | From `lib/` |
 | `list-tests` | List test files | From `t/` |
-<tr><th colspan="3" align="left">Install/uninstall</th></tr>
+
+#### Install/uninstall
+
+| Target | Description | Notes |
+|--------|-------------|-------|
 | `install-local` | Install to home | Uses `zef install . --to=home` |
 | `install-force` | Force install | Uses `zef install . --force-install` |
 | `uninstall` | Uninstall module | `zef uninstall MCP` |
-<tr><th colspan="3" align="left">CI helpers</th></tr>
+
+#### CI helpers
+
+| Target | Description | Notes |
+|--------|-------------|-------|
 | `ci` | CI pipeline | `dependencies → lint → test` |
 | `ci-full` | Full CI pipeline | `dependencies-dev → lint → test → coverage` |
-<tr><th colspan="3" align="left">Version management</th></tr>
+
+#### Version management
+
+| Target | Description | Notes |
+|--------|-------------|-------|
 | `version` | Show or update project version | `make version 1.2.3 "Release description"` updates Makefile + META6.json and creates a local annotated tag |
 | `bump-patch` | Patch bump placeholder | Not implemented |
 | `bump-minor` | Minor bump placeholder | Not implemented |
 | `bump-major` | Major bump placeholder | Not implemented |
-<tr><th colspan="3" align="left">Cleaning</th></tr>
+
+#### Cleaning
+
+| Target | Description | Notes |
+|--------|-------------|-------|
 | `clean` | Remove build/coverage/dist | Runs clean-build/clean-coverage/clean-dist |
 | `clean-build` | Remove precomp/build dirs | Removes `.precomp` and `.build` |
 | `clean-coverage` | Remove coverage output | Removes `.racoco` and `coverage-report` |
