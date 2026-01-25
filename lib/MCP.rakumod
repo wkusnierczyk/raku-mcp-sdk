@@ -41,9 +41,18 @@ our constant PROTOCOL_VERSION is export = MCP::Types::LATEST_PROTOCOL_VERSION;
 constant Implementation is export = MCP::Types::Implementation;
 constant TextContent is export = MCP::Types::TextContent;
 constant ImageContent is export = MCP::Types::ImageContent;
+constant AudioContent is export = MCP::Types::AudioContent;
+constant ResourceLink is export = MCP::Types::ResourceLink;
+constant ToolUseContent is export = MCP::Types::ToolUseContent;
+constant ToolResultContent is export = MCP::Types::ToolResultContent;
 constant Tool is export = MCP::Types::Tool;
 constant Resource is export = MCP::Types::Resource;
 constant Prompt is export = MCP::Types::Prompt;
+constant SamplingMessage is export = MCP::Types::SamplingMessage;
+constant ModelHint is export = MCP::Types::ModelHint;
+constant ModelPreferences is export = MCP::Types::ModelPreferences;
+constant ToolChoice is export = MCP::Types::ToolChoice;
+constant CreateMessageResult is export = MCP::Types::CreateMessageResult;
 
 #| Re-exported log level constants
 constant Debug is export = MCP::Types::Debug;
