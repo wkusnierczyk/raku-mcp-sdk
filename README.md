@@ -16,16 +16,9 @@
 
 ## Status
 
-**Work in Progress**
+**Work in progress**
 
-- [x] Core types
-- [x] JSON-RPC 2.0 layer
-- [x] Stdio transport
-- [x] Server API with tools, resources, prompts
-- [x] Client API
-- [ ] HTTP/Streamable HTTP transport
-- [ ] Full test coverage
-- [x] Documentation
+See [Gap Analysis](GAP_ANALYSIS.md) for details in implemented and missing features, in the context of the most recent [MCP specification](https://modelcontextprotocol.io/specification/2025-11-25).
 
 ## Table of contents
 
