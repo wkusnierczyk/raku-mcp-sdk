@@ -16,7 +16,6 @@
 > **Why Raku**?  
 > [Raku](https://raku.org/) is a expressive, multi-paradigm language with strong concurrency tools, a flexible type system, and modern Unicode support. It is well suited for building protocol-first infrastructure where clarity, safety, and rapid iteration matter.
 
-
 ## Status
 
 **Work in Progress**
@@ -43,6 +42,73 @@
 - [License](#license)
 - [References](#references)
 - [About](#about)
+
+## Introduction
+
+### MCP
+
+**Model Context Protocol (MCP)** is an open standard that standardizes how AI models interact with external data and tools. 
+Consider it a "USB-C port for AI applications", a universal interface that replaces the need to build custom connectors for every new data source or tool.
+
+#### What is it for?
+
+It solves the "m-by-n" integration problem. Instead of every AI application (Claude, ChatGPT, IDEs) needing a specific adapter for every data source (Postgres, Google Drive, Slack), they all speak one protocol.
+
+* **Servers** expose resources (data), tools (functions), and prompts.
+* **Clients** (AI applications/Hosts) discover and use these capabilities securely.
+
+#### Design Principles
+
+* **JSON-RPC 2.0**: The wire protocol is standard JSON-RPC.
+* **Client-Host-Server Architecture**: Clearly separates the Host (the AI app, e.g., Claude Desktop), the Client (the connector inside the host), and the Server (the data provider).
+* **Capability Negotiation**: Connections start with an initialize handshake where both sides declare what they support (e.g., resources, logging, sampling).
+* **Transport Agnostic**: Designed to run over Stdio (local processes) or HTTP (remote).
+
+#### Current Status
+
+* **Standard**: Released by Anthropic in late 2024; it is now an open standard (managed under the Linux Foundation) supported by major players like OpenAI, Block, and various dev tools (Replit, Sourcegraph).
+* **Stability**: The core specification is stable, but transport specifics (specifically the shift to "Streamable HTTP") have evolved recently (circa early 2025) to simplify deployment.
+* **Specification**: See the most recent [specification version 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25).
+
+### Raku
+
+Raku (formerly Perl 6) is a high-level, multi-paradigm programming language optimized for expressiveness, modularity, and consistency. 
+It is a specification-driven language (with Rakudo being the primary implementation) that encourages "programming as a human language"—allowing code to be written in a way that feels natural and context-aware rather than rigid and machine-like.
+
+#### Design Principles
+
+Raku preserves the spirit of Perl ("There Is More Than One Way To Do It") but rebuilds the foundation entirely. Its core principles include:
+
+* **Context Sensitivity**: Symbols and operators adapt based on context (e.g., string vs. numeric context), similar to natural language.
+* **Multi-Paradigm**: It does not force a style. It natively supports Object-Oriented, Functional, Concurrent/Reactive, and Procedural programming equally well.
+* **Gradual Typing**: You can write quick "scripty" code with dynamic types, or large-scale robust applications with strict static types, all in the same file.
+* **Unicode at the Core**: Raku assumes Unicode by default, treating characters as graphemes (user-perceived characters) rather than simple bytes, preventing common text-processing bugs.
+
+#### What is Outstanding? (Unique Features)
+
+Raku offers features that are often libraries or "hacks" in other languages as first-class citizens:
+
+* **Grammars**: This is arguably Raku's "killer feature." Instead of unreadable Regex strings, Raku allows you to define formal grammars as classes. You can parse complex files (JSON, XML, custom DSLs) natively without external tools like Lex or Yacc.
+* **Junctions**: You can treat multiple values as a single entity using quantum-like superposition.
+* **Rational Arithmetic**: By default, 0.1 + 0.2 equals exactly 0.3. Raku uses rational numbers (fractions) instead of floating-point math for decimals, eliminating rounding errors common in Python or JavaScript.
+* **Meta-Object Protocol (MOP)**: Raku exposes its own object system to the developer. You can hook into class creation, method dispatch, and inheritance at runtime, allowing for powerful metaprogramming.
+* **Concurrency**: It has high-level primitives for concurrency that are safer than threads. It distinguishes between Parallelism (using multiple cores for speed) and Concurrency (managing shared state) using tools like Promises, Supplies (Reactive UI), and Channels.
+
+#### Raku for AI and MCP
+
+Raku is a "sleeper" choice for specific AI domains, particularly those involving language and orchestration.
+
+**Suitability for AI**:
+
+* **Symbolic AI and NLP**: Raku excels here. Its Grammars engine makes it perhaps the best language in existence for cleaning, parsing, and restructuring messy text data before feeding it into a model.
+* **Data Pipelines**: Its functional chains and concurrency support make it excellent for building "glue" code that orchestrates data movement between models.
+* **Weakness**: It lacks the massive ecosystem of numeric tensors and GPU acceleration found in Python (PyTorch/TensorFlow). You would likely use Raku to prepare data or orchestrate agents, rather than training the neural network itself.
+
+**Interfacing through MCP (Model Context Protocol)**: Raku is surprisingly well-architected for the Model Context Protocol (MCP), which connects LLMs to external tools and data.
+
+* **Introspection**: MCP requires tools to describe their own schemas (inputs/outputs) to the AI. Raku's deep introspection (MOP) and signature objects allow you to auto-generate these JSON schemas directly from your function definitions.
+* **Gradual Typing**: MCP relies on structured data exchange. Raku's strong type system can validate AI-generated JSON inputs automatically, rejecting hallucinations before they hit your business logic.
+* **Asynchrony**: MCP is often conversational and event-driven. Raku's React / Supply blocks (reactive programming) map perfectly to handling streams of requests from an AI agent.
 
 ## Installation
 
@@ -395,7 +461,7 @@ MIT License - see LICENSE file.
 $ make about
 
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
-├─ version:    0.1.0
+├─ version:    x.y.z
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT
