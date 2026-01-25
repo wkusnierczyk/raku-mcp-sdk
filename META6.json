@@ -1,7 +1,7 @@
 {
     "name": "MCP",
     "description": "Model Context Protocol SDK for Raku - Build MCP servers and clients",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "perl": "6.d",
     "auth": "github:wkusnierczyk",
     "license": "MIT",
@@ -23,7 +23,8 @@
     },
     "depends": [
         "JSON::Fast",
-        "Cro::HTTP"
+        "Cro::HTTP",
+        "MIME::Base64"
     ],
     "test-depends": [
         "Test",

@@ -63,8 +63,9 @@ subtest 'Client connect and requests', {
     respond-to-last($transport, {
         tools => [ %tool.item ]
     });
-    my @tools = await $tools-p;
-    is @tools[0].name, 't', 'list-tools returns Tool';
+    my $tools-result = await $tools-p;
+    is $tools-result<tools>[0].name, 't', 'list-tools returns Tool';
+    nok $tools-result<nextCursor>.defined, 'list-tools has no nextCursor when not paginated';
 
     my $call-p = $client.call-tool('add', arguments => { a => 1, b => 2 });
     my %content = type => 'text', text => 'ok';
@@ -80,8 +81,9 @@ subtest 'Client connect and requests', {
     respond-to-last($transport, {
         resources => [ %resource.item ]
     });
-    my @resources = await $res-p;
-    is @resources[0].uri, 'info://x', 'list-resources returns Resource';
+    my $res-result = await $res-p;
+    is $res-result<resources>[0].uri, 'info://x', 'list-resources returns Resource';
+    nok $res-result<nextCursor>.defined, 'list-resources has no nextCursor when not paginated';
 
     my $read-p = $client.read-resource('info://x');
     my %contents = uri => 'info://x', mimeType => 'text/plain', text => 'hello';
@@ -96,8 +98,9 @@ subtest 'Client connect and requests', {
     respond-to-last($transport, {
         prompts => [ %prompt.item ]
     });
-    my @prompts = await $prompts-p;
-    is @prompts[0].name, 'p', 'list-prompts returns Prompt';
+    my $prompts-result = await $prompts-p;
+    is $prompts-result<prompts>[0].name, 'p', 'list-prompts returns Prompt';
+    nok $prompts-result<nextCursor>.defined, 'list-prompts has no nextCursor when not paginated';
 
     my $prompt-p = $client.get-prompt('p', arguments => { });
     my %msg = role => 'user', content => { type => 'text', text => 'hi' };
@@ -128,6 +131,74 @@ subtest 'Client connect and requests', {
     $transport.clear-sent;
     $transport.emit(MCP::JSONRPC::Request.new(id => 99, method => 'server/request'));
     ok $transport.sent.grep(MCP::JSONRPC::Response).elems == 1, 'client responds to server request';
+};
+
+subtest 'Client pagination support', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport
+    );
+
+    my $connect = $client.connect;
+    for ^10 {
+        last if $transport.sent.elems > 0;
+        sleep 0.1;
+    }
+    my $init-req = $transport.sent[0];
+    $transport.emit(MCP::JSONRPC::Response.success($init-req.id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => 'test'
+    }));
+    await $connect;
+
+    # Test list-tools with nextCursor
+    my $tools-p = $client.list-tools;
+    my %tool = name => 't1', description => 'd', inputSchema => { type => 'object' };
+    respond-to-last($transport, {
+        tools => [ %tool.item ],
+        nextCursor => 'cursor123'
+    });
+    my $tools-result = await $tools-p;
+    is $tools-result<tools>[0].name, 't1', 'list-tools returns Tool';
+    is $tools-result<nextCursor>, 'cursor123', 'list-tools includes nextCursor';
+
+    # Test list-tools with cursor parameter
+    my $tools-p2 = $client.list-tools(cursor => 'cursor123');
+    my $req = $transport.sent[*-1];
+    is $req.params<cursor>, 'cursor123', 'list-tools sends cursor parameter';
+    my %tool2 = name => 't2', description => 'd2', inputSchema => { type => 'object' };
+    respond-to-last($transport, {
+        tools => [ %tool2.item ]
+    });
+    my $tools-result2 = await $tools-p2;
+    is $tools-result2<tools>[0].name, 't2', 'list-tools with cursor returns next page';
+    nok $tools-result2<nextCursor>.defined, 'last page has no nextCursor';
+
+    # Test list-resources with cursor
+    my $res-p = $client.list-resources(cursor => 'rescursor');
+    my $res-req = $transport.sent[*-1];
+    is $res-req.params<cursor>, 'rescursor', 'list-resources sends cursor parameter';
+    my %res = uri => 'info://x', name => 'X', mimeType => 'text/plain';
+    respond-to-last($transport, {
+        resources => [ %res.item ],
+        nextCursor => 'rescursor2'
+    });
+    my $res-result = await $res-p;
+    is $res-result<nextCursor>, 'rescursor2', 'list-resources includes nextCursor';
+
+    # Test list-prompts with cursor
+    my $prompts-p = $client.list-prompts(cursor => 'promptcursor');
+    my $prompts-req = $transport.sent[*-1];
+    is $prompts-req.params<cursor>, 'promptcursor', 'list-prompts sends cursor parameter';
+    my %pmt = name => 'p', description => 'desc', arguments => [];
+    respond-to-last($transport, {
+        prompts => [ %pmt.item ],
+        nextCursor => 'promptcursor2'
+    });
+    my $prompts-result = await $prompts-p;
+    is $prompts-result<nextCursor>, 'promptcursor2', 'list-prompts includes nextCursor';
 };
 
 done-testing;

@@ -34,6 +34,7 @@ use MCP::Server::Tool;
 use MCP::Server::Resource;
 use MCP::Server::Prompt;
 use JSON::Fast;
+use MIME::Base64;
 
 #| Exception for MCP JSON-RPC errors
 class X::MCP::JSONRPC is Exception is export {
@@ -46,6 +47,7 @@ class Server is export {
     has MCP::Types::Implementation $.info is required;
     has MCP::Transport::Base::Transport $.transport is required;
     has Str $.instructions;
+    has Int $.page-size = 50;
 
     # Registered handlers
     has %!tools;      # name => RegisteredTool
@@ -60,6 +62,48 @@ class Server is export {
 
     # Pending request handlers for bidirectional communication
     has %!pending-requests;  # id => Promise vow
+
+    #| Encode an offset into a cursor string
+    method !encode-cursor(Int $offset --> Str) {
+        MIME::Base64.encode(to-json({ offset => $offset }).encode, :str)
+    }
+
+    #| Decode a cursor string into an offset
+    method !decode-cursor(Str $cursor --> Int) {
+        my $json = MIME::Base64.decode($cursor, :bin).decode;
+        from-json($json)<offset>
+    }
+
+    #| Paginate a list of items
+    method !paginate(@items, $params, Str :$key! --> Hash) {
+        my Int $offset = 0;
+
+        if $params && $params<cursor> {
+            try {
+                $offset = self!decode-cursor($params<cursor>);
+                CATCH {
+                    default {
+                        die X::MCP::JSONRPC.new(
+                            error => MCP::JSONRPC::Error.from-code(
+                                MCP::JSONRPC::InvalidParams,
+                                "Invalid cursor"
+                            )
+                        );
+                    }
+                }
+            }
+        }
+
+        my @page = @items[$offset ..^ min($offset + $!page-size, +@items)];
+        my %result = $key => @page;
+
+        my $next-offset = $offset + $!page-size;
+        if $next-offset < +@items {
+            %result<nextCursor> = self!encode-cursor($next-offset);
+        }
+
+        %result
+    }
 
     #| Add a tool to the server
     multi method add-tool(MCP::Server::Tool::RegisteredTool $tool) {
@@ -295,9 +339,8 @@ class Server is export {
 
     #| List tools
     method !list-tools($params?) {
-        {
-            tools => %!tools.values.map(*.to-tool.Hash).Array
-        }
+        my @tools = %!tools.values.map(*.to-tool.Hash).Array;
+        self!paginate(@tools, $params, key => 'tools')
     }
 
     #| Call a tool
@@ -323,9 +366,8 @@ class Server is export {
 
     #| List resources
     method !list-resources($params?) {
-        {
-            resources => %!resources.values.map(*.to-resource.Hash).Array
-        }
+        my @resources = %!resources.values.map(*.to-resource.Hash).Array;
+        self!paginate(@resources, $params, key => 'resources')
     }
 
     #| Read a resource
@@ -351,9 +393,8 @@ class Server is export {
 
     #| List prompts
     method !list-prompts($params?) {
-        {
-            prompts => %!prompts.values.map(*.to-prompt.Hash).Array
-        }
+        my @prompts = %!prompts.values.map(*.to-prompt.Hash).Array;
+        self!paginate(@prompts, $params, key => 'prompts')
     }
 
     #| Get a prompt
