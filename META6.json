@@ -14,6 +14,7 @@
         "MCP::JSONRPC": "lib/MCP/JSONRPC.rakumod",
         "MCP::Transport::Base": "lib/MCP/Transport/Base.rakumod",
         "MCP::Transport::Stdio": "lib/MCP/Transport/Stdio.rakumod",
+        "MCP::Transport::StreamableHTTP": "lib/MCP/Transport/StreamableHTTP.rakumod",
         "MCP::Server": "lib/MCP/Server.rakumod",
         "MCP::Server::Tool": "lib/MCP/Server/Tool.rakumod",
         "MCP::Server::Resource": "lib/MCP/Server/Resource.rakumod",
@@ -21,7 +22,8 @@
         "MCP::Client": "lib/MCP/Client.rakumod"
     },
     "depends": [
-        "JSON::Fast"
+        "JSON::Fast",
+        "Cro::HTTP"
     ],
     "test-depends": [
         "Test",
