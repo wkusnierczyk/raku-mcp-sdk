@@ -23,7 +23,8 @@
     },
     "depends": [
         "JSON::Fast",
-        "Cro::HTTP"
+        "Cro::HTTP",
+        "MIME::Base64"
     ],
     "test-depends": [
         "Test",

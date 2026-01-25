@@ -169,9 +169,13 @@ class Client is export {
     }
 
     #| List available tools
-    method list-tools(--> Promise) {
-        self.request('tools/list').then(-> $p {
-            $p.result<tools>.map({ MCP::Types::Tool.from-hash($_) }).Array
+    method list-tools(Str :$cursor --> Promise) {
+        my %params = $cursor ?? (cursor => $cursor) !! ();
+        self.request('tools/list', %params || Nil).then(-> $p {
+            {
+                tools => $p.result<tools>.map({ MCP::Types::Tool.from-hash($_) }).Array,
+                ($p.result<nextCursor> ?? (nextCursor => $p.result<nextCursor>) !! Empty),
+            }
         })
     }
 
@@ -191,9 +195,13 @@ class Client is export {
     }
 
     #| List available resources
-    method list-resources(--> Promise) {
-        self.request('resources/list').then(-> $p {
-            $p.result<resources>.map({ MCP::Types::Resource.from-hash($_) }).Array
+    method list-resources(Str :$cursor --> Promise) {
+        my %params = $cursor ?? (cursor => $cursor) !! ();
+        self.request('resources/list', %params || Nil).then(-> $p {
+            {
+                resources => $p.result<resources>.map({ MCP::Types::Resource.from-hash($_) }).Array,
+                ($p.result<nextCursor> ?? (nextCursor => $p.result<nextCursor>) !! Empty),
+            }
         })
     }
 
@@ -221,9 +229,13 @@ class Client is export {
     }
 
     #| List available prompts
-    method list-prompts(--> Promise) {
-        self.request('prompts/list').then(-> $p {
-            $p.result<prompts>.map({ MCP::Types::Prompt.from-hash($_) }).Array
+    method list-prompts(Str :$cursor --> Promise) {
+        my %params = $cursor ?? (cursor => $cursor) !! ();
+        self.request('prompts/list', %params || Nil).then(-> $p {
+            {
+                prompts => $p.result<prompts>.map({ MCP::Types::Prompt.from-hash($_) }).Array,
+                ($p.result<nextCursor> ?? (nextCursor => $p.result<nextCursor>) !! Empty),
+            }
         })
     }
 
