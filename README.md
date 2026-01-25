@@ -1,5 +1,3 @@
-# Raku MCP SDK
-
 <table>
   <tr>
     <td>
