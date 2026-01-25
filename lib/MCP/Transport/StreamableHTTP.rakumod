@@ -18,11 +18,9 @@ plus optional server-initiated SSE streams.
 
 use MCP::JSONRPC;
 use MCP::Transport::Base;
-use MCP::Types;
+need MCP::Types;
 use JSON::Fast;
-use Cro::HTTP::Client;
-use Cro::HTTP::Router;
-use Cro::HTTP::Server;
+# Cro::HTTP is loaded dynamically to keep this transport optional.
 
 my constant DEFAULT_PROTOCOL_FALLBACK = '2025-03-26';
 my constant DEFAULT_ACCEPT_POST = 'application/json, text/event-stream';
@@ -101,7 +99,7 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
     has Supplier $!incoming;
     has Supply $!incoming-supply;
     has Bool $!running = False;
-    has Cro::Service $!server;
+    has $!server;
     has %!pending-responses; # id -> { vow => Promise::Vow, init => Bool }
     has %!streams; # id -> Stream
     has @!stream-order;
@@ -117,7 +115,8 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
         $!running = True;
 
         my $application = self!build-router;
-        $!server = Cro::HTTP::Server.new(
+        my $server-class = self!cro-class('Cro::HTTP::Server');
+        $!server = $server-class.new(
             host => $!host,
             port => $!port,
             application => $application,
@@ -157,26 +156,34 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
     }
 
     method !build-router() {
+        my &route = self!cro-sub('Cro::HTTP::Router', 'route');
+        my &get = self!cro-sub('Cro::HTTP::Router', 'get');
+        my &post = self!cro-sub('Cro::HTTP::Router', 'post');
+        my &delete = self!cro-sub('Cro::HTTP::Router', 'delete');
+        my &content = self!cro-sub('Cro::HTTP::Router', 'content');
+        my &request = self!cro-sub('Cro::HTTP::Router', 'request');
+        my &response = self!cro-sub('Cro::HTTP::Router', 'response');
+
         my $self = self;
         my $path = $!path;
-        route {
+        &route({
             my sub path-ok($req --> Bool) {
                 my $target = $req.target.split('?', 2)[0] // '';
                 $target eq $path
             }
 
-            sub validate-request($req, $resp --> Bool) {
+            sub validate-request($req, $resp, &content --> Bool) {
                 return False unless path-ok($req);
-                return False unless $self!validate-origin($req, $resp);
-                return False unless $self!validate-protocol($req, $resp);
-                return False unless $self!validate-session($req, $resp);
+                return False unless $self!validate-origin($req, $resp, &content);
+                return False unless $self!validate-protocol($req, $resp, &content);
+                return False unless $self!validate-session($req, $resp, &content);
                 return True;
             }
 
-            get -> *@ {
-                my $req = request;
-                my $resp = response;
-                unless validate-request($req, $resp) {
+            &get(-> *@ {
+                my $req = &request();
+                my $resp = &response();
+                unless validate-request($req, $resp, &content) {
                     return;
                 }
                 unless $self!accepts-sse($req) {
@@ -186,7 +193,7 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
                 my $last-event-id = $req.header('Last-Event-ID');
                 if $last-event-id.defined && $last-event-id.chars {
                     $resp.status = 409;
-                    content 'application/json', $self!jsonrpc-error("Stream resumption not supported");
+                    &content('application/json', $self!jsonrpc-error("Stream resumption not supported"));
                     return;
                 }
                 my $stream = $self!open-stream;
@@ -194,13 +201,13 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
                 $resp.append-header('Cache-Control', 'no-cache');
                 $resp.append-header('Connection', 'keep-alive');
                 $resp.append-header('MCP-Session-Id', $self!session-id) if $self!session-id;
-                content 'text/event-stream', $stream.supplier.Supply;
-            }
+                &content('text/event-stream', $stream.supplier.Supply);
+            });
 
-            post -> *@ {
-                my $req = request;
-                my $resp = response;
-                unless validate-request($req, $resp) {
+            &post(-> *@ {
+                my $req = &request();
+                my $resp = &response();
+                unless validate-request($req, $resp, &content) {
                     return;
                 }
                 unless $self!accepts-post($req) {
@@ -209,7 +216,7 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
                 }
                 unless $self!valid-content-type($req) {
                     $resp.status = 415;
-                    content 'application/json', $self!jsonrpc-error("Unsupported Content-Type");
+                    &content('application/json', $self!jsonrpc-error("Unsupported Content-Type"));
                     return;
                 }
 
@@ -221,7 +228,7 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
                     CATCH {
                         default {
                             $resp.status = 400;
-                            content 'application/json', $self!jsonrpc-error("Invalid JSON-RPC message");
+                            &content('application/json', $self!jsonrpc-error("Invalid JSON-RPC message"));
                             return;
                         }
                     }
@@ -234,26 +241,26 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
                             vow => $p.vow,
                             init => ($msg.method eq 'initialize')
                         };
-                        $self!incoming.emit($msg);
+                        $!incoming.emit($msg);
                         my %payload = await $p;
                         for %payload<headers>.kv -> $k, $v {
                             $resp.append-header($k, $v);
                         }
                         $resp.status = 200;
-                        content 'application/json', %payload<body>;
+                        &content('application/json', %payload<body>);
                     }
                     default {
-                        $self!incoming.emit($msg);
+                        $!incoming.emit($msg);
                         $resp.status = 202;
                         return;
                     }
                 }
-            }
+            });
 
-            delete -> *@ {
-                my $req = request;
-                my $resp = response;
-                unless validate-request($req, $resp) {
+            &delete(-> *@ {
+                my $req = &request();
+                my $resp = &response();
+                unless validate-request($req, $resp, &content) {
                     return;
                 }
                 unless $self!allow-session-delete {
@@ -270,37 +277,37 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
                 $self!terminate-session();
                 $resp.status = 204;
                 return;
-            }
-        }
+            });
+        })
     }
 
-    method !validate-origin($req, $resp --> Bool) {
+    method !validate-origin($req, $resp, &content --> Bool) {
         my $origin = $req.header('Origin');
         return True unless $origin.defined;
         if @!allowed-origins.elems == 0 {
             $resp.status = 403;
-            content 'application/json', self!jsonrpc-error("Invalid Origin");
+            &content('application/json', self!jsonrpc-error("Invalid Origin"));
             return False;
         }
         if $origin eq any(@!allowed-origins) {
             return True;
         }
         $resp.status = 403;
-        content 'application/json', self!jsonrpc-error("Invalid Origin");
+        &content('application/json', self!jsonrpc-error("Invalid Origin"));
         False
     }
 
-    method !validate-protocol($req, $resp --> Bool) {
+    method !validate-protocol($req, $resp, &content --> Bool) {
         my $ver = $req.header('MCP-Protocol-Version') // DEFAULT_PROTOCOL_FALLBACK;
         if $ver eq any(@!protocol-versions) {
             return True;
         }
         $resp.status = 400;
-        content 'application/json', self!jsonrpc-error("Unsupported MCP-Protocol-Version");
+        &content('application/json', self!jsonrpc-error("Unsupported MCP-Protocol-Version"));
         False
     }
 
-    method !validate-session($req, $resp --> Bool) {
+    method !validate-session($req, $resp, &content --> Bool) {
         return True unless $!require-session;
         return False unless $!session-id.defined;
         my $sid = $req.header('MCP-Session-Id');
@@ -308,7 +315,7 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
             return True;
         }
         $resp.status = 404;
-        content 'application/json', self!jsonrpc-error("Unknown MCP session");
+        &content('application/json', self!jsonrpc-error("Unknown MCP session"));
         False
     }
 
@@ -397,12 +404,35 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
             error => { code => -32600, message => $message }
         }
     }
+
+    method !cro-class(Str $name) {
+        try {
+            require ::($name);
+            return ::($name);
+        }
+        CATCH {
+            default {
+                die X::MCP::Transport::StreamableHTTP::HTTP.new(
+                    message => "Cro::HTTP is required for StreamableHTTP transport"
+                );
+            }
+        }
+    }
+
+    method !cro-sub(Str $module, Str $name) {
+        my $pkg = self!cro-class($module);
+        my &sub = $pkg.WHO{$name};
+        die X::MCP::Transport::StreamableHTTP::HTTP.new(
+            message => "Missing $name in $module"
+        ) unless &sub.defined;
+        &sub
+    }
 }
 
 class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is export {
     has Str $.endpoint is required;
     has Str $.protocol-version = MCP::Types::LATEST_PROTOCOL_VERSION;
-    has Cro::HTTP::Client $.client = Cro::HTTP::Client.new;
+    has $.client;
     has Supplier $!incoming;
     has Supply $!incoming-supply;
     has Bool $!running = False;
@@ -417,6 +447,7 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
         $!incoming = Supplier.new;
         $!incoming-supply = $!incoming.Supply;
         $!running = True;
+        $!client //= self!cro-client;
         start {
             self!sse-loop;
         }
@@ -432,6 +463,7 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
             if $!session-id.defined {
                 $headers.push('MCP-Session-Id' => $!session-id);
             }
+            $!client //= self!cro-client;
             my $resp = await $!client.post(
                 $!endpoint,
                 headers => $headers,
@@ -485,6 +517,7 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
                 if $!last-event-id.defined {
                     @headers.push('Last-Event-ID' => $!last-event-id);
                 }
+                $!client //= self!cro-client;
                 my $resp = await $!client.get($!endpoint, headers => @headers);
                 self!capture-session-id($resp);
                 if $resp.status == 405 {
@@ -559,5 +592,24 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
     method !capture-session-id($resp) {
         my $sid = $resp.header('MCP-Session-Id');
         $!session-id = $sid if $sid.defined && $sid.chars;
+    }
+
+    method !cro-client() {
+        my $client-class = self!cro-class('Cro::HTTP::Client');
+        $client-class.new
+    }
+
+    method !cro-class(Str $name) {
+        try {
+            require ::($name);
+            return ::($name);
+        }
+        CATCH {
+            default {
+                die X::MCP::Transport::StreamableHTTP::HTTP.new(
+                    message => "Cro::HTTP is required for StreamableHTTP transport"
+                );
+            }
+        }
     }
 }
