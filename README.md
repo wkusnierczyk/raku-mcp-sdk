@@ -18,7 +18,26 @@
 
 **Work in progress**
 
-See [Gap Analysis](GAP_ANALYSIS.md) for details in implemented and missing features, in the context of the most recent [MCP specification](https://modelcontextprotocol.io/specification/2025-11-25).
+See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing features, in the context of the most recent [MCP specification](https://modelcontextprotocol.io/specification/2025-11-25).
+
+### Implementation Progress
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| JSON-RPC 2.0 | ✅ Done | Full message handling |
+| Stdio Transport | ✅ Done | Production ready |
+| Tools | ✅ Done | List, call, builder API |
+| Resources | ✅ Done | List, read, builder API |
+| Prompts | ✅ Done | List, get, builder API |
+| Pagination | ✅ Done | Cursor-based for all list endpoints |
+| Logging | ✅ Done | Server-side notifications |
+| Progress | ✅ Done | Server-side notifications |
+| Sampling | ⚠️ Partial | Basic support, missing tools in sampling |
+| HTTP Transport | ⚠️ Partial | Server started, client missing |
+| Cancellation | ❌ Planned | Issue #13 |
+| Resource subscriptions | ❌ Planned | |
+| Roots | ❌ Planned | |
+| OAuth 2.1 | ❌ Planned | |
 
 ## Table of contents
 
@@ -221,14 +240,15 @@ my $client = MCP::Client::Client.new(
 
 await $client.connect;
 
-# List and call tools
-my @tools = await $client.list-tools;
-for @tools -> $tool {
+# List and call tools (with pagination support)
+my $tools-result = await $client.list-tools;
+for $tools-result<tools> -> $tool {
     say "Tool: $tool.name() - $tool.description()";
 }
+# Use $tools-result<nextCursor> for pagination if present
 
-my $result = await $client.call-tool('greet', arguments => { name => 'World' });
-say $result.content[0].text;  # "Hello, World!"
+my $call-result = await $client.call-tool('greet', arguments => { name => 'World' });
+say $call-result.content[0].text;  # "Hello, World!"
 
 # Read resources
 my @contents = await $client.read-resource('info://about');

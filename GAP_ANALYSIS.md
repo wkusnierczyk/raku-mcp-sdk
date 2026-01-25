@@ -71,7 +71,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 - ❌ Tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) - types exist but not used in registration
 - ❌ `outputSchema` for structured tool outputs (2025-06-18 feature)
 - ❌ Tool name validation (SEP-986: must match `^[a-zA-Z0-9_-]{1,64}$`)
-- ❌ `tools/list` pagination support
+- ✅ `tools/list` pagination support - **Implemented**
 
 #### ✅ Resources (`MCP::Server::Resource`)
 - Resource registration with URI, name, description, mimeType
@@ -82,7 +82,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 - ❌ Resource subscriptions (`resources/subscribe`, `resources/unsubscribe`)
 - ❌ `notifications/resources/list_changed`
 - ❌ `notifications/resources/updated` for subscribed resources
-- ❌ `resources/list` pagination support
+- ✅ `resources/list` pagination support - **Implemented**
 - ❌ Resource annotations
 
 #### ✅ Prompts (`MCP::Server::Prompt`)
@@ -90,7 +90,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 - Prompt retrieval with argument substitution
 
 **Missing**:
-- ❌ `prompts/list` pagination support
+- ✅ `prompts/list` pagination support - **Implemented**
 - ❌ `notifications/prompts/list_changed`
 
 ---
@@ -222,7 +222,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 | SSE Transport | ✅ Full | ❌ No |
 | Tasks | ✅ Experimental | ❌ No |
 | Completion | ✅ Full | ❌ No |
-| Pagination | ✅ Full | ❌ No |
+| Pagination | ✅ Full | ✅ Full |
 
 ---
 
@@ -231,7 +231,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 ### High Priority (Core Functionality)
 1. **Complete Streamable HTTP transport** - Required for remote deployments
 2. **Add resource subscriptions** - Common use case for file watching
-3. **Add pagination** - Required for large tool/resource/prompt lists
+3. ~~**Add pagination**~~ ✅ **Done** - Cursor-based pagination for all list endpoints
 4. **Implement roots** - Required for filesystem-based servers
 5. **Implement proper cancellation** - Important for long-running operations
 
@@ -288,7 +288,7 @@ Current tests cover:
 
 Missing tests for:
 - ❌ Resource subscriptions
-- ❌ Pagination
+- ✅ Pagination - **Implemented**
 - ❌ Cancellation
 - ❌ Progress tracking
 - ❌ HTTP transport (partial)
