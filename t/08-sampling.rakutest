@@ -1,0 +1,171 @@
+use v6.d;
+use Test;
+use lib 'lib';
+use lib 't/lib';
+
+use MCP::Client;
+use MCP::Types;
+need MCP::JSONRPC;
+need TestTransport;
+
+=begin pod
+=head1 NAME
+
+08-sampling.rakutest - Tests for sampling support
+
+=head1 DESCRIPTION
+
+Exercises client-side handling of sampling/createMessage requests.
+
+=end pod
+
+sub respond-to-init(TestTransport::TestTransport $transport) {
+    my $req = $transport.sent[0];
+    $transport.emit(MCP::JSONRPC::Response.success($req.id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => 'ready'
+    }));
+}
+
+sub wait-for-response(TestTransport::TestTransport $transport, Int $id, Int $timeout = 100) {
+    for ^$timeout * 10 {
+        my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
+        my $resp = @responses.first({ .id.Str eq $id.Str });
+        return $resp if $resp;
+        sleep 0.1;
+    }
+    Nil
+}
+
+subtest 'Sampling handler returns result', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        capabilities => MCP::Types::ClientCapabilities.new(
+            sampling => MCP::Types::SamplingCapability.new(tools => True)
+        ),
+        transport => $transport,
+        sampling-handler => -> %params {
+            MCP::Types::CreateMessageResult.new(
+                role => 'assistant',
+                model => 'test-model',
+                content => [ MCP::Types::TextContent.new(text => 'ok') ]
+            )
+        }
+    );
+
+    my $connect = $client.connect;
+    for ^10 {
+        last if $transport.sent.elems > 0;
+        sleep 0.1;
+    }
+    respond-to-init($transport);
+    await $connect;
+
+    $transport.clear-sent;
+    my $req = MCP::JSONRPC::Request.new(
+        id => 42,
+        method => 'sampling/createMessage',
+        params => {
+            messages => [
+                { role => 'user', content => [ { type => 'text', text => 'hi' } ] }
+            ],
+            maxTokens => 4,
+            modelPreferences => {
+                hints => [ { name => 'test-model' } ]
+            }
+        }
+    );
+    $transport.emit($req);
+
+    my $resp = wait-for-response($transport, 42);
+    isa-ok $resp, MCP::JSONRPC::Response, 'response emitted';
+    if $resp.error {
+        diag "sampling error: {$resp.error.code} {$resp.error.message}";
+    }
+    ok !$resp.error, 'no error';
+    is $resp.result<model>, 'test-model', 'model returned';
+    is $resp.result<role>, 'assistant', 'role returned';
+    is $resp.result<content>[0]<type>, 'text', 'content type';
+};
+
+subtest 'Sampling rejects tools when capability missing', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        capabilities => MCP::Types::ClientCapabilities.new(
+            sampling => MCP::Types::SamplingCapability.new
+        ),
+        transport => $transport,
+        sampling-handler => -> %params { { role => 'assistant', model => 'x', content => [ { type => 'text', text => 'ok' } ] } }
+    );
+
+    my $connect = $client.connect;
+    for ^10 {
+        last if $transport.sent.elems > 0;
+        sleep 0.1;
+    }
+    respond-to-init($transport);
+    await $connect;
+
+    $transport.clear-sent;
+    my $req = MCP::JSONRPC::Request.new(
+        id => 7,
+        method => 'sampling/createMessage',
+        params => {
+            messages => [
+                { role => 'user', content => [ { type => 'text', text => 'hi' } ] }
+            ],
+            tools => [ { name => 't', description => 'd', inputSchema => { type => 'object' } } ]
+        }
+    );
+    $transport.emit($req);
+
+    my $resp = wait-for-response($transport, 7);
+    isa-ok $resp, MCP::JSONRPC::Response, 'response emitted';
+    if $resp.error {
+        diag "sampling error (tool result): {$resp.error.code} {$resp.error.message}";
+    }
+    ok $resp.error.defined, 'error returned';
+    is $resp.error.code, MCP::JSONRPC::InvalidParams.value, 'invalid params';
+};
+
+subtest 'Sampling enforces tool result placement', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        capabilities => MCP::Types::ClientCapabilities.new(
+            sampling => MCP::Types::SamplingCapability.new(tools => True)
+        ),
+        transport => $transport,
+        sampling-handler => -> %params { { role => 'assistant', model => 'x', content => [ { type => 'text', text => 'ok' } ] } }
+    );
+
+    my $connect = $client.connect;
+    for ^10 {
+        last if $transport.sent.elems > 0;
+        sleep 0.1;
+    }
+    respond-to-init($transport);
+    await $connect;
+
+    $transport.clear-sent;
+    my $req = MCP::JSONRPC::Request.new(
+        id => 9,
+        method => 'sampling/createMessage',
+        params => {
+            messages => [
+                { role => 'assistant', content => [ { type => 'tool_result', toolUseId => 'x', content => [ { type => 'text', text => 'bad' } ] } ] }
+            ]
+        }
+    );
+    $transport.emit($req);
+
+    my $resp = wait-for-response($transport, 9);
+    isa-ok $resp, MCP::JSONRPC::Response, 'response emitted';
+    ok $resp.error.defined, 'error returned';
+    is $resp.error.code, MCP::JSONRPC::InvalidParams.value, 'invalid params';
+};
+
+done-testing;

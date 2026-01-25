@@ -1,0 +1,111 @@
+use v6.d;
+use Test;
+use lib 'lib';
+
+use MCP::Transport::StreamableHTTP;
+use MCP::JSONRPC;
+use JSON::Fast;
+need MCP::Types;
+
+=begin pod
+=head1 NAME
+
+09-http-transport.rakutest - Tests for Streamable HTTP transport
+
+=head1 DESCRIPTION
+
+Validates basic Streamable HTTP request/response handling.
+
+=end pod
+
+sub cro-available(--> Bool) {
+    try {
+        require ::('Cro::HTTP::Client');
+        require ::('Cro::HTTP::Server');
+        True
+    }
+    CATCH { default { False } }
+}
+
+unless cro-available() {
+    plan 1;
+    skip 'Cro::HTTP not installed', 1;
+    done-testing;
+    exit;
+}
+
+my $client-class = ::('Cro::HTTP::Client');
+my $client = $client-class.new;
+
+sub start-server(--> Hash) {
+    my $transport;
+    my $port;
+    for ^20 -> $i {
+        $port = 32000 + ($*PID % 1000) + $i;
+        $transport = MCP::Transport::StreamableHTTP::StreamableHTTPServerTransport.new(
+            host => '127.0.0.1',
+            port => $port,
+            path => '/mcp'
+        );
+        my $ok = try {
+            $transport.start;
+            True
+        } // False;
+        return { transport => $transport, port => $port } if $ok;
+    }
+    {}
+}
+
+subtest 'POST initialize returns response and session id', {
+    my %server = start-server();
+    unless %server<transport> {
+        skip 'No free port for HTTP transport', 1;
+        return;
+    }
+    my $transport = %server<transport>;
+    my $port = %server<port>;
+
+    my $incoming = $transport.start;
+    my $got = Promise.new;
+    $incoming.tap(-> $msg {
+        my $resp = MCP::JSONRPC::Response.success($msg.id, {
+            protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+            capabilities => {},
+            serverInfo => { name => 'srv', version => '0.1' }
+        });
+        $transport.send($resp);
+        try $got.keep($msg);
+    });
+
+    my $resp = await $client.post(
+        "http://127.0.0.1:$port/mcp",
+        headers => [
+            Accept => 'application/json, text/event-stream',
+            'MCP-Protocol-Version' => MCP::Types::LATEST_PROTOCOL_VERSION
+        ],
+        content-type => 'application/json',
+        body => {
+            jsonrpc => '2.0',
+            id => 1,
+            method => 'initialize',
+            params => {
+                protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+                capabilities => {},
+                clientInfo => { name => 'cli', version => '0.1' }
+            }
+        }
+    );
+
+    my $msg = await $got;
+    isa-ok $msg, MCP::JSONRPC::Request, 'incoming request parsed';
+    is $resp.status, 200, 'response status';
+    ok $resp.header('MCP-Session-Id').defined, 'session id header set';
+
+    my $body = await $resp.body;
+    my %payload = $body ~~ Hash ?? $body !! from-json($body);
+    is %payload<result><protocolVersion>, MCP::Types::LATEST_PROTOCOL_VERSION, 'protocol version in response';
+
+    await $transport.close;
+};
+
+done-testing;

@@ -1,5 +1,3 @@
-# Raku MCP SDK
-
 <table>
   <tr>
     <td>
@@ -18,24 +16,36 @@
 
 ## Status
 
-**Work in Progress**
+**Work in progress**
 
-- [x] Core types
-- [x] JSON-RPC 2.0 layer
-- [x] Stdio transport
-- [x] Server API with tools, resources, prompts
-- [x] Client API
-- [ ] HTTP/Streamable HTTP transport
-- [ ] Full test coverage
-- [x] Documentation
+See [Gap Analysis](GAP_ANALYSIS.md) for details in implemented and missing features, in the context of the most recent [MCP specification](https://modelcontextprotocol.io/specification/2025-11-25).
 
 ## Table of contents
 
+- [Status](#status)
+- [Introduction](#introduction)
+  - [MCP](#mcp)
+    - [What is it for?](#what-is-it-for)
+    - [Design Principles](#design-principles)
+    - [Current Status](#current-status)
+  - [Raku](#raku)
+    - [Design Principles](#design-principles-1)
+    - [What is Outstanding? (Unique Features)](#what-is-outstanding-unique-features)
+    - [Raku for AI and MCP](#raku-for-ai-and-mcp)
 - [Installation](#installation)
 - [Quick start](#quick-start)
+  - [Creating a server](#creating-a-server)
+  - [Using the fluent builder API](#using-the-fluent-builder-api)
+  - [Creating a client](#creating-a-client)
 - [Features](#features)
+  - [Tools](#tools)
+  - [Resources](#resources)
+  - [Prompts](#prompts)
 - [Protocol support](#protocol-support)
 - [Development](#development)
+  - [Makefile Targets](#makefile-targets)
+  - [Environment Variables](#environment-variables)
+  - [Coverage Prerequisites](#coverage-prerequisites)
 - [Architecture](#architecture)
 - [Project structure](#project-structure)
 - [Contributing](#contributing)

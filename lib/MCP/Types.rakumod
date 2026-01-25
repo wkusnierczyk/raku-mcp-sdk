@@ -108,6 +108,21 @@ class ImageContent does Content is export {
     }
 }
 
+#| Audio content (base64 encoded)
+class AudioContent does Content is export {
+    has Str $.data is required;      # base64 encoded
+    has Str $.mimeType is required;
+    has Annotations $.annotations;
+
+    method type(--> Str) { 'audio' }
+
+    method Hash(--> Hash) {
+        my %h = type => 'audio', data => $!data, mimeType => $!mimeType;
+        %h<annotations> = $!annotations.Hash if $!annotations;
+        %h
+    }
+}
+
 #| Embedded resource content
 class EmbeddedResource does Content is export {
     has $.resource is required;  # ResourceContents
@@ -118,6 +133,67 @@ class EmbeddedResource does Content is export {
     method Hash(--> Hash) {
         my %h = type => 'resource', resource => $!resource.Hash;
         %h<annotations> = $!annotations.Hash if $!annotations;
+        %h
+    }
+}
+
+#| Resource link content
+class ResourceLink does Content is export {
+    has Str $.name is required;
+    has Str $.title;
+    has Str $.uri is required;
+    has Str $.description;
+    has Str $.mimeType;
+    has Annotations $.annotations;
+    has Int $.size;
+
+    method type(--> Str) { 'resource_link' }
+
+    method Hash(--> Hash) {
+        my %h = type => 'resource_link', name => $!name, uri => $!uri;
+        %h<title> = $_ with $!title;
+        %h<description> = $_ with $!description;
+        %h<mimeType> = $_ with $!mimeType;
+        %h<annotations> = $!annotations.Hash if $!annotations;
+        %h<size> = $_ with $!size;
+        %h
+    }
+}
+
+#| Tool use content
+class ToolUseContent does Content is export {
+    has Str $.id is required;
+    has Str $.name is required;
+    has $.input is required; # Hash or Array
+
+    method type(--> Str) { 'tool_use' }
+
+    method Hash(--> Hash) {
+        {
+            type => 'tool_use',
+            id => $!id,
+            name => $!name,
+            input => $!input
+        }
+    }
+}
+
+#| Tool result content
+class ToolResultContent does Content is export {
+    has @.content;     # Array of Content objects
+    has Str $.toolUseId is required;
+    has Bool $.isError = False;
+    has $.structuredContent;
+    has $.meta;
+
+    method type(--> Str) { 'tool_result' }
+
+    method Hash(--> Hash) {
+        my %h = type => 'tool_result', toolUseId => $!toolUseId;
+        %h<content> = @!content.map(*.Hash).Array;
+        %h<isError> = $!isError if $!isError.defined;
+        %h<structuredContent> = $_ with $!structuredContent;
+        %h<_meta> = $_ with $!meta;
         %h
     }
 }
@@ -249,6 +325,76 @@ class PromptMessage is export {
     }
 }
 
+#| Sampling message
+class SamplingMessage is export {
+    has Str $.role is required where * ~~ any(<user assistant>);
+    has $.content is required;  # Content or array of Content
+
+    method Hash(--> Hash) {
+        {
+            role => $!role,
+            content => $!content ~~ Positional
+                ?? $!content.map(*.Hash).Array
+                !! $!content.Hash
+        }
+    }
+}
+
+#| Model selection hint
+class ModelHint is export {
+    has Str $.name is required;
+
+    method Hash(--> Hash) { { name => $!name } }
+}
+
+#| Model preferences for sampling
+class ModelPreferences is export {
+    has @.hints; # Array of ModelHint
+    has Num $.costPriority;
+    has Num $.speedPriority;
+    has Num $.intelligencePriority;
+
+    method Hash(--> Hash) {
+        my %h;
+        %h<hints> = @!hints.map(*.Hash).Array if @!hints;
+        %h<costPriority> = $_ with $!costPriority;
+        %h<speedPriority> = $_ with $!speedPriority;
+        %h<intelligencePriority> = $_ with $!intelligencePriority;
+        %h
+    }
+}
+
+#| Tool choice for sampling
+class ToolChoice is export {
+    has Str $.mode is required; # auto | none | required | tool
+    has Str $.name;
+
+    method Hash(--> Hash) {
+        my %h = mode => $!mode;
+        %h<name> = $_ with $!name;
+        %h
+    }
+}
+
+#| Sampling result
+class CreateMessageResult is export {
+    has $.content is required;  # Content or array of Content
+    has Str $.model is required;
+    has Str $.role is required;
+    has Str $.stopReason;
+    has $.meta;
+
+    method Hash(--> Hash) {
+        my %h = model => $!model, role => $!role,
+            content => $!content ~~ Positional
+                ?? $!content.map(*.Hash).Array
+                !! $!content.Hash;
+        %h<stopReason> = $_ with $!stopReason;
+        %h<_meta> = $_ with $!meta;
+        %h
+    }
+}
+
 #| Server capabilities sub-types
 class LoggingCapability is export {
     method Hash(--> Hash) { {} }
@@ -327,7 +473,15 @@ class RootsCapability is export {
 }
 
 class SamplingCapability is export {
-    method Hash(--> Hash) { {} }
+    has Bool $.tools;
+    has Bool $.context;
+
+    method Hash(--> Hash) {
+        my %h;
+        %h<tools> = {} if $!tools;
+        %h<context> = {} if $!context;
+        %h
+    }
 }
 
 class ElicitationCapability is export {

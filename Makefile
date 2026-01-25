@@ -108,7 +108,7 @@ VERSION_ARGS_DESC := $(wordlist 3, 999, $(MAKECMDGOALS))
 # Allow passing VERSION_NEW/VERSION_DESC via variables, or via positional args.
 VERSION_NEW ?= $(VERSION_INPUT)
 VERSION_DESC ?= $(strip $(VERSION_ARGS_DESC))
-ifneq ($(VERSION_INPUT),)
+ifeq ($(firstword $(MAKECMDGOALS)),version)
     $(foreach word,$(wordlist 2, 999, $(MAKECMDGOALS)),$(eval $(word):;@:))
 endif
 
