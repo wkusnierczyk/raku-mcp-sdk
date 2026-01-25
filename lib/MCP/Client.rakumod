@@ -355,31 +355,51 @@ class Client is export {
             return;
         }
 
-        start {
-            my $response;
-            try {
-                self!validate-sampling-params($req.params // {});
-                my $result = &!sampling-handler($req.params // {});
-                if $result ~~ Promise {
-                    $result = await $result;
-                }
-                my $payload = self!coerce-sampling-result($result);
-                $response = MCP::JSONRPC::Response.success($req.id, $payload);
-                CATCH {
-                    when X::MCP::Client::Error {
-                        $response = MCP::JSONRPC::Response.error($req.id, $_.error);
-                    }
-                    default {
-                        my $err = MCP::JSONRPC::Error.from-code(
-                            MCP::JSONRPC::InternalError,
-                            $_.message
-                        );
-                        $response = MCP::JSONRPC::Response.error($req.id, $err);
-                    }
-                }
-            }
-            $!transport.send($response);
+        my $params = $req.params // {};
+        my %params;
+        if $params ~~ Associative {
+            %params = $params;
+        } elsif $params ~~ Pair {
+            %params = Hash.new($params);
+        } elsif $params ~~ Positional && $params.all ~~ Pair {
+            %params = Hash.new(|$params);
+        } else {
+            die X::MCP::Client::Error.new(
+                error => MCP::JSONRPC::Error.from-code(
+                    MCP::JSONRPC::InvalidParams,
+                    "Invalid sampling params"
+                )
+            );
         }
+        $! = Nil;
+        my $result = try {
+            self!validate-sampling-params(%params);
+            my $out = &!sampling-handler(%params);
+            if $out ~~ Promise {
+                $out = $out.result;
+            }
+            $out
+        };
+
+        my $failure = $!;
+        my $response;
+        if $failure.defined {
+            my $ex = $failure ~~ Failure ?? $failure.exception !! $failure;
+            if $ex ~~ X::MCP::Client::Error {
+                $response = MCP::JSONRPC::Response.error($req.id, $ex.error);
+            } else {
+                my $err = MCP::JSONRPC::Error.from-code(
+                    MCP::JSONRPC::InternalError,
+                    ($ex ?? $ex.message !! 'Sampling request failed')
+                );
+                $response = MCP::JSONRPC::Response.error($req.id, $err);
+            }
+        } else {
+            my $payload = self!coerce-sampling-result($result);
+            $response = MCP::JSONRPC::Response.success($req.id, $payload);
+        }
+
+        $!transport.send($response);
     }
 
     method !validate-sampling-params(%params) {
@@ -394,29 +414,42 @@ class Client is export {
             );
         }
         if %params<messages>:exists && %params<messages>.defined {
-            self!validate-sampling-messages(%params<messages>);
+            my $msgs = %params<messages>;
+            my @messages = $msgs ~~ Positional ?? $msgs !! [$msgs];
+            self!validate-sampling-messages(@messages);
         }
     }
 
     method !validate-sampling-messages(@messages) {
         my %pending;
         for @messages -> $msg {
-            my $content = $msg<content>;
+            my $entry = $msg;
+            if $entry ~~ Pair {
+                $entry = Hash.new($entry);
+            } elsif $entry ~~ Positional && $entry.all ~~ Pair {
+                $entry = Hash.new(|$entry);
+            } elsif $entry !~~ Associative {
+                self!invalid-sampling("Invalid message format");
+            }
+
+            my $content = $entry<content>;
             next unless $content.defined;
             my @blocks = $content ~~ Positional ?? $content !! [$content];
-            my @tool-use = @blocks.grep({ $_<type> eq 'tool_use' });
-            my @tool-result = @blocks.grep({ $_<type> eq 'tool_result' });
-
-            if %pending && $msg<role> eq 'assistant' {
-                self!invalid-sampling("Tool result missing in request");
-            }
+            # Normalize blocks: convert Array of Pairs to Hash
+            @blocks = @blocks.map({
+                when Associative { $_ }
+                when Positional { $_.all ~~ Pair ?? Hash.new(|$_) !! $_ }
+                default { $_ }
+            }).Array;
+            my @tool-use = @blocks.grep({ $_ ~~ Associative && $_<type> eq 'tool_use' });
+            my @tool-result = @blocks.grep({ $_ ~~ Associative && $_<type> eq 'tool_result' });
 
             if @tool-result {
                 self!invalid-sampling("Tool result messages must contain only tool_result blocks")
                     if @tool-result.elems != @blocks.elems;
                 self!invalid-sampling("Tool results must be in user messages")
-                    unless $msg<role> eq 'user';
-                if %pending {
+                    unless $entry<role> eq 'user';
+                if %pending.elems {
                     my @ids = @tool-result.map(*<toolUseId>);
                     for %pending.keys -> $id {
                         self!invalid-sampling("Tool result missing in request") unless $id eq any(@ids);
@@ -430,8 +463,12 @@ class Client is export {
                     %pending{$block<id>} = True if $block<id>.defined;
                 }
             }
+
+            if %pending.elems && $entry<role> eq 'assistant' {
+                self!invalid-sampling("Tool result missing in request");
+            }
         }
-        if %pending {
+        if %pending.elems {
             self!invalid-sampling("Tool result missing in request");
         }
     }
