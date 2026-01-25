@@ -18,7 +18,7 @@
 PROJECT_NAME    := MCP
 PROJECT_TITLE   := Raku MCP SDK
 PROJECT_DESC    := Raku Implementation of the Model Context Protocol
-VERSION         := 0.2.0
+VERSION         := 0.3.0
 DEVELOPER_NAME  := Waclaw Kusnierczyk
 DEVELOPER_EMAIL := waclaw.kusnierczyk@gmail.com
 SOURCE_URL      := https://github.com/wkusnierczyk/raku-mcp-sdk
@@ -658,7 +658,7 @@ ifneq ($(VERSION_NEW),)
 		exit 1; \
 	fi
 	$(call log-info,Updating project version to $(VERSION_NEW)...)
-	$(Q)perl -0pi -e 's/^VERSION\\s*:=\\s*.*/VERSION         := $(VERSION_NEW)/m' Makefile
+	$(Q)perl -0pi -e 's/^VERSION\\s*:=\\s*.*/VERSION := $(VERSION_NEW)/m' Makefile
 	$(Q)perl -0pi -e 's/"version"\\s*:\\s*"[^"]*"/"version": "$(VERSION_NEW)"/' $(META_FILE)
 	$(call log-success,Version updated in Makefile and $(META_FILE))
 	$(call log-info,Creating git tag v$(VERSION_NEW)...)
