@@ -79,9 +79,9 @@ This document compares the current implementation of the Raku MCP SDK against th
 
 **Missing**:
 - ❌ Resource templates (URI templates with placeholders)
-- ❌ Resource subscriptions (`resources/subscribe`, `resources/unsubscribe`)
-- ❌ `notifications/resources/list_changed`
-- ❌ `notifications/resources/updated` for subscribed resources
+- ✅ Resource subscriptions (`resources/subscribe`, `resources/unsubscribe`) - **Implemented**
+- ✅ `notifications/resources/list_changed` - **Implemented** via `notify-resources-list-changed()`
+- ✅ `notifications/resources/updated` for subscribed resources - **Implemented** via `notify-resource-updated(uri)`
 - ✅ `resources/list` pagination support - **Implemented**
 - ✅ Resource annotations (`audience`, `priority`) - **Implemented** via builder API
 
@@ -210,8 +210,8 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 
 | Feature | Python SDK | Raku SDK |
 |---------|-----------|----------|
-| Tools | ✅ Full | ⚠️ Basic |
-| Resources | ✅ Full + templates + subscriptions | ⚠️ Basic |
+| Tools | ✅ Full | ⚠️ Basic + annotations |
+| Resources | ✅ Full + templates + subscriptions | ✅ Full + subscriptions (no templates) |
 | Prompts | ✅ Full | ⚠️ Basic |
 | Sampling | ✅ Full + tools | ⚠️ Basic |
 | Roots | ✅ Full | ❌ No |
@@ -229,7 +229,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 
 ### High Priority (Core Functionality)
 1. **Complete Streamable HTTP transport** - Required for remote deployments
-2. **Add resource subscriptions** - Common use case for file watching
+2. ~~**Add resource subscriptions**~~ ✅ **Done** - Subscribe/unsubscribe and update notifications
 3. ~~**Add pagination**~~ ✅ **Done** - Cursor-based pagination for all list endpoints
 4. **Implement roots** - Required for filesystem-based servers
 5. ~~**Implement proper cancellation**~~ ✅ **Done** - Request cancellation with notifications
@@ -283,7 +283,7 @@ Current tests cover:
 - ✅ Sampling validation
 
 Missing tests for:
-- ❌ Resource subscriptions
+- ✅ Resource subscriptions - **Implemented**
 - ✅ Pagination - **Implemented**
 - ✅ Cancellation - **Implemented**
 - ❌ Progress tracking
@@ -298,8 +298,8 @@ Missing tests for:
 The Raku MCP SDK provides a solid foundation with core protocol support, but significant work remains to achieve full specification compliance. The highest impact improvements would be:
 
 1. Completing HTTP transport for production deployment
-2. Adding resource subscriptions for real-time updates
-3. Implementing pagination for scalability
+2. ~~Adding resource subscriptions for real-time updates~~ ✅ **Done**
+3. ~~Implementing pagination for scalability~~ ✅ **Done**
 4. Adding roots support for filesystem servers
 5. Implementing the authorization framework for secure connections
 
