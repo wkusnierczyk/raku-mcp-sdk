@@ -11,7 +11,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 | Category | Status | Notes |
 |----------|--------|-------|
 | **Base Protocol** | ✅ Mostly Complete | JSON-RPC 2.0, lifecycle, basic message handling |
-| **Transports** | ⚠️ Partial | Stdio complete, Streamable HTTP started |
+| **Transports** | ✅ Mostly Complete | Stdio complete, Streamable HTTP complete |
 | **Server Features** | ⚠️ Partial | Tools/Resources/Prompts basic support |
 | **Client Features** | ⚠️ Partial | Sampling basic support |
 | **Utilities** | ⚠️ Partial | Logging, progress, cancellation implemented |
@@ -46,14 +46,14 @@ This document compares the current implementation of the Raku MCP SDK against th
 - Complete implementation
 - Proper newline-delimited JSON messages
 
-#### ⚠️ Streamable HTTP Transport (`MCP::Transport::StreamableHTTP`)
-- Server-side implementation started
-- **Missing**:
-  - Full client-side implementation
-  - Session management (Mcp-Session-Id header)
-  - Last-Event-ID replay for SSE resumption
-  - CORS handling (started but incomplete)
-  - Proper error responses per spec
+#### ✅ Streamable HTTP Transport (`MCP::Transport::StreamableHTTP`)
+- Full server-side implementation (POST/GET/DELETE)
+- Full client-side implementation
+- Session management (`MCP-Session-Id` header)
+- `Last-Event-ID` replay for SSE resumption
+- CORS handling via `allowed-origins`
+- Protocol version validation (`MCP-Protocol-Version` header)
+- Proper error responses per spec (400, 403, 404, 405, 406, 415)
 
 #### ❌ Missing
 - **SSE Transport** (legacy, but some clients still use it)
@@ -220,7 +220,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 | Roots | ✅ Full | ✅ Full |
 | Elicitation | ✅ Full + URL mode | ❌ No |
 | OAuth 2.1 | ✅ Full | ❌ No |
-| Streamable HTTP | ✅ Full client + server | ⚠️ Server partial |
+| Streamable HTTP | ✅ Full client + server | ✅ Full |
 | SSE Transport | ✅ Full | ❌ No |
 | Tasks | ✅ Experimental | ❌ No |
 | Completion | ✅ Full | ❌ No |
@@ -231,7 +231,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 ## Priority Recommendations
 
 ### High Priority (Core Functionality)
-1. **Complete Streamable HTTP transport** - Required for remote deployments
+1. ~~**Complete Streamable HTTP transport**~~ ✅ **Done** - Full client/server with session management, SSE, and resumption
 2. ~~**Add resource subscriptions**~~ ✅ **Done** - Subscribe/unsubscribe and update notifications
 3. ~~**Add pagination**~~ ✅ **Done** - Cursor-based pagination for all list endpoints
 4. ~~**Implement roots**~~ ✅ **Done** - Client roots support and server list-roots

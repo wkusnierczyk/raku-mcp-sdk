@@ -56,7 +56,7 @@ sub start-server(--> Hash) {
     {}
 }
 
-subtest 'POST initialize returns response and session id', {
+subtest 'Server: POST initialize returns response and session id', {
     my %server = start-server();
     unless %server<transport> {
         skip 'No free port for HTTP transport', 1;
@@ -106,6 +106,272 @@ subtest 'POST initialize returns response and session id', {
     is %payload<result><protocolVersion>, MCP::Types::LATEST_PROTOCOL_VERSION, 'protocol version in response';
 
     await $transport.close;
+};
+
+subtest 'Server: POST notification returns 202 Accepted', {
+    my %server = start-server();
+    unless %server<transport> {
+        skip 'No free port for HTTP transport', 1;
+        return;
+    }
+    my $transport = %server<transport>;
+    my $port = %server<port>;
+
+    my $incoming = $transport.start;
+    my $got = Promise.new;
+    $incoming.tap(-> $msg {
+        try $got.keep($msg);
+    });
+
+    my $resp = await $client.post(
+        "http://127.0.0.1:$port/mcp",
+        headers => [
+            Accept => 'application/json, text/event-stream',
+            'MCP-Protocol-Version' => MCP::Types::LATEST_PROTOCOL_VERSION
+        ],
+        content-type => 'application/json',
+        body => {
+            jsonrpc => '2.0',
+            method => 'notifications/initialized'
+        }
+    );
+
+    my $msg = await Promise.anyof($got, Promise.in(2).then({ Nil }));
+    ok $msg.status ~~ Kept, 'notification received';
+    is $resp.status, 202, 'notification returns 202 Accepted';
+
+    await $transport.close;
+};
+
+subtest 'Server: Invalid protocol version returns 400', {
+    my %server = start-server();
+    unless %server<transport> {
+        skip 'No free port for HTTP transport', 1;
+        return;
+    }
+    my $transport = %server<transport>;
+    my $port = %server<port>;
+
+    $transport.start;
+
+    my $resp;
+    my $error-class = ::('X::Cro::HTTP::Error');
+    try {
+        $resp = await $client.post(
+            "http://127.0.0.1:$port/mcp",
+            headers => [
+                Accept => 'application/json, text/event-stream',
+                'MCP-Protocol-Version' => 'invalid-version'
+            ],
+            content-type => 'application/json',
+            body => { jsonrpc => '2.0', id => 1, method => 'ping' }
+        );
+        CATCH {
+            when $error-class {
+                $resp = .response;
+            }
+        }
+    }
+
+    is $resp.status, 400, 'invalid protocol version returns 400';
+
+    await $transport.close;
+};
+
+subtest 'Server: DELETE session termination', {
+    my %server = start-server();
+    unless %server<transport> {
+        skip 'No free port for HTTP transport', 1;
+        return;
+    }
+    my $transport = %server<transport>;
+    my $port = %server<port>;
+
+    my $incoming = $transport.start;
+    my $session-id;
+
+    $incoming.tap(-> $msg {
+        if $msg ~~ MCP::JSONRPC::Request && $msg.method eq 'initialize' {
+            my $resp = MCP::JSONRPC::Response.success($msg.id, {
+                protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+                capabilities => {},
+                serverInfo => { name => 'srv', version => '0.1' }
+            });
+            $transport.send($resp);
+        }
+    });
+
+    # Initialize to get a session
+    my $init-resp = await $client.post(
+        "http://127.0.0.1:$port/mcp",
+        headers => [
+            Accept => 'application/json, text/event-stream',
+            'MCP-Protocol-Version' => MCP::Types::LATEST_PROTOCOL_VERSION
+        ],
+        content-type => 'application/json',
+        body => {
+            jsonrpc => '2.0',
+            id => 1,
+            method => 'initialize',
+            params => {
+                protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+                capabilities => {},
+                clientInfo => { name => 'cli', version => '0.1' }
+            }
+        }
+    );
+
+    $session-id = $init-resp.header('MCP-Session-Id');
+    ok $session-id.defined, 'got session id';
+
+    # Send DELETE to terminate session
+    my $del-resp = await $client.delete(
+        "http://127.0.0.1:$port/mcp",
+        headers => [
+            'MCP-Protocol-Version' => MCP::Types::LATEST_PROTOCOL_VERSION,
+            'MCP-Session-Id' => $session-id
+        ]
+    );
+
+    is $del-resp.status, 204, 'DELETE returns 204 No Content';
+
+    await $transport.close;
+};
+
+subtest 'Client: sends POST and receives response', {
+    my %server = start-server();
+    unless %server<transport> {
+        skip 'No free port for HTTP transport', 1;
+        return;
+    }
+    my $server = %server<transport>;
+    my $port = %server<port>;
+
+    my $server-incoming = $server.start;
+    $server-incoming.tap(-> $msg {
+        if $msg ~~ MCP::JSONRPC::Request {
+            my $resp = MCP::JSONRPC::Response.success($msg.id, {
+                protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+                capabilities => {},
+                serverInfo => { name => 'srv', version => '0.1' }
+            });
+            $server.send($resp);
+        }
+    });
+
+    # Create client transport
+    my $client-transport = MCP::Transport::StreamableHTTP::StreamableHTTPClientTransport.new(
+        endpoint => "http://127.0.0.1:$port/mcp"
+    );
+
+    my $client-incoming = $client-transport.start;
+    my $got-response = Promise.new;
+    $client-incoming.tap(-> $msg {
+        try $got-response.keep($msg);
+    });
+
+    # Send initialize request
+    my $req = MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'initialize',
+        params => {
+            protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+            capabilities => {},
+            clientInfo => { name => 'test-client', version => '0.1' }
+        }
+    );
+    await $client-transport.send($req);
+
+    my $response = await Promise.anyof($got-response, Promise.in(5).then({ Nil }));
+    ok $response.status ~~ Kept, 'client received response';
+
+    if $response.status ~~ Kept {
+        my $msg = $response.result;
+        isa-ok $msg, MCP::JSONRPC::Response, 'response is correct type';
+        is $msg.id, 1, 'response has matching id';
+        ok $msg.result<protocolVersion>.defined, 'response has protocol version';
+    }
+
+    await $client-transport.close;
+    await $server.close;
+};
+
+subtest 'Client: terminate-session sends DELETE', {
+    my %server = start-server();
+    unless %server<transport> {
+        skip 'No free port for HTTP transport', 1;
+        return;
+    }
+    my $server = %server<transport>;
+    my $port = %server<port>;
+
+    my $server-incoming = $server.start;
+    $server-incoming.tap(-> $msg {
+        if $msg ~~ MCP::JSONRPC::Request && $msg.method eq 'initialize' {
+            my $resp = MCP::JSONRPC::Response.success($msg.id, {
+                protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+                capabilities => {},
+                serverInfo => { name => 'srv', version => '0.1' }
+            });
+            $server.send($resp);
+        }
+    });
+
+    my $client-transport = MCP::Transport::StreamableHTTP::StreamableHTTPClientTransport.new(
+        endpoint => "http://127.0.0.1:$port/mcp"
+    );
+
+    my $client-incoming = $client-transport.start;
+    my $got-init = Promise.new;
+    $client-incoming.tap(-> $msg {
+        try $got-init.keep($msg);
+    });
+
+    # Initialize to establish session
+    my $req = MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'initialize',
+        params => {
+            protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+            capabilities => {},
+            clientInfo => { name => 'test-client', version => '0.1' }
+        }
+    );
+    await $client-transport.send($req);
+    await Promise.anyof($got-init, Promise.in(5));
+
+    # Terminate session
+    my $result = await $client-transport.terminate-session;
+    ok $result, 'terminate-session returned success';
+
+    await $client-transport.close;
+    await $server.close;
+};
+
+subtest 'Client: is-connected reflects state', {
+    my %server = start-server();
+    unless %server<transport> {
+        skip 'No free port for HTTP transport', 1;
+        return;
+    }
+    my $server = %server<transport>;
+    my $port = %server<port>;
+
+    $server.start;
+
+    my $client-transport = MCP::Transport::StreamableHTTP::StreamableHTTPClientTransport.new(
+        endpoint => "http://127.0.0.1:$port/mcp"
+    );
+
+    nok $client-transport.is-connected, 'not connected before start';
+
+    $client-transport.start;
+    ok $client-transport.is-connected, 'connected after start';
+
+    await $client-transport.close;
+    nok $client-transport.is-connected, 'not connected after close';
+
+    await $server.close;
 };
 
 done-testing;
