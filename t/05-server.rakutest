@@ -612,4 +612,48 @@ subtest 'Resource subscriptions', {
     is @notifications.elems, 0, 'no notification sent for unknown URI';
 };
 
+subtest 'Server list-roots', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    # Test list-roots sends request to client
+    $transport.clear-sent;
+    my $roots-promise = $server.list-roots;
+
+    # Verify request was sent
+    my @requests = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @requests.elems, 1, 'list-roots sends request';
+    is @requests[0].method, 'roots/list', 'request method is roots/list';
+
+    # Simulate client response
+    $server.handle-response-public(MCP::JSONRPC::Response.success(@requests[0].id, {
+        roots => [
+            { uri => 'file:///project', name => 'Project' },
+            { uri => 'file:///home' },
+        ]
+    }));
+
+    # Verify promise resolves with Root objects
+    my @roots = await $roots-promise;
+    is @roots.elems, 2, 'list-roots returns 2 roots';
+    isa-ok @roots[0], MCP::Types::Root, 'first item is Root';
+    is @roots[0].uri, 'file:///project', 'first root uri correct';
+    is @roots[0].name, 'Project', 'first root name correct';
+    isa-ok @roots[1], MCP::Types::Root, 'second item is Root';
+    is @roots[1].uri, 'file:///home', 'second root uri correct';
+
+    # Test empty roots response
+    $transport.clear-sent;
+    my $empty-promise = $server.list-roots;
+    @requests = $transport.sent.grep(MCP::JSONRPC::Request);
+    $server.handle-response-public(MCP::JSONRPC::Response.success(@requests[0].id, {
+        roots => []
+    }));
+    my @empty-roots = await $empty-promise;
+    is @empty-roots.elems, 0, 'empty roots returns empty array';
+};
+
 done-testing;

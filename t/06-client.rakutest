@@ -314,4 +314,94 @@ subtest 'Client resource subscription support', {
     pass 'resources list changed notification received';
 };
 
+subtest 'Client roots support', {
+    my $transport = TestTransport::TestTransport.new;
+
+    # Create client with roots configured
+    my @roots = [
+        { uri => 'file:///home/user/project', name => 'Project' },
+        { uri => 'file:///tmp' },
+    ];
+
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+        roots => @roots
+    );
+
+    my $connect = $client.connect;
+    for ^10 {
+        last if $transport.sent.elems > 0;
+        sleep 0.1;
+    }
+    my $init-req = $transport.sent[0];
+
+    # Verify roots capability is advertised
+    ok $init-req.params<capabilities><roots>:exists, 'roots capability advertised';
+    ok $init-req.params<capabilities><roots><listChanged>, 'roots listChanged is true';
+
+    $transport.emit(MCP::JSONRPC::Response.success($init-req.id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => 'test'
+    }));
+    await $connect;
+
+    # Test get-roots returns configured roots
+    my @client-roots = $client.get-roots;
+    is @client-roots.elems, 2, 'get-roots returns 2 roots';
+    is @client-roots[0].uri, 'file:///home/user/project', 'first root uri correct';
+    is @client-roots[0].name, 'Project', 'first root name correct';
+    is @client-roots[1].uri, 'file:///tmp', 'second root uri correct';
+
+    # Test roots/list request from server
+    $transport.clear-sent;
+    $transport.emit(MCP::JSONRPC::Request.new(
+        id => 'roots-req-1',
+        method => 'roots/list'
+    ));
+
+    # Wait for response
+    for ^10 {
+        last if $transport.sent.grep(MCP::JSONRPC::Response).elems > 0;
+        sleep 0.1;
+    }
+
+    my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
+    is @responses.elems, 1, 'client responded to roots/list';
+    my $response = @responses[0];
+    is $response.id, 'roots-req-1', 'response has correct id';
+    ok $response.result<roots>:exists, 'response has roots';
+    is $response.result<roots>.elems, 2, 'response has 2 roots';
+    is $response.result<roots>[0]<uri>, 'file:///home/user/project', 'first root in response';
+
+    # Test set-roots updates roots and sends notification
+    $transport.clear-sent;
+    $client.set-roots([
+        MCP::Types::Root.new(uri => 'file:///new/root', name => 'New Root')
+    ]);
+
+    my @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifications.elems, 1, 'set-roots sends notification';
+    is @notifications[0].method, 'notifications/roots/list_changed', 'notification method correct';
+
+    # Verify roots are updated
+    @client-roots = $client.get-roots;
+    is @client-roots.elems, 1, 'roots updated to 1';
+    is @client-roots[0].uri, 'file:///new/root', 'new root uri correct';
+
+    # Test client without roots doesn't advertise capability
+    my $client2 = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli2', version => '0.1'),
+        transport => TestTransport::TestTransport.new
+    );
+    my $connect2 = $client2.connect;
+    for ^10 {
+        last if $client2.transport.sent.elems > 0;
+        sleep 0.1;
+    }
+    my $init-req2 = $client2.transport.sent[0];
+    nok $init-req2.params<capabilities><roots>:exists, 'no roots capability without roots';
+};
+
 done-testing;

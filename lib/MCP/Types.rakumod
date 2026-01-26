@@ -461,6 +461,24 @@ class ServerCapabilities is export {
     }
 }
 
+#| Root definition (filesystem boundary)
+class Root is export {
+    has Str $.uri is required;
+    has Str $.name;
+
+    method Hash(--> Hash) {
+        my %h = uri => $!uri;
+        %h<name> = $_ with $!name;
+        %h
+    }
+
+    method from-hash(%h --> Root) {
+        my %args = uri => %h<uri>;
+        %args<name> = %h<name> if %h<name>.defined;
+        self.new(|%args)
+    }
+}
+
 #| Client capabilities sub-types
 class RootsCapability is export {
     has Bool $.listChanged;
