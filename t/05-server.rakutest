@@ -568,6 +568,48 @@ subtest 'Resource subscriptions', {
     @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
     is @notifications.elems, 1, 'notify-resources-list-changed sends notification';
     is @notifications[0].method, 'notifications/resources/list_changed', 'list changed notification method is correct';
+
+    # Test multiple subscriptions
+    $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 8,
+        method => 'resources/subscribe',
+        params => { uri => 'file://test.txt' }
+    ));
+    $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 9,
+        method => 'resources/subscribe',
+        params => { uri => 'file://other.txt' }
+    ));
+    ok $server.is-subscribed('file://test.txt'), 'first resource still subscribed';
+    ok $server.is-subscribed('file://other.txt'), 'second resource now subscribed';
+
+    # Test notifications sent only for subscribed resources when multiple subscribed
+    $transport.clear-sent;
+    $server.notify-resource-updated('file://test.txt');
+    $server.notify-resource-updated('file://other.txt');
+    @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifications.elems, 2, 'both subscribed resources get notifications';
+
+    # Test idempotent subscribe (subscribing twice should succeed)
+    lives-ok {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 10,
+            method => 'resources/subscribe',
+            params => { uri => 'file://test.txt' }
+        ));
+    }, 'subscribing twice succeeds (idempotent)';
+    ok $server.is-subscribed('file://test.txt'), 'still subscribed after double subscribe';
+
+    # Test is-subscribed for completely unknown URI
+    nok $server.is-subscribed('file://never-existed.txt'), 'is-subscribed returns false for unknown URI';
+
+    # Test notify-resource-updated for unknown URI (should not send, not throw)
+    $transport.clear-sent;
+    lives-ok {
+        $server.notify-resource-updated('file://unknown-resource.txt');
+    }, 'notify-resource-updated for unknown URI does not throw';
+    @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifications.elems, 0, 'no notification sent for unknown URI';
 };
 
 done-testing;
