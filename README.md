@@ -493,6 +493,7 @@ $ make about
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
 ├─ version:    x.y.z
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
+├─ support:    Claude Opus 4.5 <noreply@anthropic.com>
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT
 ```

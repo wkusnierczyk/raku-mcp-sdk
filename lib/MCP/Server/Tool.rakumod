@@ -169,20 +169,24 @@ class ToolBuilder is export {
         self
     }
 
-    #| Set annotations
+    #| Set annotations (supports both short names and spec names with Hint suffix)
     method annotations(
         Str :$title,
         Bool :$readOnly,
+        Bool :$readOnlyHint,
         Bool :$destructive,
+        Bool :$destructiveHint,
         Bool :$idempotent,
-        Bool :$openWorld
+        Bool :$idempotentHint,
+        Bool :$openWorld,
+        Bool :$openWorldHint
     --> ToolBuilder) {
         $!annotations = MCP::Types::ToolAnnotations.new(
             title => $title,
-            readOnlyHint => $readOnly,
-            destructiveHint => $destructive,
-            idempotentHint => $idempotent,
-            openWorldHint => $openWorld,
+            readOnlyHint => $readOnly // $readOnlyHint,
+            destructiveHint => $destructive // $destructiveHint,
+            idempotentHint => $idempotent // $idempotentHint,
+            openWorldHint => $openWorld // $openWorldHint,
         );
         self
     }

@@ -68,7 +68,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 - Builder pattern API
 
 **Missing**:
-- ❌ Tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) - types exist but not used in registration
+- ✅ Tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) - **Implemented** via builder API
 - ❌ `outputSchema` for structured tool outputs (2025-06-18 feature)
 - ❌ Tool name validation (SEP-986: must match `^[a-zA-Z0-9_-]{1,64}$`)
 - ✅ `tools/list` pagination support - **Implemented**
@@ -83,7 +83,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 - ❌ `notifications/resources/list_changed`
 - ❌ `notifications/resources/updated` for subscribed resources
 - ✅ `resources/list` pagination support - **Implemented**
-- ❌ Resource annotations
+- ✅ Resource annotations (`audience`, `priority`) - **Implemented** via builder API
 
 #### ✅ Prompts (`MCP::Server::Prompt`)
 - Prompt registration with arguments
