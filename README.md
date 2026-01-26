@@ -35,9 +35,21 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
 | Cancellation | ✅ Done | Request cancellation with notifications |
 | Resource subscriptions | ✅ Done | Subscribe, unsubscribe, update notifications |
 | Roots | ✅ Done | Client roots, server list-roots |
-| Sampling | ⚠️ Partial | Basic support, missing tools in sampling |
-| HTTP Transport | ⚠️ Partial | Server started, client missing |
-| OAuth 2.1 | ❌ Planned | |
+| Sampling | ⚠️ Partial | Basic support, missing tools/toolChoice/includeContext/stopReason |
+| HTTP Transport | ⚠️ Partial | Server started, client missing; session/replay, SSE resumption/polling, origin/403 handling pending |
+| Elicitation | ❌ Planned | Client-side support incl. URL mode |
+| Tasks (experimental) | ❌ Planned | |
+| Extensions framework | ❌ Planned | |
+| Completion | ❌ Planned | Autocomplete/complete endpoints |
+| OAuth 2.1 | ❌ Planned | OIDC discovery, incremental consent, client ID metadata |
+
+### Remaining (2025-11-25 spec)
+
+* Authorization: OAuth 2.1 framework (OIDC discovery, incremental consent, client ID metadata)
+* Client features: Elicitation (incl. URL mode), Sampling with tools/toolChoice/includeContext/stopReason
+* Server metadata: icons; tool name validation; tool outputSchema
+* Transports: Streamable HTTP client + spec-compliant headers/session/replay + SSE resumption/polling
+* Experimental: Tasks framework; Extensions framework
 
 ## Table of contents
 
