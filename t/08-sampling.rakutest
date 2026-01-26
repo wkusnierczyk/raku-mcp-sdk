@@ -56,10 +56,11 @@ subtest 'Sampling handler returns result', {
     );
 
     my $connect = $client.connect;
-    for ^10 {
+    for ^20 {
         last if $transport.sent.elems > 0;
         sleep 0.1;
     }
+    sleep 0.2;  # Allow message handler to start
     respond-to-init($transport);
     await $connect;
 
@@ -102,10 +103,11 @@ subtest 'Sampling rejects tools when capability missing', {
     );
 
     my $connect = $client.connect;
-    for ^10 {
+    for ^20 {
         last if $transport.sent.elems > 0;
         sleep 0.1;
     }
+    sleep 0.2;  # Allow message handler to start
     respond-to-init($transport);
     await $connect;
 
@@ -143,10 +145,11 @@ subtest 'Sampling enforces tool result placement', {
     );
 
     my $connect = $client.connect;
-    for ^10 {
+    for ^20 {
         last if $transport.sent.elems > 0;
         sleep 0.1;
     }
+    sleep 0.2;  # Allow message handler to start
     respond-to-init($transport);
     await $connect;
 
