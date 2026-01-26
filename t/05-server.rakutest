@@ -267,4 +267,43 @@ subtest 'Pagination support', {
     ok $prompt-page1<nextCursor>.defined, 'prompts first page has nextCursor';
 };
 
+subtest 'Cancellation support', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    # Test is-cancelled returns False for unknown request
+    nok $server.is-cancelled('unknown-id'), 'is-cancelled returns False for unknown request';
+
+    # Test cancellation notification is handled
+    # We need to simulate an in-flight request being cancelled
+    # Since dispatch-request is synchronous for simple handlers, we test the notification handling
+
+    # Test that notifications/cancelled is accepted (doesn't throw)
+    lives-ok {
+        $server.handle-message-public(MCP::JSONRPC::Notification.new(
+            method => 'notifications/cancelled',
+            params => { requestId => 'some-id', reason => 'test' }
+        ));
+    }, 'notifications/cancelled is handled without error';
+
+    # Test cancel-request sends notification
+    $transport.clear-sent;
+    $server.cancel-request('req-123', reason => 'User cancelled');
+    my @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifications.elems, 1, 'cancel-request sends notification';
+    is @notifications[0].method, 'notifications/cancelled', 'notification method is correct';
+    is @notifications[0].params<requestId>, 'req-123', 'notification has correct requestId';
+    is @notifications[0].params<reason>, 'User cancelled', 'notification has correct reason';
+
+    # Test cancel-request without reason
+    $transport.clear-sent;
+    $server.cancel-request('req-456');
+    @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifications.elems, 1, 'cancel-request without reason sends notification';
+    nok @notifications[0].params<reason>:exists, 'notification has no reason when not provided';
+};
+
 done-testing;

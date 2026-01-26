@@ -201,4 +201,49 @@ subtest 'Client pagination support', {
     is $prompts-result<nextCursor>, 'promptcursor2', 'list-prompts includes nextCursor';
 };
 
+subtest 'Client cancellation support', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport
+    );
+
+    my $connect = $client.connect;
+    for ^10 {
+        last if $transport.sent.elems > 0;
+        sleep 0.1;
+    }
+    my $init-req = $transport.sent[0];
+    $transport.emit(MCP::JSONRPC::Response.success($init-req.id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => 'test'
+    }));
+    await $connect;
+
+    # Test cancel-request sends notification
+    $transport.clear-sent;
+    $client.cancel-request('req-789', reason => 'User cancelled');
+    my @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifications.elems, 1, 'cancel-request sends notification';
+    is @notifications[0].method, 'notifications/cancelled', 'notification method is correct';
+    is @notifications[0].params<requestId>, 'req-789', 'notification has correct requestId';
+    is @notifications[0].params<reason>, 'User cancelled', 'notification has correct reason';
+
+    # Test cancel-request for pending request breaks the promise
+    $transport.clear-sent;
+    my $pending = $client.request('some/method');
+    my $req = $transport.sent.grep(MCP::JSONRPC::Request)[*-1];
+    $client.cancel-request($req.id, reason => 'Cancelled by test');
+
+    # The promise should be broken
+    dies-ok { await $pending }, 'cancelled request breaks promise';
+
+    # And a notification should have been sent
+    @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    ok @notifications.elems >= 1, 'cancellation notification was sent';
+    my $cancel-notif = @notifications.first({ $_.method eq 'notifications/cancelled' });
+    ok $cancel-notif.defined, 'notifications/cancelled was sent';
+};
+
 done-testing;

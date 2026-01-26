@@ -271,15 +271,38 @@ class Client is export {
         my $request = MCP::JSONRPC::Request.new(:$id, :$method, :$params);
         $!transport.send($request);
 
-        # Add timeout
+        # Add timeout with cancellation notification
         my $timeout = Promise.in(30).then({
             if %!pending-requests{$id}:exists {
+                # Send cancellation notification before breaking the promise
+                self.notify('notifications/cancelled', {
+                    requestId => $id,
+                    reason => "Request timed out",
+                });
                 my $vow = %!pending-requests{$id}:delete;
                 $vow.break(X::MCP::Client::Timeout.new(method => $method));
             }
         });
 
         $p
+    }
+
+    #| Cancel a pending request
+    method cancel-request($request-id, Str :$reason) {
+        self.notify('notifications/cancelled', {
+            requestId => $request-id,
+            ($reason ?? (reason => $reason) !! Empty),
+        });
+        # Also break the local promise if it exists
+        if %!pending-requests{$request-id}:exists {
+            my $vow = %!pending-requests{$request-id}:delete;
+            $vow.break(X::MCP::Client::Error.new(
+                error => MCP::JSONRPC::Error.from-code(
+                    MCP::JSONRPC::InternalError,
+                    $reason // "Request cancelled"
+                )
+            ));
+        }
     }
 
     #| Send a notification
