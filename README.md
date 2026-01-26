@@ -36,7 +36,7 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
 | Resource subscriptions | ✅ Done | Subscribe, unsubscribe, update notifications |
 | Roots | ✅ Done | Client roots, server list-roots |
 | Sampling | ⚠️ Partial | Basic support, missing tools/toolChoice/includeContext/stopReason |
-| HTTP Transport | ⚠️ Partial | Server started, client missing; session/replay, SSE resumption/polling, origin/403 handling pending |
+| HTTP Transport | ✅ Done | Full client/server with session management, SSE, resumption |
 | Elicitation | ❌ Planned | Client-side support incl. URL mode |
 | Tasks (experimental) | ❌ Planned | |
 | Extensions framework | ❌ Planned | |
@@ -450,8 +450,9 @@ MCP/
 │   ├── Types.rakumod        # Protocol types
 │   ├── JSONRPC.rakumod      # JSON-RPC 2.0
 │   ├── Transport/
-│   │   ├── Base.rakumod     # Transport role
-│   │   └── Stdio.rakumod    # stdio transport
+│   │   ├── Base.rakumod          # Transport role
+│   │   ├── Stdio.rakumod         # Stdio transport
+│   │   └── StreamableHTTP.rakumod # HTTP transport with SSE
 │   ├── Server.rakumod       # Server implementation
 │   ├── Server/
 │   │   ├── Tool.rakumod     # Tool helpers

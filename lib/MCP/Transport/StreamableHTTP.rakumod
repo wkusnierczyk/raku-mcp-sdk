@@ -191,12 +191,18 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
                     return;
                 }
                 my $last-event-id = $req.header('Last-Event-ID');
+                my $stream;
                 if $last-event-id.defined && $last-event-id.chars {
-                    $resp.status = 409;
-                    &content('application/json', $self!jsonrpc-error("Stream resumption not supported"));
-                    return;
+                    # Attempt to resume an existing stream
+                    $stream = $self!resume-stream($last-event-id);
+                    unless $stream.defined {
+                        # Stream not found or cannot be resumed
+                        $resp.status = 204;
+                        return;
+                    }
+                } else {
+                    $stream = $self!open-stream;
                 }
-                my $stream = $self!open-stream;
                 $resp.append-header('Content-Type', 'text/event-stream');
                 $resp.append-header('Cache-Control', 'no-cache');
                 $resp.append-header('Connection', 'keep-alive');
@@ -309,13 +315,21 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
 
     method !validate-session($req, $resp, &content --> Bool) {
         return True unless $!require-session;
-        return False unless $!session-id.defined;
+        # When no session exists yet, allow the request (initialization phase)
+        return True unless $!session-id.defined;
+        # Once a session is established, require matching session ID
         my $sid = $req.header('MCP-Session-Id');
         if $sid && $sid eq $!session-id {
             return True;
         }
-        $resp.status = 404;
-        &content('application/json', self!jsonrpc-error("Unknown MCP session"));
+        # Per MCP spec: 400 for missing session ID, 404 for unknown session
+        if !$sid.defined || $sid eq '' {
+            $resp.status = 400;
+            &content('application/json', self!jsonrpc-error("Missing MCP-Session-Id header"));
+        } else {
+            $resp.status = 404;
+            &content('application/json', self!jsonrpc-error("Unknown MCP session"));
+        }
         False
     }
 
@@ -377,6 +391,18 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
         %!streams{$id} = $stream;
         @!stream-order.push($id);
         $stream.emit-priming;
+        $stream
+    }
+
+    method !resume-stream(Str $last-event-id) {
+        # Event ID format: "streamId:seq"
+        my ($stream-id, $seq-str) = $last-event-id.split(':', 2);
+        return Nil unless $stream-id.defined && $seq-str.defined;
+        my $stream = %!streams{$stream-id};
+        return Nil unless $stream.defined;
+        my $seq = $seq-str.Int // return Nil;
+        # Replay events after the given sequence number
+        $stream.replay-from($seq);
         $stream
     }
 
@@ -474,6 +500,14 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
             self!capture-session-id($resp);
             return if $resp.status == 202;
 
+            # Per MCP spec: 404 means session expired, must reinitialize
+            if $resp.status == 404 && $!session-id.defined {
+                $!session-id = Nil;
+                die X::MCP::Transport::StreamableHTTP::Protocol.new(
+                    message => "Session expired, reinitialization required"
+                );
+            }
+
             my $ctype = $resp.header('Content-Type') // '';
             if $ctype.contains('text/event-stream') {
                 await self!consume-sse($resp.body-byte-stream);
@@ -496,6 +530,28 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
             $!closing = True;
             $!running = False;
             $!incoming.done if $!incoming;
+        }
+    }
+
+    #| Terminate the session by sending DELETE request
+    method terminate-session(--> Promise) {
+        start {
+            return unless $!session-id.defined;
+            my @headers = (
+                'MCP-Protocol-Version' => $!protocol-version,
+                'MCP-Session-Id' => $!session-id,
+            );
+            $!client //= self!cro-client;
+            try {
+                my $resp = await $!client.delete($!endpoint, headers => @headers);
+                if $resp.status == 204 || $resp.status == 200 {
+                    $!session-id = Nil;
+                    True
+                } else {
+                    False
+                }
+                CATCH { default { False } }
+            }
         }
     }
 
@@ -546,7 +602,7 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
                     $buffer ~= $chunk.decode('utf-8');
                     loop {
                         my $idx = $buffer.index("\n");
-                        last if $idx < 0;
+                        last unless $idx.defined;
                         my $line = $buffer.substr(0, $idx);
                         $buffer = $buffer.substr($idx + 1);
                         $line = $line.subst(/\r$/, '');
