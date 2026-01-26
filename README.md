@@ -26,17 +26,17 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
 |---------|--------|-------|
 | JSON-RPC 2.0 | ✅ Done | Full message handling |
 | Stdio Transport | ✅ Done | Production ready |
-| Tools | ✅ Done | List, call, builder API |
-| Resources | ✅ Done | List, read, builder API |
+| Tools | ✅ Done | List, call, builder API, annotations |
+| Resources | ✅ Done | List, read, builder API, annotations |
 | Prompts | ✅ Done | List, get, builder API |
 | Pagination | ✅ Done | Cursor-based for all list endpoints |
 | Logging | ✅ Done | Server-side notifications |
 | Progress | ✅ Done | Server-side notifications |
+| Cancellation | ✅ Done | Request cancellation with notifications |
+| Resource subscriptions | ✅ Done | Subscribe, unsubscribe, update notifications |
+| Roots | ✅ Done | Client roots, server list-roots |
 | Sampling | ⚠️ Partial | Basic support, missing tools in sampling |
 | HTTP Transport | ⚠️ Partial | Server started, client missing |
-| Cancellation | ✅ Done | Request cancellation support |
-| Resource subscriptions | ❌ Planned | |
-| Roots | ❌ Planned | |
 | OAuth 2.1 | ❌ Planned | |
 
 ## Table of contents

@@ -556,4 +556,15 @@ class Server is export {
     method notify-resources-list-changed() {
         self.notify('notifications/resources/list_changed');
     }
+
+    #| Request roots from client
+    #| Returns a Promise that resolves to an array of Root objects
+    method list-roots(--> Promise) {
+        self.request('roots/list').then(-> $p {
+            my $result = $p.result;
+            ($result<roots> // []).map({
+                MCP::Types::Root.from-hash($_)
+            }).Array
+        })
+    }
 }

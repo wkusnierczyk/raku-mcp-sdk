@@ -50,6 +50,7 @@ class Client is export {
     has MCP::Types::ClientCapabilities $.capabilities = MCP::Types::ClientCapabilities.new;
     has MCP::Transport::Base::Transport $.transport is required;
     has &.sampling-handler;
+    has @.roots;  # Array of Root objects or Hashes with uri/name
 
     # State
     has Bool $!initialized = False;
@@ -91,12 +92,18 @@ class Client is export {
 
     #| Initialize the connection
     method !initialize(--> Promise) {
+        # Build capabilities, adding roots if configured
+        my %capabilities = $!capabilities.Hash;
+        if @!roots {
+            %capabilities<roots> = { listChanged => True };
+        }
+
         self.request('initialize', {
             protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
-            capabilities => $!capabilities.Hash,
+            capabilities => %capabilities,
             clientInfo => $!info.Hash,
-        }).then(-> $p {
-            my $result = $p.result;
+        }).then(-> $promise {
+            my $result = $promise.result;
             $!protocol-version = $result<protocolVersion>;
             $!server-capabilities = MCP::Types::ServerCapabilities.from-hash($result<capabilities>);
             $!server-instructions = $result<instructions>;
@@ -142,6 +149,9 @@ class Client is export {
             when 'sampling/createMessage' {
                 self!handle-sampling-request($req);
             }
+            when 'roots/list' {
+                self!handle-roots-list-request($req);
+            }
             default {
                 my $error = MCP::JSONRPC::Error.from-code(
                     MCP::JSONRPC::MethodNotFound,
@@ -151,6 +161,18 @@ class Client is export {
                 $!transport.send($response);
             }
         }
+    }
+
+    #| Handle roots/list request from server
+    method !handle-roots-list-request(MCP::JSONRPC::Request $req) {
+        my @root-hashes = @!roots.map({
+            $_ ~~ MCP::Types::Root ?? $_.Hash !! $_
+        }).Array;
+
+        my $response = MCP::JSONRPC::Response.success($req.id, {
+            roots => @root-hashes
+        });
+        $!transport.send($response);
     }
 
     #| Get server capabilities
@@ -171,10 +193,10 @@ class Client is export {
     #| List available tools
     method list-tools(Str :$cursor --> Promise) {
         my %params = $cursor ?? (cursor => $cursor) !! ();
-        self.request('tools/list', %params || Nil).then(-> $p {
+        self.request('tools/list', %params || Nil).then(-> $promise {
             {
-                tools => $p.result<tools>.map({ MCP::Types::Tool.from-hash($_) }).Array,
-                ($p.result<nextCursor> ?? (nextCursor => $p.result<nextCursor>) !! Empty),
+                tools => $promise.result<tools>.map({ MCP::Types::Tool.from-hash($_) }).Array,
+                ($promise.result<nextCursor> ?? (nextCursor => $promise.result<nextCursor>) !! Empty),
             }
         })
     }
@@ -184,12 +206,12 @@ class Client is export {
         self.request('tools/call', {
             name => $name,
             arguments => %arguments,
-        }).then(-> $p {
+        }).then(-> $promise {
             MCP::Types::CallToolResult.new(
-                content => $p.result<content>.map({
+                content => $promise.result<content>.map({
                     self!parse-content($_)
                 }).Array,
-                isError => $p.result<isError> // False,
+                isError => $promise.result<isError> // False,
             )
         })
     }
@@ -197,18 +219,18 @@ class Client is export {
     #| List available resources
     method list-resources(Str :$cursor --> Promise) {
         my %params = $cursor ?? (cursor => $cursor) !! ();
-        self.request('resources/list', %params || Nil).then(-> $p {
+        self.request('resources/list', %params || Nil).then(-> $promise {
             {
-                resources => $p.result<resources>.map({ MCP::Types::Resource.from-hash($_) }).Array,
-                ($p.result<nextCursor> ?? (nextCursor => $p.result<nextCursor>) !! Empty),
+                resources => $promise.result<resources>.map({ MCP::Types::Resource.from-hash($_) }).Array,
+                ($promise.result<nextCursor> ?? (nextCursor => $promise.result<nextCursor>) !! Empty),
             }
         })
     }
 
     #| Read a resource
     method read-resource(Str $uri --> Promise) {
-        self.request('resources/read', { uri => $uri }).then(-> $p {
-            $p.result<contents>.map({
+        self.request('resources/read', { uri => $uri }).then(-> $promise {
+            $promise.result<contents>.map({
                 MCP::Types::ResourceContents.new(
                     uri => $_<uri>,
                     mimeType => $_<mimeType>,
@@ -231,10 +253,10 @@ class Client is export {
     #| List available prompts
     method list-prompts(Str :$cursor --> Promise) {
         my %params = $cursor ?? (cursor => $cursor) !! ();
-        self.request('prompts/list', %params || Nil).then(-> $p {
+        self.request('prompts/list', %params || Nil).then(-> $promise {
             {
-                prompts => $p.result<prompts>.map({ MCP::Types::Prompt.from-hash($_) }).Array,
-                ($p.result<nextCursor> ?? (nextCursor => $p.result<nextCursor>) !! Empty),
+                prompts => $promise.result<prompts>.map({ MCP::Types::Prompt.from-hash($_) }).Array,
+                ($promise.result<nextCursor> ?? (nextCursor => $promise.result<nextCursor>) !! Empty),
             }
         })
     }
@@ -244,10 +266,10 @@ class Client is export {
         self.request('prompts/get', {
             name => $name,
             arguments => %arguments,
-        }).then(-> $p {
+        }).then(-> $promise {
             {
-                description => $p.result<description>,
-                messages => $p.result<messages>.map({
+                description => $promise.result<description>,
+                messages => $promise.result<messages>.map({
                     MCP::Types::PromptMessage.new(
                         role => $_<role>,
                         content => self!parse-content($_<content>),
@@ -309,6 +331,19 @@ class Client is export {
     method notify(Str $method, $params?) {
         my $notification = MCP::JSONRPC::Notification.new(:$method, :$params);
         $!transport.send($notification);
+    }
+
+    #| Get current roots
+    method get-roots(--> Array) {
+        @!roots.map({
+            $_ ~~ MCP::Types::Root ?? $_ !! MCP::Types::Root.from-hash($_)
+        }).Array
+    }
+
+    #| Update roots and notify server
+    method set-roots(@new-roots) {
+        @!roots = @new-roots;
+        self.notify('notifications/roots/list_changed');
     }
 
     #| Close the connection

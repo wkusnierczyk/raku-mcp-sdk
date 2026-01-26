@@ -16,7 +16,7 @@ use lib 'lib';
 
 use MCP::Types;
 
-plan 23;
+plan 24;
 
 # Test Implementation
 subtest 'Implementation', {
@@ -275,6 +275,31 @@ subtest 'ResourceContents with blob', {
     );
     ok $contents.blob.defined, 'blob is defined';
     is $contents.blob.elems, 5, 'blob has correct size';
+};
+
+# Test Root type
+subtest 'Root', {
+    my $root = Root.new(
+        uri => 'file:///home/user/project',
+        name => 'Project Root',
+    );
+    is $root.uri, 'file:///home/user/project', 'uri is correct';
+    is $root.name, 'Project Root', 'name is correct';
+
+    my %h = $root.Hash;
+    is %h<uri>, 'file:///home/user/project', 'Hash has uri';
+    is %h<name>, 'Project Root', 'Hash has name';
+
+    # Test without optional name
+    my $root-no-name = Root.new(uri => 'file:///tmp');
+    my %h2 = $root-no-name.Hash;
+    is %h2<uri>, 'file:///tmp', 'Hash has uri without name';
+    nok %h2<name>:exists, 'Hash has no name when not provided';
+
+    # Test from-hash
+    my $restored = Root.from-hash({ uri => 'file:///restored', name => 'Restored' });
+    is $restored.uri, 'file:///restored', 'from-hash restores uri';
+    is $restored.name, 'Restored', 'from-hash restores name';
 };
 
 done-testing;

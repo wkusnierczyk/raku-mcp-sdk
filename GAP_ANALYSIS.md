@@ -106,12 +106,15 @@ This document compares the current implementation of the Raku MCP SDK against th
 - ❌ `includeContext` parameter support
 - ❌ Proper `stopReason` handling
 
-#### ❌ Roots
-- `RootsCapability` type exists but not implemented
-- Missing:
-  - `roots/list` request handler (server → client)
-  - `notifications/roots/list_changed` handling
-  - Root URI validation
+#### ✅ Roots - **Implemented**
+- `Root` type with `uri` and optional `name`
+- Client-side:
+  - `roots` configuration option
+  - Handles `roots/list` requests from server
+  - `set-roots()` method sends `notifications/roots/list_changed`
+  - Advertises `roots` capability (with `listChanged`)
+- Server-side:
+  - `list-roots()` method to request roots from client
 
 #### ❌ Elicitation (2025-06-18 feature)
 - `ElicitationCapability` type exists but not implemented
@@ -214,7 +217,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 | Resources | ✅ Full + templates + subscriptions | ✅ Full + subscriptions (no templates) |
 | Prompts | ✅ Full | ⚠️ Basic |
 | Sampling | ✅ Full + tools | ⚠️ Basic |
-| Roots | ✅ Full | ❌ No |
+| Roots | ✅ Full | ✅ Full |
 | Elicitation | ✅ Full + URL mode | ❌ No |
 | OAuth 2.1 | ✅ Full | ❌ No |
 | Streamable HTTP | ✅ Full client + server | ⚠️ Server partial |
@@ -231,7 +234,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 1. **Complete Streamable HTTP transport** - Required for remote deployments
 2. ~~**Add resource subscriptions**~~ ✅ **Done** - Subscribe/unsubscribe and update notifications
 3. ~~**Add pagination**~~ ✅ **Done** - Cursor-based pagination for all list endpoints
-4. **Implement roots** - Required for filesystem-based servers
+4. ~~**Implement roots**~~ ✅ **Done** - Client roots support and server list-roots
 5. ~~**Implement proper cancellation**~~ ✅ **Done** - Request cancellation with notifications
 
 ### Medium Priority (Enhanced Functionality)
@@ -254,9 +257,6 @@ The following types are defined but not fully utilized:
 
 ```raku
 # Defined but unused/incomplete:
-- ToolAnnotations (readOnlyHint, etc.) - not exposed in registration
-- Annotations (audience, priority) - not exposed in builders
-- RootsCapability - defined, not implemented
 - ElicitationCapability - defined, not implemented
 ```
 
@@ -300,7 +300,7 @@ The Raku MCP SDK provides a solid foundation with core protocol support, but sig
 1. Completing HTTP transport for production deployment
 2. ~~Adding resource subscriptions for real-time updates~~ ✅ **Done**
 3. ~~Implementing pagination for scalability~~ ✅ **Done**
-4. Adding roots support for filesystem servers
+4. ~~Adding roots support for filesystem servers~~ ✅ **Done**
 5. Implementing the authorization framework for secure connections
 
 The SDK's architecture is well-designed and should accommodate these additions without major refactoring.
