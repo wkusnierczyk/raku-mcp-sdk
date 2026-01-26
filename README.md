@@ -322,7 +322,7 @@ $server.add-prompt(
 
 ## Protocol support
 
-This SDK implements the [MCP specification version 2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26).
+This SDK implements the [MCP specification version 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25).
 
 - ✅ JSON-RPC 2.0 messaging
 - ✅ Capability negotiation

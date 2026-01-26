@@ -264,15 +264,12 @@ The following types are defined but not fully utilized:
 
 ## Protocol Version
 
-Current implementation targets: **2025-03-26**
+Current implementation targets: **2025-11-25** ✅
 
-Should update to: **2025-11-25**
-
-Key changes needed:
-- Update `LATEST_PROTOCOL_VERSION` constant
-- Add Tasks support
+Key features still needed for full 2025-11-25 compliance:
+- Add Tasks support (experimental)
 - Add Extensions framework
-- Update capability negotiation
+- Update capability negotiation for new features
 
 ---
 
