@@ -60,7 +60,6 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
   - [Tools](#tools)
   - [Resources](#resources)
   - [Prompts](#prompts)
-- [Protocol support](#protocol-support)
 - [Development](#development)
   - [Makefile Targets](#makefile-targets)
   - [Environment Variables](#environment-variables)
@@ -319,23 +318,6 @@ $server.add-prompt(
     }
 );
 ```
-
-## Protocol support
-
-This SDK implements the [MCP specification version 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25).
-
-- ✅ JSON-RPC 2.0 messaging
-- ✅ Capability negotiation
-- ✅ Tools (list, call, annotations)
-- ✅ Resources (list, read, subscribe, annotations)
-- ✅ Prompts (list, get)
-- ✅ Logging
-- ✅ Progress notifications
-- ✅ Pagination (cursor-based)
-- ✅ Request cancellation
-- ✅ Roots (client roots, server list-roots)
-- 🔄 Sampling (server requesting LLM completions)
-- 🔄 HTTP transport
 
 ## Development
 
