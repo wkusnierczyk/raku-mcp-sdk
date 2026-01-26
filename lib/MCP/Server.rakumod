@@ -63,6 +63,9 @@ class Server is export {
     # Pending request handlers for bidirectional communication
     has %!pending-requests;  # id => Promise vow
 
+    # In-flight request tracking for cancellation support
+    has %!in-flight-requests;  # id => { cancelled => Bool }
+
     #| Encode an offset into a cursor string
     method !encode-cursor(Int $offset --> Str) {
         MIME::Base64.encode(to-json({ offset => $offset }).encode, :str)
@@ -225,6 +228,9 @@ class Server is export {
 
     #| Handle incoming request
     method !handle-request(MCP::JSONRPC::Request $req) {
+        # Track this request as in-flight (for cancellation support)
+        %!in-flight-requests{$req.id} = { cancelled => False };
+
         my $result;
         my $error;
 
@@ -244,12 +250,21 @@ class Server is export {
             }
         }
 
+        # Check if request was cancelled - don't send response if so
+        if %!in-flight-requests{$req.id}<cancelled> {
+            %!in-flight-requests{$req.id}:delete;
+            return;
+        }
+
         # Send response
         my $response = $error
             ?? MCP::JSONRPC::Response.error($req.id, $error)
             !! MCP::JSONRPC::Response.success($req.id, $result);
 
         $!transport.send($response);
+
+        # Clean up tracking
+        %!in-flight-requests{$req.id}:delete;
     }
 
     #| Dispatch request to appropriate handler using multi-dispatch
@@ -308,19 +323,24 @@ class Server is export {
         }
     }
 
-    #| Handle initialized notification
+    #| Handle notifications
     method !handle-notification(MCP::JSONRPC::Notification $notif) {
         given $notif.method {
             when 'initialized' {
                 # Client is ready
             }
-            when 'cancelled' {
-                # Request was cancelled
+            when 'notifications/cancelled' | 'cancelled' {
+                # Request was cancelled - mark it so we don't send a response
                 my $id = $notif.params<requestId>;
-                # Could handle cancellation here
+                if $id.defined {
+                    if %!in-flight-requests{$id}:exists {
+                        %!in-flight-requests{$id}<cancelled> = True;
+                    }
+                }
+                # Silently ignore unknown/completed requests per spec
             }
             default {
-                # Unknown notification - ignore
+                # Unknown notification - ignore per spec
             }
         }
     }
@@ -455,6 +475,21 @@ class Server is export {
             progress => $progress,
             ($total.defined ?? (total => $total) !! Empty),
             ($message ?? (message => $message) !! Empty),
+        });
+    }
+
+    #| Check if a request has been cancelled
+    #| Useful for long-running tool handlers to check periodically
+    method is-cancelled($request-id --> Bool) {
+        return False unless %!in-flight-requests{$request-id}:exists;
+        %!in-flight-requests{$request-id}<cancelled>
+    }
+
+    #| Cancel a request (for server-initiated cancellation)
+    method cancel-request($request-id, Str :$reason) {
+        self.notify('notifications/cancelled', {
+            requestId => $request-id,
+            ($reason ?? (reason => $reason) !! Empty),
         });
     }
 }

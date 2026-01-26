@@ -34,7 +34,7 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
 | Progress | ✅ Done | Server-side notifications |
 | Sampling | ⚠️ Partial | Basic support, missing tools in sampling |
 | HTTP Transport | ⚠️ Partial | Server started, client missing |
-| Cancellation | ❌ Planned | Issue #13 |
+| Cancellation | ✅ Done | Request cancellation support |
 | Resource subscriptions | ❌ Planned | |
 | Roots | ❌ Planned | |
 | OAuth 2.1 | ❌ Planned | |
