@@ -22,7 +22,7 @@ need MCP::Types;
 use JSON::Fast;
 # Cro::HTTP is loaded dynamically to keep this transport optional.
 
-my constant DEFAULT_PROTOCOL_FALLBACK = '2025-03-26';
+my constant DEFAULT_PROTOCOL_FALLBACK = '2025-11-25';
 my constant DEFAULT_ACCEPT_POST = 'application/json, text/event-stream';
 my constant DEFAULT_ACCEPT_SSE = 'text/event-stream';
 

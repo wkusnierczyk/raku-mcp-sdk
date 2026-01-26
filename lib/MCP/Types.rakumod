@@ -17,8 +17,8 @@ for serialization and validation.
 =end pod
 
 #| Protocol versions
-our constant LATEST_PROTOCOL_VERSION is export = "2025-03-26";
-our constant SUPPORTED_PROTOCOL_VERSIONS is export = <2025-03-26 2024-11-05>;
+our constant LATEST_PROTOCOL_VERSION is export = "2025-11-25";
+our constant SUPPORTED_PROTOCOL_VERSIONS is export = <2025-11-25 2025-03-26 2024-11-05>;
 
 #| Implementation information for client/server identification
 class Implementation is export {

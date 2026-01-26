@@ -358,6 +358,58 @@ subtest 'Cancellation support', {
     is @responses.elems, 0, 'cancelled request does not send response';
 };
 
+subtest 'Protocol version handling', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    # Verify SUPPORTED_PROTOCOL_VERSIONS constant contains expected versions
+    ok MCP::Types::LATEST_PROTOCOL_VERSION eq '2025-11-25', 'latest protocol version is 2025-11-25';
+    ok '2025-11-25' ~~ any(MCP::Types::SUPPORTED_PROTOCOL_VERSIONS.list), 'SUPPORTED contains 2025-11-25';
+    ok '2025-03-26' ~~ any(MCP::Types::SUPPORTED_PROTOCOL_VERSIONS.list), 'SUPPORTED contains 2025-03-26';
+    ok '2024-11-05' ~~ any(MCP::Types::SUPPORTED_PROTOCOL_VERSIONS.list), 'SUPPORTED contains 2024-11-05';
+
+    # Test client with latest protocol version
+    my $init-latest = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'initialize',
+        params => { protocolVersion => '2025-11-25' }
+    ));
+    is $init-latest<protocolVersion>, MCP::Types::LATEST_PROTOCOL_VERSION,
+        'server responds with latest version for 2025-11-25 client';
+
+    # Test client with older supported version (2025-03-26)
+    my $server2 = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv2', version => '0.1'),
+        transport => $transport
+    );
+    my $init-older = $server2.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'initialize',
+        params => { protocolVersion => '2025-03-26' }
+    ));
+    is $init-older<protocolVersion>, MCP::Types::LATEST_PROTOCOL_VERSION,
+        'server responds with latest version for 2025-03-26 client';
+    ok $init-older<capabilities>:exists, 'server includes capabilities for older client';
+
+    # Test client with even older supported version (2024-11-05)
+    my $server3 = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv3', version => '0.1'),
+        transport => $transport
+    );
+    my $init-oldest = $server3.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 3,
+        method => 'initialize',
+        params => { protocolVersion => '2024-11-05' }
+    ));
+    is $init-oldest<protocolVersion>, MCP::Types::LATEST_PROTOCOL_VERSION,
+        'server responds with latest version for 2024-11-05 client';
+    ok $init-oldest<serverInfo>:exists, 'server includes serverInfo for older client';
+    is $init-oldest<serverInfo><name>, 'srv3', 'serverInfo has correct name';
+};
+
 subtest 'Annotations in list responses', {
     my $transport = TestTransport::TestTransport.new;
     my $server = Server.new(
