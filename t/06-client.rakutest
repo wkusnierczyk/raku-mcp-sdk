@@ -246,4 +246,72 @@ subtest 'Client cancellation support', {
     ok $cancel-notif.defined, 'notifications/cancelled was sent';
 };
 
+subtest 'Client resource subscription support', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport
+    );
+
+    my $connect = $client.connect;
+    for ^10 {
+        last if $transport.sent.elems > 0;
+        sleep 0.1;
+    }
+    my $init-req = $transport.sent[0];
+    $transport.emit(MCP::JSONRPC::Response.success($init-req.id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => { resources => { subscribe => True } },
+        instructions => 'test'
+    }));
+    await $connect;
+
+    # Test subscribe-resource sends request
+    $transport.clear-sent;
+    my $sub-p = $client.subscribe-resource('file://test.txt');
+    my $sub-req = $transport.sent.grep(MCP::JSONRPC::Request)[*-1];
+    is $sub-req.method, 'resources/subscribe', 'subscribe-resource sends correct method';
+    is $sub-req.params<uri>, 'file://test.txt', 'subscribe-resource sends correct uri';
+    respond-to-last($transport, {});
+    await $sub-p;
+    pass 'subscribe-resource completes successfully';
+
+    # Test unsubscribe-resource sends request
+    $transport.clear-sent;
+    my $unsub-p = $client.unsubscribe-resource('file://test.txt');
+    my $unsub-req = $transport.sent.grep(MCP::JSONRPC::Request)[*-1];
+    is $unsub-req.method, 'resources/unsubscribe', 'unsubscribe-resource sends correct method';
+    is $unsub-req.params<uri>, 'file://test.txt', 'unsubscribe-resource sends correct uri';
+    respond-to-last($transport, {});
+    await $unsub-p;
+    pass 'unsubscribe-resource completes successfully';
+
+    # Test receiving resource update notification
+    my $update-received = Promise.new;
+    $client.notifications.tap(-> $n {
+        if $n.method eq 'notifications/resources/updated' {
+            $update-received.keep($n);
+        }
+    });
+    $transport.emit(MCP::JSONRPC::Notification.new(
+        method => 'notifications/resources/updated',
+        params => { uri => 'file://test.txt' }
+    ));
+    my $notif = await $update-received;
+    is $notif.params<uri>, 'file://test.txt', 'resource update notification received';
+
+    # Test receiving list changed notification
+    my $list-changed = Promise.new;
+    $client.notifications.tap(-> $n {
+        if $n.method eq 'notifications/resources/list_changed' {
+            $list-changed.keep($n);
+        }
+    });
+    $transport.emit(MCP::JSONRPC::Notification.new(
+        method => 'notifications/resources/list_changed'
+    ));
+    await $list-changed;
+    pass 'resources list changed notification received';
+};
+
 done-testing;

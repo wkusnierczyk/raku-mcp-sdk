@@ -66,6 +66,9 @@ class Server is export {
     # In-flight request tracking for cancellation support
     has %!in-flight-requests;  # id => { cancelled => Bool }
 
+    # Resource subscriptions tracking
+    has %!subscriptions;  # uri => True (SetHash-like)
+
     #| Encode an offset into a cursor string
     method !encode-cursor(Int $offset --> Str) {
         MIME::Base64.encode(to-json({ offset => $offset }).encode, :str)
@@ -194,7 +197,7 @@ class Server is export {
     method capabilities(--> MCP::Types::ServerCapabilities) {
         MCP::Types::ServerCapabilities.new(
             tools => %!tools ?? MCP::Types::ToolsCapability.new(listChanged => True) !! MCP::Types::ToolsCapability,
-            resources => %!resources ?? MCP::Types::ResourcesCapability.new(listChanged => True) !! MCP::Types::ResourcesCapability,
+            resources => %!resources ?? MCP::Types::ResourcesCapability.new(listChanged => True, subscribe => True) !! MCP::Types::ResourcesCapability,
             prompts => %!prompts ?? MCP::Types::PromptsCapability.new(listChanged => True) !! MCP::Types::PromptsCapability,
             logging => MCP::Types::LoggingCapability.new,
         )
@@ -290,6 +293,14 @@ class Server is export {
 
     multi method dispatch-request($req where *.method eq 'resources/read') {
         self!read-resource($req.params);
+    }
+
+    multi method dispatch-request($req where *.method eq 'resources/subscribe') {
+        self!subscribe-resource($req.params);
+    }
+
+    multi method dispatch-request($req where *.method eq 'resources/unsubscribe') {
+        self!unsubscribe-resource($req.params);
     }
 
     multi method dispatch-request($req where *.method eq 'prompts/list') {
@@ -411,6 +422,42 @@ class Server is export {
         }
     }
 
+    #| Subscribe to a resource
+    method !subscribe-resource(%params) {
+        my $uri = %params<uri> // die X::MCP::JSONRPC.new(
+            error => MCP::JSONRPC::Error.from-code(
+                MCP::JSONRPC::InvalidParams,
+                "Missing required parameter: uri"
+            )
+        );
+
+        # Verify resource exists
+        unless %!resources{$uri}:exists {
+            die X::MCP::JSONRPC.new(
+                error => MCP::JSONRPC::Error.from-code(
+                    MCP::JSONRPC::InvalidParams,
+                    "Unknown resource: $uri"
+                )
+            );
+        }
+
+        %!subscriptions{$uri} = True;
+        {}  # Empty response on success
+    }
+
+    #| Unsubscribe from a resource
+    method !unsubscribe-resource(%params) {
+        my $uri = %params<uri> // die X::MCP::JSONRPC.new(
+            error => MCP::JSONRPC::Error.from-code(
+                MCP::JSONRPC::InvalidParams,
+                "Missing required parameter: uri"
+            )
+        );
+
+        %!subscriptions{$uri}:delete;
+        {}  # Empty response on success
+    }
+
     #| List prompts
     method !list-prompts($params?) {
         my @prompts = %!prompts.values.map(*.to-prompt.Hash).Array;
@@ -491,5 +538,22 @@ class Server is export {
             requestId => $request-id,
             ($reason ?? (reason => $reason) !! Empty),
         });
+    }
+
+    #| Check if a resource is subscribed
+    method is-subscribed(Str $uri --> Bool) {
+        %!subscriptions{$uri}:exists && %!subscriptions{$uri}
+    }
+
+    #| Notify clients that a subscribed resource has been updated
+    #| Only sends notification if the resource is subscribed
+    method notify-resource-updated(Str $uri) {
+        return unless self.is-subscribed($uri);
+        self.notify('notifications/resources/updated', { uri => $uri });
+    }
+
+    #| Notify clients that the resource list has changed
+    method notify-resources-list-changed() {
+        self.notify('notifications/resources/list_changed');
     }
 }

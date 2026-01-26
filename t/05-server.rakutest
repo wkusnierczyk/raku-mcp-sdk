@@ -458,4 +458,116 @@ subtest 'Annotations in list responses', {
     is-deeply $resources<resources>[0]<annotations><audience>, ['user', 'assistant'], 'resource audience annotation';
 };
 
+subtest 'Resource subscriptions', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    # Add resources to subscribe to
+    $server.add-resource(
+        uri => 'file://test.txt',
+        name => 'Test File',
+        reader => { 'content' }
+    );
+    $server.add-resource(
+        uri => 'file://other.txt',
+        name => 'Other File',
+        reader => { 'other content' }
+    );
+
+    # Verify capabilities include subscribe
+    my $init = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'initialize',
+        params => { protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION }
+    ));
+    ok $init<capabilities><resources><subscribe>, 'capabilities include subscribe';
+
+    # Test subscribe to resource
+    my $sub-result = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'resources/subscribe',
+        params => { uri => 'file://test.txt' }
+    ));
+    is-deeply $sub-result, {}, 'subscribe returns empty response';
+
+    # Verify resource is subscribed
+    ok $server.is-subscribed('file://test.txt'), 'resource is marked as subscribed';
+    nok $server.is-subscribed('file://other.txt'), 'other resource is not subscribed';
+
+    # Test subscribe requires uri
+    dies-ok {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 3,
+            method => 'resources/subscribe',
+            params => {}
+        ));
+    }, 'subscribe requires uri parameter';
+
+    # Test subscribe to unknown resource
+    dies-ok {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 4,
+            method => 'resources/subscribe',
+            params => { uri => 'file://nonexistent.txt' }
+        ));
+    }, 'subscribe to unknown resource fails';
+
+    # Test notify-resource-updated sends notification for subscribed resource
+    $transport.clear-sent;
+    $server.notify-resource-updated('file://test.txt');
+    my @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifications.elems, 1, 'notify-resource-updated sends notification';
+    is @notifications[0].method, 'notifications/resources/updated', 'notification method is correct';
+    is @notifications[0].params<uri>, 'file://test.txt', 'notification has correct uri';
+
+    # Test notify-resource-updated does NOT send for unsubscribed resource
+    $transport.clear-sent;
+    $server.notify-resource-updated('file://other.txt');
+    @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifications.elems, 0, 'no notification for unsubscribed resource';
+
+    # Test unsubscribe
+    my $unsub-result = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 5,
+        method => 'resources/unsubscribe',
+        params => { uri => 'file://test.txt' }
+    ));
+    is-deeply $unsub-result, {}, 'unsubscribe returns empty response';
+    nok $server.is-subscribed('file://test.txt'), 'resource is no longer subscribed';
+
+    # Test notify-resource-updated after unsubscribe
+    $transport.clear-sent;
+    $server.notify-resource-updated('file://test.txt');
+    @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifications.elems, 0, 'no notification after unsubscribe';
+
+    # Test unsubscribe requires uri
+    dies-ok {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 6,
+            method => 'resources/unsubscribe',
+            params => {}
+        ));
+    }, 'unsubscribe requires uri parameter';
+
+    # Test unsubscribe from unknown resource (should succeed silently)
+    lives-ok {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 7,
+            method => 'resources/unsubscribe',
+            params => { uri => 'file://never-subscribed.txt' }
+        ));
+    }, 'unsubscribe from unknown resource succeeds';
+
+    # Test notify-resources-list-changed
+    $transport.clear-sent;
+    $server.notify-resources-list-changed();
+    @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifications.elems, 1, 'notify-resources-list-changed sends notification';
+    is @notifications[0].method, 'notifications/resources/list_changed', 'list changed notification method is correct';
+};
+
 done-testing;
