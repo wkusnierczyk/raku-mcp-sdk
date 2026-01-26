@@ -304,6 +304,106 @@ subtest 'Cancellation support', {
     @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
     is @notifications.elems, 1, 'cancel-request without reason sends notification';
     nok @notifications[0].params<reason>:exists, 'notification has no reason when not provided';
+
+    # Test cancellation of in-flight request suppresses response
+    # Use a Promise-based handler that we can control
+    my $handler-promise = Promise.new;
+    my $handler-vow = $handler-promise.vow;
+
+    my $server2 = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv2', version => '0.1'),
+        transport => $transport
+    );
+    $server2.add-tool(
+        name => 'slow-tool',
+        description => 'A slow tool for testing cancellation',
+        handler => -> {
+            await $handler-promise;  # Wait until we signal completion
+            'completed'
+        }
+    );
+
+    $transport.clear-sent;
+
+    # Start request processing in background
+    my $request-task = start {
+        $server2.handle-message-public(MCP::JSONRPC::Request.new(
+            id => 'cancel-test-1',
+            method => 'tools/call',
+            params => { name => 'slow-tool', arguments => {} }
+        ));
+    };
+
+    # Give the handler time to start
+    sleep 0.1;
+
+    # Verify request is tracked as in-flight
+    ok $server2.is-cancelled('cancel-test-1') === False, 'in-flight request is tracked';
+
+    # Send cancellation while handler is running
+    $server2.handle-message-public(MCP::JSONRPC::Notification.new(
+        method => 'notifications/cancelled',
+        params => { requestId => 'cancel-test-1', reason => 'test cancellation' }
+    ));
+
+    # Verify request is now marked as cancelled
+    ok $server2.is-cancelled('cancel-test-1'), 'is-cancelled returns True after cancellation';
+
+    # Complete the handler
+    $handler-vow.keep(True);
+    await $request-task;
+
+    # Verify no response was sent (key behavior!)
+    my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
+    is @responses.elems, 0, 'cancelled request does not send response';
+};
+
+subtest 'Annotations in list responses', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    # Add tool with annotations
+    $server.add-tool(
+        MCP::Server::Tool::tool()
+            .name('delete-file')
+            .description('Delete a file')
+            .annotations(destructiveHint => True, readOnlyHint => False, title => 'File Deleter')
+            .handler(-> { 'deleted' })
+            .build
+    );
+
+    # Add resource with annotations
+    $server.add-resource(
+        MCP::Server::Resource::resource()
+            .uri('info://config')
+            .name('Config')
+            .description('Configuration')
+            .annotations(['user', 'assistant'], priority => 0.8)
+            .reader(-> { 'config data' })
+            .build
+    );
+
+    # Verify tool annotations in tools/list response
+    my $tools = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'tools/list'
+    ));
+    ok $tools<tools>[0]<annotations>:exists, 'tool annotations in list response';
+    is $tools<tools>[0]<annotations><title>, 'File Deleter', 'tool title annotation';
+    ok $tools<tools>[0]<annotations><destructiveHint>, 'tool destructiveHint annotation';
+    nok $tools<tools>[0]<annotations><readOnlyHint>, 'tool readOnlyHint annotation';
+
+    # Verify resource annotations in resources/list response
+    my $resources = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'resources/list'
+    ));
+    ok $resources<resources>[0]<annotations>:exists, 'resource annotations in list response';
+    is $resources<resources>[0]<annotations><priority>, 0.8, 'resource priority annotation';
+    is-deeply $resources<resources>[0]<annotations><audience>, ['user', 'assistant'], 'resource audience annotation';
 };
 
 done-testing;

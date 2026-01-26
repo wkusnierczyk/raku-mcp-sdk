@@ -42,6 +42,17 @@ subtest 'Tool builder and normalization', {
     my $tool = $built.to-tool;
     is $tool.name, 'calc', 'to-tool preserves name';
     is $tool.annotations.title, 'Calc', 'annotations set';
+    ok $tool.annotations.readOnlyHint, 'readOnly annotation set';
+    ok $tool.annotations.idempotentHint, 'idempotent annotation set';
+
+    # Test spec-style naming with *Hint suffixes
+    my $spec-style = tool()
+        .name('delete')
+        .annotations(destructiveHint => True, readOnlyHint => False)
+        .handler(-> { 'ok' })
+        .build;
+    ok $spec-style.to-tool.annotations.destructiveHint, 'destructiveHint naming works';
+    nok $spec-style.to-tool.annotations.readOnlyHint, 'readOnlyHint naming works';
 
     my $result = $built.call({ a => 'x' });
     isa-ok $result, MCP::Types::CallToolResult, 'call returns CallToolResult';
@@ -88,6 +99,17 @@ subtest 'Resource builder and normalization', {
 
     is $resource.to-resource.uri, 'info://test', 'resource uri';
     is $resource.to-resource.name, 'Test', 'resource name';
+
+    # Test resource annotations
+    my $res-obj = $resource.to-resource;
+    ok $res-obj.annotations.defined, 'resource annotations set';
+    is $res-obj.annotations.audience[0], 'user', 'resource audience set';
+    is $res-obj.annotations.priority, 0.5, 'resource priority set';
+
+    # Test annotations in Hash serialization
+    my %res-hash = $res-obj.Hash;
+    ok %res-hash<annotations>:exists, 'annotations in resource Hash';
+    is %res-hash<annotations><priority>, 0.5, 'priority in serialized Hash';
 
     my $contents = $resource.read;
     is $contents[0].text, 'hello', 'string normalized to ResourceContents';
