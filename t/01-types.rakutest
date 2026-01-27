@@ -598,7 +598,7 @@ subtest 'ToolChoice Hash', {
 # Test ServerCapabilities from-hash roundtrip
 subtest 'ServerCapabilities from-hash', {
     my $caps = ServerCapabilities.new(
-        experimental => True,
+        experimental => { 'test/ext' => {} },
         logging => LoggingCapability.new,
         prompts => PromptsCapability.new(listChanged => True),
         resources => ResourcesCapability.new(subscribe => True, listChanged => True),

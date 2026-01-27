@@ -1,0 +1,156 @@
+use v6.d;
+use Test;
+use lib 'lib';
+use lib 't/lib';
+use MCP::Types;
+use MCP::Server;
+use MCP::Client;
+need MCP::JSONRPC;
+need TestTransport;
+
+plan 9;
+
+use MONKEY-TYPING;
+augment class MCP::Server::Server {
+    method handle-message-public($msg) { self!handle-message($msg) }
+}
+
+# === 1. Extension type ===
+subtest 'Extension type construct and roundtrip', {
+    plan 5;
+    my $ext = MCP::Types::Extension.new(name => 'acme/logging', version => '1.0', settings => { level => 'debug' });
+    is $ext.name, 'acme/logging', 'name';
+    is $ext.version, '1.0', 'version';
+    is $ext.settings<level>, 'debug', 'settings';
+
+    my %h = $ext.Hash;
+    my $ext2 = MCP::Types::Extension.from-hash(%h);
+    is $ext2.name, 'acme/logging', 'roundtrip name';
+    is $ext2.settings<level>, 'debug', 'roundtrip settings';
+};
+
+# === 2. ServerCapabilities with experimental Hash ===
+subtest 'ServerCapabilities experimental Hash serialization', {
+    plan 3;
+    my $caps = MCP::Types::ServerCapabilities.new(
+        experimental => { 'acme/ext' => { version => '1.0', settings => {} } }
+    );
+    my %h = $caps.Hash;
+    ok %h<experimental>:exists, 'experimental present in Hash';
+    is %h<experimental><acme/ext><version>, '1.0', 'extension data preserved';
+
+    my $caps2 = MCP::Types::ServerCapabilities.from-hash(%h);
+    is $caps2.experimental<acme/ext><version>, '1.0', 'roundtrip from-hash';
+};
+
+# === 3. Server register-extension appears in capabilities ===
+subtest 'Server register-extension in capabilities', {
+    plan 2;
+    my $transport = TestTransport::TestTransport.new;
+    my $server = MCP::Server::Server.new(
+        info => MCP::Types::Implementation.new(name => 'test', version => '0.1'),
+        transport => $transport,
+    );
+    $server.register-extension(
+        name     => 'acme/test',
+        version  => '2.0',
+        settings => { foo => 'bar' },
+    );
+    my $caps = $server.capabilities;
+    ok $caps.experimental.defined, 'experimental is set';
+    is $caps.experimental<acme/test><version>, '2.0', 'extension in capabilities';
+};
+
+# === 4. Server extension method dispatch ===
+subtest 'Server extension method dispatch', {
+    plan 1;
+    my $transport = TestTransport::TestTransport.new;
+    my $server = MCP::Server::Server.new(
+        info => MCP::Types::Implementation.new(name => 'test', version => '0.1'),
+        transport => $transport,
+    );
+    $server.register-extension(
+        name    => 'acme/math',
+        methods => { 'acme/math.add' => -> %params { { sum => %params<a> + %params<b> } } },
+    );
+
+    my $req = MCP::JSONRPC::Request.new(id => 1, method => 'acme/math.add', params => { a => 3, b => 4 });
+    my $result = $server.dispatch-request($req);
+    is $result<sum>, 7, 'extension method handler called';
+};
+
+# === 5. Server extension notification dispatch ===
+subtest 'Server extension notification dispatch', {
+    plan 1;
+    my $transport = TestTransport::TestTransport.new;
+    my $server = MCP::Server::Server.new(
+        info => MCP::Types::Implementation.new(name => 'test', version => '0.1'),
+        transport => $transport,
+    );
+    my $called = False;
+    $server.register-extension(
+        name          => 'acme/events',
+        notifications => { 'acme/events.ping' => -> %params { $called = True } },
+    );
+
+    my $notif = MCP::JSONRPC::Notification.new(method => 'acme/events.ping', params => {});
+    $server.handle-message-public($notif);
+    ok $called, 'extension notification handler called';
+};
+
+# === 6. Server unregister-extension ===
+subtest 'Server unregister-extension', {
+    plan 2;
+    my $transport = TestTransport::TestTransport.new;
+    my $server = MCP::Server::Server.new(
+        info => MCP::Types::Implementation.new(name => 'test', version => '0.1'),
+        transport => $transport,
+    );
+    $server.register-extension(name => 'acme/temp', version => '1.0');
+    ok $server.capabilities.experimental<acme/temp>:exists, 'registered';
+    $server.unregister-extension('acme/temp');
+    my $caps = $server.capabilities;
+    my $still-there = $caps.experimental.defined && ($caps.experimental<acme/temp>:exists);
+    ok !$still-there, 'unregistered';
+};
+
+# === 7. Client register-extension ===
+subtest 'Client register-extension in init capabilities', {
+    plan 1;
+    my $client = MCP::Client::Client.new(
+        info => MCP::Types::Implementation.new(name => 'test-client', version => '0.1'),
+        transport => TestTransport::TestTransport.new,
+    );
+    $client.register-extension(name => 'acme/feature', version => '1.0', settings => { enabled => True });
+    pass 'client extension registered without error';
+};
+
+# === 8. Client server-extensions ===
+subtest 'Client server-extensions parses experimental', {
+    plan 2;
+    my $client = MCP::Client::Client.new(
+        info => MCP::Types::Implementation.new(name => 'test-client', version => '0.1'),
+        transport => TestTransport::TestTransport.new,
+    );
+    is $client.server-extensions.elems, 0, 'no server extensions before connect';
+    ok !$client.supports-extension('acme/foo'), 'supports-extension returns False';
+};
+
+# === 9. Namespace validation ===
+subtest 'Extension name must contain /', {
+    plan 2;
+    my $transport = TestTransport::TestTransport.new;
+    my $server = MCP::Server::Server.new(
+        info => MCP::Types::Implementation.new(name => 'test', version => '0.1'),
+        transport => $transport,
+    );
+    dies-ok { $server.register-extension(name => 'badname') }, 'server rejects name without /';
+
+    my $client = MCP::Client::Client.new(
+        info => MCP::Types::Implementation.new(name => 'test-client', version => '0.1'),
+        transport => TestTransport::TestTransport.new,
+    );
+    dies-ok { $client.register-extension(name => 'badname') }, 'client rejects name without /';
+};
+
+done-testing;

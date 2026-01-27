@@ -53,6 +53,9 @@ class Client is export {
     has &.elicitation-handler;  # Handler for elicitation requests
     has @.roots;  # Array of Root objects or Hashes with uri/name
 
+    # Client-side extension declarations
+    has %!extensions;  # name => { version => Str, settings => Hash }
+
     # State
     has Bool $!initialized = False;
     has MCP::Types::ServerCapabilities $!server-capabilities;
@@ -91,6 +94,26 @@ class Client is export {
         }
     }
 
+    #| Register a client-side extension (included in capabilities during init)
+    method register-extension(Str :$name!, Str :$version, Hash :$settings) {
+        die "Extension name must contain '/': $name" unless $name.contains('/');
+        %!extensions{$name} = {
+            version  => $version // '',
+            settings => $settings // {},
+        };
+    }
+
+    #| Get extensions reported by the server
+    method server-extensions(--> Hash) {
+        return {} unless $!server-capabilities.defined && $!server-capabilities.experimental.defined;
+        $!server-capabilities.experimental
+    }
+
+    #| Check if the server supports a specific extension
+    method supports-extension(Str $name --> Bool) {
+        self.server-extensions{$name}:exists
+    }
+
     #| Initialize the connection
     method !initialize(--> Promise) {
         # Build capabilities, adding roots if configured
@@ -102,6 +125,17 @@ class Client is export {
         if &!elicitation-handler.defined {
             %capabilities<elicitation> //= {};
             %capabilities<elicitation><form> = {};
+        }
+        # Add extension declarations to experimental capability
+        if %!extensions {
+            my %experimental;
+            for %!extensions.kv -> $ext-name, %ext {
+                %experimental{$ext-name} = {
+                    version  => %ext<version>,
+                    settings => %ext<settings>,
+                };
+            }
+            %capabilities<experimental> = %experimental;
         }
 
         self.request('initialize', {

@@ -56,6 +56,7 @@ constant CreateMessageResult is export = MCP::Types::CreateMessageResult;
 constant Task is export = MCP::Types::Task;
 constant TaskStatus is export = MCP::Types::TaskStatus;
 constant CreateTaskResult is export = MCP::Types::CreateTaskResult;
+constant Extension is export = MCP::Types::Extension;
 
 #| Re-exported log level constants
 constant Debug is export = MCP::Types::Debug;
