@@ -105,12 +105,21 @@ endif
 # Version command args (allow: make version 1.2.3 "Description")
 VERSION_INPUT := $(word 2, $(MAKECMDGOALS))
 VERSION_ARGS_DESC := $(wordlist 3, 999, $(MAKECMDGOALS))
-# Allow passing VERSION_NEW/VERSION_DESC via variables, or via positional args.
-VERSION_NEW ?= $(VERSION_INPUT)
-VERSION_DESC ?= $(strip $(VERSION_ARGS_DESC))
+# Allow passing TAG/DESCRIPTION via variables, or via positional args.
+TAG ?= $(VERSION_INPUT)
+DESCRIPTION ?= $(strip $(VERSION_ARGS_DESC))
+DESCRIPTION := $(if $(DESCRIPTION),$(DESCRIPTION),$(if $(TAG),Update version to v$(TAG),))
 ifeq ($(firstword $(MAKECMDGOALS)),version)
     $(foreach word,$(wordlist 2, 999, $(MAKECMDGOALS)),$(eval $(word):;@:))
 endif
+
+# Compute next version from VERSION (simple semver: MAJOR.MINOR.PATCH)
+VERSION_MAJOR := $(word 1, $(subst ., ,$(VERSION)))
+VERSION_MINOR := $(word 2, $(subst ., ,$(VERSION)))
+VERSION_PATCH := $(word 3, $(subst ., ,$(VERSION)))
+NEXT_PATCH := $(VERSION_MAJOR).$(VERSION_MINOR).$(shell expr $(VERSION_PATCH) + 1)
+NEXT_MINOR := $(VERSION_MAJOR).$(shell expr $(VERSION_MINOR) + 1).0
+NEXT_MAJOR := $(shell expr $(VERSION_MAJOR) + 1).0.0
 
 # ------------------------------------------------------------------------------
 # Diagnostic Functions (output to stderr)
@@ -651,19 +660,35 @@ ci-full: dependencies-dev lint test coverage
 .PHONY: version
 # version: Show version (or update version when args provided)
 version:
-ifneq ($(VERSION_NEW),)
-	@if [ -z "$(VERSION_DESC)" ]; then \
-		$(call log-error,Description is required); \
-		$(call log,Usage: make version 1.2.3 "Description"); \
+ifneq ($(TAG),)
+	@if ! echo "$(TAG)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		printf "$(CLR_RED)✗ Version must be semver: MAJOR.MINOR.PATCH$(CLR_RESET)\n" >&2; \
 		exit 1; \
 	fi
-	$(call log-info,Updating project version to $(VERSION_NEW)...)
-	$(Q)perl -0pi -e 's/^VERSION\\s*:=\\s*.*/VERSION := $(VERSION_NEW)/m' Makefile
-	$(Q)perl -0pi -e 's/"version"\\s*:\\s*"[^"]*"/"version": "$(VERSION_NEW)"/' $(META_FILE)
-	$(call log-success,Version updated in Makefile and $(META_FILE))
-	$(call log-info,Creating git tag v$(VERSION_NEW)...)
-	$(Q)git tag -a "v$(VERSION_NEW)" -m "$(VERSION_DESC)"
-	$(call log-success,Tag created locally: v$(VERSION_NEW))
+	@if git rev-parse -q --verify "refs/tags/v$(TAG)" >/dev/null; then \
+		printf "$(CLR_RED)✗ Tag v$(TAG) already exists$(CLR_RESET)\n" >&2; \
+		exit 1; \
+	fi
+	$(call log-info,Updating project version to $(TAG)...)
+	$(Q)perl -0pi -e 's/^(\s*VERSION\s*:=\s*).*/$${1}$(TAG)/m' Makefile
+	$(Q)perl -0pi -e 's/"version"\s*:\s*"[^"]*"/"version": "$(TAG)"/' $(META_FILE)
+	$(Q)perl -0pi -e 's/^(├─ version:\s*).*/$${1}$(TAG)/m' README.md
+	@if ! grep -Eq '^VERSION[[:space:]]*:=[[:space:]]*$(TAG)[[:space:]]*$$' Makefile; then \
+		printf "$(CLR_RED)✗ Failed to update VERSION in Makefile$(CLR_RESET)\n" >&2; \
+		exit 1; \
+	fi
+	@if ! grep -Eq '"version"[[:space:]]*:[[:space:]]*"$(TAG)"' $(META_FILE); then \
+		printf "$(CLR_RED)✗ Failed to update version in $(META_FILE)$(CLR_RESET)\n" >&2; \
+		exit 1; \
+	fi
+	@if ! grep -Eq '^├─ version:[[:space:]]*$(TAG)[[:space:]]*$$' README.md; then \
+		printf "$(CLR_RED)✗ Failed to update version in README.md$(CLR_RESET)\n" >&2; \
+		exit 1; \
+	fi
+	$(call log-success,Version updated in Makefile, $(META_FILE), and README.md)
+	$(call log-info,Creating git tag v$(TAG)...)
+	$(Q)git tag -a "v$(TAG)" -m "$(DESCRIPTION)"
+	$(call log-success,Tag created locally: v$(TAG))
 else
 	$(call log,$(PROJECT_NAME) v$(VERSION))
 endif
@@ -671,20 +696,35 @@ endif
 .PHONY: bump-patch
 # bump-patch: Placeholder for patch bump
 bump-patch:
-	$(call log-warning,Version bumping not yet implemented)
-	$(call log-step,Edit META6.json manually or use mi6)
+	@if ! echo "$(VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		printf "$(CLR_RED)✗ Current VERSION must be semver: MAJOR.MINOR.PATCH$(CLR_RESET)\n" >&2; \
+		exit 1; \
+	fi
+	@desc="$(DESCRIPTION)"; \
+	if [ -z "$$desc" ]; then desc="Bump patch version to $(NEXT_PATCH)"; fi; \
+	$(MAKE) version TAG=$(NEXT_PATCH) DESCRIPTION="$$desc"
 
 .PHONY: bump-minor
 # bump-minor: Placeholder for minor bump
 bump-minor:
-	$(call log-warning,Version bumping not yet implemented)
-	$(call log-step,Edit META6.json manually or use mi6)
+	@if ! echo "$(VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		printf "$(CLR_RED)✗ Current VERSION must be semver: MAJOR.MINOR.PATCH$(CLR_RESET)\n" >&2; \
+		exit 1; \
+	fi
+	@desc="$(DESCRIPTION)"; \
+	if [ -z "$$desc" ]; then desc="Bump minor version to $(NEXT_MINOR)"; fi; \
+	$(MAKE) version TAG=$(NEXT_MINOR) DESCRIPTION="$$desc"
 
 .PHONY: bump-major
 # bump-major: Placeholder for major bump
 bump-major:
-	$(call log-warning,Version bumping not yet implemented)
-	$(call log-step,Edit META6.json manually or use mi6)
+	@if ! echo "$(VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		printf "$(CLR_RED)✗ Current VERSION must be semver: MAJOR.MINOR.PATCH$(CLR_RESET)\n" >&2; \
+		exit 1; \
+	fi
+	@desc="$(DESCRIPTION)"; \
+	if [ -z "$$desc" ]; then desc="Bump major version to $(NEXT_MAJOR)"; fi; \
+	$(MAKE) version TAG=$(NEXT_MAJOR) DESCRIPTION="$$desc"
 
 # ------------------------------------------------------------------------------
 # Special Targets
