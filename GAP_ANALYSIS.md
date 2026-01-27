@@ -13,7 +13,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 | **Base Protocol** | ✅ Mostly Complete | JSON-RPC 2.0, lifecycle, basic message handling |
 | **Transports** | ✅ Mostly Complete | Stdio complete, Streamable HTTP complete |
 | **Server Features** | ⚠️ Partial | Tools/Resources/Prompts basic support |
-| **Client Features** | ⚠️ Partial | Sampling basic support |
+| **Client Features** | ✅ Done | Sampling with tools, includeContext, stopReason |
 | **Utilities** | ⚠️ Partial | Logging, progress, cancellation implemented |
 | **Authorization** | ✅ Done | OAuth 2.1 with PKCE |
 | **New 2025-11-25 Features** | ⚠️ Partial | Elicitation done, Tasks/Extensions missing |
@@ -116,14 +116,14 @@ This document compares the current implementation of the Raku MCP SDK against th
 
 ### Client Features
 
-#### ⚠️ Sampling (`MCP::Client` sampling-handler)
-- Basic `sampling/createMessage` handling
+#### ✅ Sampling (`MCP::Client` sampling-handler) - **Implemented**
+- `sampling/createMessage` handling with full parameter support
+- Tool definitions in sampling requests (SEP-1577)
+- `toolChoice` parameter support
+- `includeContext` parameter with capability validation
+- `stopReason` in responses
 - Tool validation in sampling messages
-
-**Missing**:
-- ❌ Sampling with tools (SEP-1577) - allowing tool definitions in sampling requests
-- ❌ `includeContext` parameter support
-- ❌ Proper `stopReason` handling
+- Server-side `create-message()` convenience method with tools/toolChoice/includeContext
 
 #### ✅ Roots - **Implemented**
 - `Root` type with `uri` and optional `name`
@@ -248,7 +248,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 | Tools | ✅ Full | ⚠️ Basic + annotations |
 | Resources | ✅ Full + templates + subscriptions | ✅ Full + subscriptions (no templates) |
 | Prompts | ✅ Full | ⚠️ Basic |
-| Sampling | ✅ Full + tools | ⚠️ Basic |
+| Sampling | ✅ Full + tools | ✅ Full + tools |
 | Roots | ✅ Full | ✅ Full |
 | Elicitation | ✅ Full + URL mode | ✅ Full |
 | OAuth 2.1 | ✅ Full | ✅ Core (no dynamic registration) |
@@ -278,7 +278,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 ### Lower Priority (Advanced Features)
 10. **Tasks framework** - Long-running operations (experimental)
 11. **Extensions framework** - Plugin architecture
-12. **Sampling with tools** - Advanced agentic capabilities
+12. ~~**Sampling with tools**~~ ✅ **Done** - Tools, toolChoice, includeContext, stopReason
 
 ---
 

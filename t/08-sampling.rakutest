@@ -168,4 +168,172 @@ subtest 'Sampling enforces tool result placement', {
     is $resp.error.code, MCP::JSONRPC::InvalidParams.value, 'invalid params';
 };
 
+subtest 'Sampling with tools passes tools to handler', {
+    my $transport = TestTransport::TestTransport.new;
+    my $received-tools;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        capabilities => MCP::Types::ClientCapabilities.new(
+            sampling => MCP::Types::SamplingCapability.new(tools => True)
+        ),
+        transport => $transport,
+        sampling-handler => -> %params {
+            $received-tools = %params<tools>;
+            MCP::Types::CreateMessageResult.new(
+                role => 'assistant',
+                model => 'test-model',
+                content => [ MCP::Types::TextContent.new(text => 'used tool') ],
+                stopReason => 'tool_use',
+            )
+        }
+    );
+
+    my $connect = $client.connect;
+    for ^10 { last if $transport.sent.elems > 0; sleep 0.1; }
+    respond-to-init($transport);
+    await $connect;
+
+    $transport.clear-sent;
+    my $req = MCP::JSONRPC::Request.new(
+        id => 50,
+        method => 'sampling/createMessage',
+        params => {
+            messages => [
+                { role => 'user', content => [ { type => 'text', text => 'use a tool' } ] }
+            ],
+            tools => [
+                %( name => 'calculator', description => 'Math', inputSchema => %( type => 'object', properties => %( expr => %( type => 'string' ) ) ) ),
+            ],
+            toolChoice => %( mode => 'auto' ),
+        }
+    );
+    $transport.emit($req);
+
+    my $resp = wait-for-response($transport, 50);
+    ok !$resp.error, 'no error with tools';
+    ok $received-tools.defined, 'handler received tools';
+    is $received-tools[0]<name>, 'calculator', 'tool name passed through';
+    is $resp.result<stopReason>, 'tool_use', 'stopReason preserved';
+};
+
+subtest 'Sampling validates tool definitions', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        capabilities => MCP::Types::ClientCapabilities.new(
+            sampling => MCP::Types::SamplingCapability.new(tools => True)
+        ),
+        transport => $transport,
+        sampling-handler => -> %params { { role => 'assistant', model => 'x', content => [ { type => 'text', text => 'ok' } ] } }
+    );
+
+    my $connect = $client.connect;
+    for ^10 { last if $transport.sent.elems > 0; sleep 0.1; }
+    respond-to-init($transport);
+    await $connect;
+
+    # Missing inputSchema
+    $transport.clear-sent;
+    $transport.emit(MCP::JSONRPC::Request.new(
+        id => 60,
+        method => 'sampling/createMessage',
+        params => {
+            messages => [ { role => 'user', content => [ { type => 'text', text => 'hi' } ] } ],
+            tools => [ %( name => 'bad-tool' ), ],
+        }
+    ));
+    my $resp = wait-for-response($transport, 60);
+    ok $resp.error.defined, 'error for missing inputSchema';
+    is $resp.error.code, MCP::JSONRPC::InvalidParams.value, 'invalid params code';
+
+    # Missing name
+    $transport.clear-sent;
+    $transport.emit(MCP::JSONRPC::Request.new(
+        id => 61,
+        method => 'sampling/createMessage',
+        params => {
+            messages => [ { role => 'user', content => [ { type => 'text', text => 'hi' } ] } ],
+            tools => [ %( inputSchema => %( type => 'object' ) ), ],
+        }
+    ));
+    my $resp2 = wait-for-response($transport, 61);
+    ok $resp2.error.defined, 'error for missing name';
+};
+
+subtest 'Sampling rejects includeContext without capability', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        capabilities => MCP::Types::ClientCapabilities.new(
+            sampling => MCP::Types::SamplingCapability.new
+        ),
+        transport => $transport,
+        sampling-handler => -> %params { { role => 'assistant', model => 'x', content => [ { type => 'text', text => 'ok' } ] } }
+    );
+
+    my $connect = $client.connect;
+    for ^10 { last if $transport.sent.elems > 0; sleep 0.1; }
+    respond-to-init($transport);
+    await $connect;
+
+    $transport.clear-sent;
+    $transport.emit(MCP::JSONRPC::Request.new(
+        id => 70,
+        method => 'sampling/createMessage',
+        params => {
+            messages => [ { role => 'user', content => [ { type => 'text', text => 'hi' } ] } ],
+            includeContext => 'allServers',
+        }
+    ));
+    my $resp = wait-for-response($transport, 70);
+    ok $resp.error.defined, 'error when includeContext without capability';
+    is $resp.error.code, MCP::JSONRPC::InvalidParams.value, 'invalid params';
+};
+
+subtest 'Sampling accepts includeContext with capability', {
+    my $transport = TestTransport::TestTransport.new;
+    my $received-context;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        capabilities => MCP::Types::ClientCapabilities.new(
+            sampling => MCP::Types::SamplingCapability.new(context => True)
+        ),
+        transport => $transport,
+        sampling-handler => -> %params {
+            $received-context = %params<includeContext>;
+            { role => 'assistant', model => 'x', content => [ { type => 'text', text => 'ok' } ] }
+        }
+    );
+
+    my $connect = $client.connect;
+    for ^10 { last if $transport.sent.elems > 0; sleep 0.1; }
+    respond-to-init($transport);
+    await $connect;
+
+    $transport.clear-sent;
+    $transport.emit(MCP::JSONRPC::Request.new(
+        id => 80,
+        method => 'sampling/createMessage',
+        params => {
+            messages => [ { role => 'user', content => [ { type => 'text', text => 'hi' } ] } ],
+            includeContext => 'allServers',
+        }
+    ));
+    my $resp = wait-for-response($transport, 80);
+    ok !$resp.error, 'no error with includeContext capability';
+    is $received-context, 'allServers', 'includeContext passed to handler';
+};
+
+subtest 'SamplingCapability Hash includes context', {
+    my $cap = MCP::Types::SamplingCapability.new(tools => True, context => True);
+    my %h = $cap.Hash;
+    ok %h<tools>:exists, 'tools in Hash';
+    ok %h<context>:exists, 'context in Hash';
+
+    my $cap2 = MCP::Types::SamplingCapability.new;
+    my %h2 = $cap2.Hash;
+    nok %h2<tools>:exists, 'no tools when not set';
+    nok %h2<context>:exists, 'no context when not set';
+};
+
 done-testing;

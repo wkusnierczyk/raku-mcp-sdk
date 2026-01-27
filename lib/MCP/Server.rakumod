@@ -825,6 +825,45 @@ class Server is export {
         })
     }
 
+    #| Request a sampling/createMessage from the client
+    #| Returns a Promise that resolves to a CreateMessageResult
+    method create-message(
+        :@messages!,
+        Int :$maxTokens,
+        :$modelPreferences,
+        Str :$systemPrompt,
+        Str :$includeContext,
+        :@tools,
+        :$toolChoice,
+        :$meta,
+    --> Promise) {
+        my %params = messages => @messages.map({
+            $_ ~~ MCP::Types::SamplingMessage ?? $_.Hash !! $_
+        }).Array;
+        %params<maxTokens> = $_ with $maxTokens;
+        %params<modelPreferences> = $_ ~~ MCP::Types::ModelPreferences ?? $_.Hash !! $_ with $modelPreferences;
+        %params<systemPrompt> = $_ with $systemPrompt;
+        %params<includeContext> = $_ with $includeContext;
+        if @tools {
+            %params<tools> = @tools.map({
+                $_ ~~ MCP::Types::Tool ?? $_.Hash !! $_
+            }).Array;
+        }
+        %params<toolChoice> = $_ ~~ MCP::Types::ToolChoice ?? $_.Hash !! $_ with $toolChoice;
+        %params<_meta> = $_ with $meta;
+
+        self.request('sampling/createMessage', %params).then(-> $p {
+            my $result = $p.result;
+            MCP::Types::CreateMessageResult.new(
+                role => $result<role>,
+                model => $result<model>,
+                content => $result<content>,
+                stopReason => $result<stopReason>,
+                meta => $result<_meta>,
+            )
+        })
+    }
+
     #| Request user input via form mode elicitation
     #| Returns a Promise that resolves to an ElicitationResponse
     method elicit(Str :$message!, :%schema! --> Promise) {
