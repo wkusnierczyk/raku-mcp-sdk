@@ -470,11 +470,13 @@ Contributions are welcome. You can:
 * Open an [issue](https://github.com/wkusnierczyk/raku-mcp-sdk/issues) for bugs, feature requests, or questions.
 * Fork or clone the repository, create a branch, push it, and open a [pull request](https://github.com/wkusnierczyk/raku-mcp-sdk/pulls).
 
-**Note**
-* Pushing directly to `main` is <strong style="color: red;">disallowed</strong>.  
-* Merging into `main` without positive review and passing checks is <strong style="color: red;">disallowed</strong>.
-* Merging into `main` of stalled pull requests is <strong style="color: red;">disallowed</strong>. You need to merge `main` into your branch, or rebase your branch onto `main` before being able to merge into `main`.
-* Merging into `main` with the whole multi-commit history of your branch is <strong style="color: red;">disallowed</strong>. You can only merge-squash as one commit, with a detailed description of your changes.
+> **Note**
+> * Pushing directly to `main` is <strong style="color: red;">disallowed</strong>.  
+> * Merging into `main` without positive review and passing checks is <strong style="color: red;">disallowed</strong>.
+> * Merging into `main` of stalled pull requests is <strong style="color: red;">disallowed</strong>.  
+>   You need to merge `main` into your branch, or rebase your branch onto `main` before being able to merge into `main`.
+> * Merging into `main` with the whole multi-commit history of your branch is <strong style="color: red;">disallowed</strong>.  
+>   You can only merge-squash as one commit, with a detailed description of your changes.
 
 
 ## License
