@@ -16,7 +16,7 @@ use lib 'lib';
 
 use MCP::Types;
 
-plan 27;
+plan 29;
 
 # Test Implementation
 subtest 'Implementation', {
@@ -300,6 +300,41 @@ subtest 'Root', {
     my $restored = Root.from-hash({ uri => 'file:///restored', name => 'Restored' });
     is $restored.uri, 'file:///restored', 'from-hash restores uri';
     is $restored.name, 'Restored', 'from-hash restores name';
+};
+
+# Test CompletionsCapability
+subtest 'CompletionsCapability', {
+    my $cap = CompletionsCapability.new;
+    my %h = $cap.Hash;
+    is %h.keys.elems, 0, 'empty hash';
+};
+
+# Test CompletionResult
+subtest 'CompletionResult', {
+    my $result = CompletionResult.new(
+        values => <alpha beta gamma>,
+        total => 10,
+        hasMore => True,
+    );
+    is $result.values.elems, 3, 'has 3 values';
+    is $result.total, 10, 'total is 10';
+    ok $result.hasMore, 'hasMore is true';
+
+    my %h = $result.Hash;
+    is %h<values>.elems, 3, 'Hash has values';
+    is %h<total>, 10, 'Hash has total';
+    ok %h<hasMore>, 'Hash hasMore';
+
+    # from-hash
+    my $restored = CompletionResult.from-hash(%h);
+    is $restored.values.elems, 3, 'from-hash restores values';
+    is $restored.total, 10, 'from-hash restores total';
+
+    # Without optional fields
+    my $minimal = CompletionResult.new(values => ['x']);
+    my %h2 = $minimal.Hash;
+    nok %h2<total>:exists, 'no total when not set';
+    nok %h2<hasMore>:exists, 'no hasMore when not set';
 };
 
 # Test ElicitationAction enum

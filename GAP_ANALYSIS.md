@@ -180,12 +180,13 @@ This document compares the current implementation of the Raku MCP SDK against th
   - Client-side `ping` for keepalive
   - Timeout handling
 
-#### ❌ Completion (autocomplete)
-- Not implemented
-- Missing:
-  - `completion/complete` request
-  - Argument completion for prompts
-  - Resource URI completion
+#### ✅ Completion (autocomplete)
+- `completion/complete` request handling
+- Server: `add-prompt-completer()`, `add-resource-completer()` for registering completers
+- Client: `complete-prompt()`, `complete-resource()` convenience methods
+- `CompletionResult` type with values, total, hasMore
+- Auto-truncation to 100 values per spec
+- `completions` capability advertised when completers registered
 
 ---
 
@@ -266,7 +267,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 ### Medium Priority (Enhanced Functionality)
 6. **Add tool output schemas** - Better structured responses
 7. ~~**Implement elicitation**~~ ✅ **Done** - Form and URL mode with handler callbacks
-8. **Add completion/autocomplete** - Better UX for prompt arguments
+8. ~~**Add completion/autocomplete**~~ ✅ **Done** - Prompt and resource completion with handler registration
 9. **Implement OAuth 2.1** - Required for authenticated servers
 
 ### Lower Priority (Advanced Features)

@@ -724,4 +724,88 @@ subtest 'Server elicitation', {
     is @notifications[0].params<elicitationId>, 'test-123', 'notification has elicitationId';
 };
 
+# Test completion/complete
+subtest 'Completion support', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = MCP::Server::Server.new(
+        info => MCP::Types::Implementation.new(name => 'test', version => '0.1'),
+        transport => $transport,
+    );
+
+    # Register a prompt completer that returns suggestions
+    $server.add-prompt-completer('code-review', -> $arg-name, $value, *%context {
+        my @all = <python javascript typescript ruby go rust>;
+        my @matched = @all.grep(*.starts-with($value));
+        { values => @matched }
+    });
+
+    # Register a resource completer
+    $server.add-resource-completer('file:///projects', -> $arg-name, $value, *%context {
+        <project-a project-b project-c>.grep(*.starts-with($value)).Array
+    });
+
+    # Test prompt completion
+    my $req1 = MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'completion/complete',
+        params => {
+            ref => { type => 'ref/prompt', name => 'code-review' },
+            argument => { name => 'language', value => 'py' },
+        },
+    );
+    $server.handle-message-public($req1);
+    my @sent = $transport.sent;
+    ok @sent.elems >= 1, 'got response';
+    my $resp1 = @sent[*-1];
+    ok $resp1 ~~ MCP::JSONRPC::Response, 'response is Response';
+    ok $resp1.result<completion>.defined, 'has completion';
+    is $resp1.result<completion><values>, ['python'], 'filtered to matching values';
+
+    # Test resource completion returning an Array
+    $transport.clear-sent;
+    my $req2 = MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'completion/complete',
+        params => {
+            ref => { type => 'ref/resource', uri => 'file:///projects' },
+            argument => { name => 'name', value => 'project-a' },
+        },
+    );
+    $server.handle-message-public($req2);
+    my $resp2 = $transport.sent[*-1];
+    is $resp2.result<completion><values>, ['project-a'], 'resource completion works';
+
+    # Test completion with no completer registered (empty result)
+    $transport.clear-sent;
+    my $req3 = MCP::JSONRPC::Request.new(
+        id => 3,
+        method => 'completion/complete',
+        params => {
+            ref => { type => 'ref/prompt', name => 'unknown-prompt' },
+            argument => { name => 'arg', value => 'x' },
+        },
+    );
+    $server.handle-message-public($req3);
+    my $resp3 = $transport.sent[*-1];
+    is $resp3.result<completion><values>, [], 'unregistered completer returns empty';
+
+    # Test invalid ref type
+    $transport.clear-sent;
+    my $req4 = MCP::JSONRPC::Request.new(
+        id => 4,
+        method => 'completion/complete',
+        params => {
+            ref => { type => 'ref/invalid' },
+            argument => { name => 'arg', value => 'x' },
+        },
+    );
+    $server.handle-message-public($req4);
+    my $resp4 = $transport.sent[*-1];
+    ok $resp4.error.defined, 'invalid ref type returns error';
+
+    # Test capabilities include completions
+    my $caps = $server.capabilities;
+    ok $caps.completions.defined, 'capabilities include completions';
+};
+
 done-testing;
