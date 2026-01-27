@@ -19,10 +19,10 @@ Covers initialization, request/response handling, and content parsing.
 
 =end pod
 
-sub respond-to-last(TestTransport::TestTransport $transport, $payload) {
+sub respond-to-last(TestTransport::TestTransport $transport, $payload --> Bool) {
     my $req;
     # Be resilient to scheduler timing: wait briefly for a request to appear.
-    for ^200 {
+    for ^1000 {
         for $transport.sent.reverse -> $msg {
             if $msg ~~ MCP::JSONRPC::Request {
                 $req = $msg;
@@ -32,8 +32,13 @@ sub respond-to-last(TestTransport::TestTransport $transport, $payload) {
         last if $req.defined;
         sleep 0.01;
     }
-    die "No request to respond to" unless $req.defined;
+    unless $req.defined {
+        flunk 'request available to respond';
+        diag 'No request to respond to';
+        return False;
+    }
     $transport.emit(MCP::JSONRPC::Response.success($req.id, $payload));
+    True
 }
 
 subtest 'Client connect and requests', {
@@ -67,7 +72,7 @@ subtest 'Client connect and requests', {
     my %tool = name => 't', description => 'd', inputSchema => { type => 'object' };
     respond-to-last($transport, {
         tools => [ %tool.item ]
-    });
+    }) or return;
     my $tools-result = await $tools-p;
     is $tools-result<tools>[0].name, 't', 'list-tools returns Tool';
     nok $tools-result<nextCursor>.defined, 'list-tools has no nextCursor when not paginated';
@@ -78,7 +83,7 @@ subtest 'Client connect and requests', {
         outputSchema => { type => 'object', properties => { temp => { type => 'number' } } };
     respond-to-last($transport, {
         tools => [ %tool-with-schema.item ]
-    });
+    }) or return;
     my $tools-result2 = await $tools-p2;
     ok $tools-result2<tools>[0].outputSchema.defined, 'list-tools parses outputSchema';
     is $tools-result2<tools>[0].outputSchema<type>, 'object', 'outputSchema type preserved';
@@ -88,7 +93,7 @@ subtest 'Client connect and requests', {
     respond-to-last($transport, {
         content => [ %content.item ],
         isError => False
-    });
+    }) or return;
     my $call = await $call-p;
     is $call.content[0].text, 'ok', 'call-tool parses content';
 
@@ -99,7 +104,7 @@ subtest 'Client connect and requests', {
         content => [ %sc-content.item ],
         isError => False,
         structuredContent => { temperature => 72, conditions => 'sunny' },
-    });
+    }) or return;
     my $call2 = await $call-p2;
     ok $call2.structuredContent.defined, 'call-tool parses structuredContent';
     is $call2.structuredContent<temperature>, 72, 'structuredContent temperature';
@@ -110,7 +115,7 @@ subtest 'Client connect and requests', {
     respond-to-last($transport, {
         content => [ { type => 'text', text => 'hi' } ],
         isError => False,
-    });
+    }) or return;
     my $call3 = await $call-p3;
     nok $call3.structuredContent.defined, 'no structuredContent when absent';
 
@@ -118,7 +123,7 @@ subtest 'Client connect and requests', {
     my %resource = uri => 'info://x', name => 'X', mimeType => 'text/plain';
     respond-to-last($transport, {
         resources => [ %resource.item ]
-    });
+    }) or return;
     my $res-result = await $res-p;
     is $res-result<resources>[0].uri, 'info://x', 'list-resources returns Resource';
     nok $res-result<nextCursor>.defined, 'list-resources has no nextCursor when not paginated';
@@ -127,7 +132,7 @@ subtest 'Client connect and requests', {
     my %contents = uri => 'info://x', mimeType => 'text/plain', text => 'hello';
     respond-to-last($transport, {
         contents => [ %contents.item ]
-    });
+    }) or return;
     my @contents = await $read-p;
     is @contents[0].text, 'hello', 'read-resource returns contents';
 
@@ -135,7 +140,7 @@ subtest 'Client connect and requests', {
     my %prompt = name => 'p', description => 'desc', arguments => [];
     respond-to-last($transport, {
         prompts => [ %prompt.item ]
-    });
+    }) or return;
     my $prompts-result = await $prompts-p;
     is $prompts-result<prompts>[0].name, 'p', 'list-prompts returns Prompt';
     nok $prompts-result<nextCursor>.defined, 'list-prompts has no nextCursor when not paginated';
@@ -145,12 +150,12 @@ subtest 'Client connect and requests', {
     respond-to-last($transport, {
         description => 'desc',
         messages => [ %msg.item ]
-    });
+    }) or return;
     my $prompt = await $prompt-p;
     is $prompt<messages>[0].content.text, 'hi', 'get-prompt parses messages';
 
     my $ping-p = $client.ping;
-    respond-to-last($transport, {});
+    respond-to-last($transport, {}) or return;
     ok await($ping-p), 'ping resolves true';
 
     my $bad = $client.request('bad');
@@ -197,7 +202,7 @@ subtest 'Client pagination support', {
     respond-to-last($transport, {
         tools => [ %tool.item ],
         nextCursor => 'cursor123'
-    });
+    }) or return;
     my $tools-result = await $tools-p;
     is $tools-result<tools>[0].name, 't1', 'list-tools returns Tool';
     is $tools-result<nextCursor>, 'cursor123', 'list-tools includes nextCursor';
@@ -209,7 +214,7 @@ subtest 'Client pagination support', {
     my %tool2 = name => 't2', description => 'd2', inputSchema => { type => 'object' };
     respond-to-last($transport, {
         tools => [ %tool2.item ]
-    });
+    }) or return;
     my $tools-result2 = await $tools-p2;
     is $tools-result2<tools>[0].name, 't2', 'list-tools with cursor returns next page';
     nok $tools-result2<nextCursor>.defined, 'last page has no nextCursor';
@@ -222,7 +227,7 @@ subtest 'Client pagination support', {
     respond-to-last($transport, {
         resources => [ %res.item ],
         nextCursor => 'rescursor2'
-    });
+    }) or return;
     my $res-result = await $res-p;
     is $res-result<nextCursor>, 'rescursor2', 'list-resources includes nextCursor';
 
@@ -234,7 +239,7 @@ subtest 'Client pagination support', {
     respond-to-last($transport, {
         prompts => [ %pmt.item ],
         nextCursor => 'promptcursor2'
-    });
+    }) or return;
     my $prompts-result = await $prompts-p;
     is $prompts-result<nextCursor>, 'promptcursor2', 'list-prompts includes nextCursor';
 };
@@ -310,7 +315,7 @@ subtest 'Client resource subscription support', {
     my $sub-req = $transport.sent.grep(MCP::JSONRPC::Request)[*-1];
     is $sub-req.method, 'resources/subscribe', 'subscribe-resource sends correct method';
     is $sub-req.params<uri>, 'file://test.txt', 'subscribe-resource sends correct uri';
-    respond-to-last($transport, {});
+    respond-to-last($transport, {}) or return;
     await $sub-p;
     pass 'subscribe-resource completes successfully';
 
@@ -320,7 +325,7 @@ subtest 'Client resource subscription support', {
     my $unsub-req = $transport.sent.grep(MCP::JSONRPC::Request)[*-1];
     is $unsub-req.method, 'resources/unsubscribe', 'unsubscribe-resource sends correct method';
     is $unsub-req.params<uri>, 'file://test.txt', 'unsubscribe-resource sends correct uri';
-    respond-to-last($transport, {});
+    respond-to-last($transport, {}) or return;
     await $unsub-p;
     pass 'unsubscribe-resource completes successfully';
 
@@ -564,7 +569,7 @@ subtest 'Completion support', {
             capabilities => { completions => {} },
             serverInfo => { name => 'test-server', version => '0.1' },
             instructions => 'test',
-        });
+        }) or return;
     }
     await $client.connect;
 
@@ -573,7 +578,7 @@ subtest 'Completion support', {
         sleep 0.1;
         respond-to-last($transport, {
             completion => { values => ['python', 'perl'], hasMore => False },
-        });
+        }) or return;
     }
     my $result = await $client.complete-prompt('code-review',
         argument-name => 'language',
@@ -588,7 +593,7 @@ subtest 'Completion support', {
         sleep 0.1;
         respond-to-last($transport, {
             completion => { values => ['file:///a'], total => 5, hasMore => True },
-        });
+        }) or return;
     }
     my $result2 = await $client.complete-resource('file:///projects',
         argument-name => 'uri',

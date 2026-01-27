@@ -113,6 +113,7 @@ jobs:
         run: |
           zef install App::Prove6 || true
           prove6 -I. -v t/
+        # TODO: Consider a targeted one-time retry for specific flaky tests only.
 
       - name: Run tests (fallback)
         if: failure()
