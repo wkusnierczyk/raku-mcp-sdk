@@ -16,7 +16,7 @@ use lib 'lib';
 
 use MCP::Types;
 
-plan 31;
+plan 41;
 
 # Test Implementation
 subtest 'Implementation', {
@@ -455,6 +455,164 @@ subtest 'ElicitationResponse', {
     });
     is $restored.action, ElicitAccept, 'from-hash restores accept';
     is $restored.content<email>, 'test@example.com', 'from-hash restores content';
+};
+
+# Test ImageContent Hash serialization
+subtest 'ImageContent Hash', {
+    my $img = ImageContent.new(data => 'abc123', mimeType => 'image/png');
+    my %h = $img.Hash;
+    is %h<type>, 'image', 'type is image';
+    is %h<data>, 'abc123', 'data preserved';
+    is %h<mimeType>, 'image/png', 'mimeType preserved';
+    nok %h<annotations>:exists, 'no annotations when not set';
+
+    my $with-ann = ImageContent.new(
+        data => 'x', mimeType => 'image/jpeg',
+        annotations => Annotations.new(audience => ['user'], priority => 0.8e0),
+    );
+    my %h2 = $with-ann.Hash;
+    ok %h2<annotations>:exists, 'annotations included';
+    is %h2<annotations><priority>, 0.8e0, 'annotation priority';
+};
+
+# Test AudioContent Hash serialization
+subtest 'AudioContent Hash', {
+    my $audio = AudioContent.new(data => 'audiodata', mimeType => 'audio/wav');
+    my %h = $audio.Hash;
+    is %h<type>, 'audio', 'type is audio';
+    is %h<data>, 'audiodata', 'data preserved';
+    is %h<mimeType>, 'audio/wav', 'mimeType preserved';
+
+    my $with-ann = AudioContent.new(
+        data => 'x', mimeType => 'audio/mp3',
+        annotations => Annotations.new(audience => ['assistant']),
+    );
+    ok $with-ann.Hash<annotations>:exists, 'annotations included';
+};
+
+# Test EmbeddedResource Hash serialization
+subtest 'EmbeddedResource Hash', {
+    my $rc = ResourceContents.new(uri => 'file:///test', mimeType => 'text/plain', text => 'hi');
+    my $er = EmbeddedResource.new(resource => $rc);
+    my %h = $er.Hash;
+    is %h<type>, 'resource', 'type is resource';
+    is %h<resource><uri>, 'file:///test', 'resource uri';
+    nok %h<annotations>:exists, 'no annotations';
+
+    my $with-ann = EmbeddedResource.new(
+        resource => $rc,
+        annotations => Annotations.new(priority => 0.3e0),
+    );
+    ok $with-ann.Hash<annotations>:exists, 'annotations included';
+};
+
+# Test ResourceLink Hash serialization
+subtest 'ResourceLink Hash', {
+    my $rl = ResourceLink.new(name => 'doc', uri => 'file:///doc.pdf',
+        title => 'Doc', description => 'A doc', mimeType => 'application/pdf', size => 1024);
+    my %h = $rl.Hash;
+    is %h<type>, 'resource_link', 'type';
+    is %h<name>, 'doc', 'name';
+    is %h<uri>, 'file:///doc.pdf', 'uri';
+    is %h<title>, 'Doc', 'title';
+    is %h<description>, 'A doc', 'description';
+    is %h<mimeType>, 'application/pdf', 'mimeType';
+    is %h<size>, 1024, 'size';
+
+    # Minimal
+    my $min = ResourceLink.new(name => 'x', uri => 'y');
+    my %h2 = $min.Hash;
+    nok %h2<title>:exists, 'no title';
+    nok %h2<size>:exists, 'no size';
+};
+
+# Test ToolUseContent Hash
+subtest 'ToolUseContent Hash', {
+    my $tu = ToolUseContent.new(id => 'call-1', name => 'calc', input => { expr => '1+1' });
+    my %h = $tu.Hash;
+    is %h<type>, 'tool_use', 'type';
+    is %h<id>, 'call-1', 'id';
+    is %h<name>, 'calc', 'name';
+    is %h<input><expr>, '1+1', 'input';
+};
+
+# Test ToolResultContent Hash
+subtest 'ToolResultContent Hash', {
+    my $tr = ToolResultContent.new(
+        toolUseId => 'call-1',
+        content => [TextContent.new(text => 'result')],
+        isError => True,
+        structuredContent => { val => 42 },
+        meta => { requestId => 'r1' },
+    );
+    my %h = $tr.Hash;
+    is %h<type>, 'tool_result', 'type';
+    is %h<toolUseId>, 'call-1', 'toolUseId';
+    ok %h<isError>, 'isError';
+    is %h<structuredContent><val>, 42, 'structuredContent';
+    is %h<_meta><requestId>, 'r1', 'meta';
+    is %h<content>[0]<type>, 'text', 'content serialized';
+};
+
+# Test ModelHint Hash
+subtest 'ModelHint Hash', {
+    my $hint = ModelHint.new(name => 'claude-3');
+    my %h = $hint.Hash;
+    is %h<name>, 'claude-3', 'name in Hash';
+};
+
+# Test ModelPreferences Hash
+subtest 'ModelPreferences Hash', {
+    my $prefs = ModelPreferences.new(
+        hints => [ModelHint.new(name => 'fast')],
+        costPriority => 0.5e0,
+        speedPriority => 0.8e0,
+        intelligencePriority => 0.3e0,
+    );
+    my %h = $prefs.Hash;
+    is %h<hints>[0]<name>, 'fast', 'hint name';
+    is %h<costPriority>, 0.5e0, 'costPriority';
+    is %h<speedPriority>, 0.8e0, 'speedPriority';
+    is %h<intelligencePriority>, 0.3e0, 'intelligencePriority';
+
+    # Minimal
+    my $min = ModelPreferences.new;
+    my %h2 = $min.Hash;
+    nok %h2<hints>:exists, 'no hints';
+    nok %h2<costPriority>:exists, 'no costPriority';
+};
+
+# Test ToolChoice Hash
+subtest 'ToolChoice Hash', {
+    my $tc = ToolChoice.new(mode => 'tool', name => 'calc');
+    my %h = $tc.Hash;
+    is %h<mode>, 'tool', 'mode';
+    is %h<name>, 'calc', 'name';
+
+    my $auto = ToolChoice.new(mode => 'auto');
+    my %h2 = $auto.Hash;
+    is %h2<mode>, 'auto', 'auto mode';
+    nok %h2<name>:exists, 'no name for auto';
+};
+
+# Test ServerCapabilities from-hash roundtrip
+subtest 'ServerCapabilities from-hash', {
+    my $caps = ServerCapabilities.new(
+        experimental => { 'test/ext' => {} },
+        logging => LoggingCapability.new,
+        prompts => PromptsCapability.new(listChanged => True),
+        resources => ResourcesCapability.new(subscribe => True, listChanged => True),
+        tools => ToolsCapability.new(listChanged => True),
+        completions => CompletionsCapability.new,
+        tasks => { list => {} },
+    );
+    my %h = $caps.Hash;
+    ok %h<experimental>:exists, 'experimental in Hash';
+    ok %h<tasks>:exists, 'tasks in Hash';
+
+    my $restored = ServerCapabilities.from-hash(%h);
+    ok $restored.tools.defined, 'from-hash restores tools';
+    ok $restored.tasks.defined, 'from-hash restores tasks';
 };
 
 done-testing;

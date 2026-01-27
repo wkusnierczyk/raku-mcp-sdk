@@ -551,9 +551,30 @@ class CompletionResult is export {
     }
 }
 
+#| Extension definition for experimental capabilities
+class Extension is export {
+    has Str $.name is required;
+    has Str $.version;
+    has Hash $.settings;
+
+    method Hash(--> Hash) {
+        my %h = name => $!name;
+        %h<version> = $_ with $!version;
+        %h<settings> = $_ with $!settings;
+        %h
+    }
+
+    method from-hash(%h --> Extension) {
+        my %args = name => %h<name>;
+        %args<version> = %h<version> if %h<version>.defined;
+        %args<settings> = %h<settings> if %h<settings>.defined;
+        self.new(|%args)
+    }
+}
+
 #| Full server capabilities
 class ServerCapabilities is export {
-    has Bool $.experimental;
+    has Hash $.experimental;
     has LoggingCapability $.logging;
     has PromptsCapability $.prompts;
     has ResourcesCapability $.resources;
@@ -563,7 +584,7 @@ class ServerCapabilities is export {
 
     method Hash(--> Hash) {
         my %h;
-        %h<experimental> = {} if $!experimental;
+        %h<experimental> = $!experimental if $!experimental;
         %h<logging> = $!logging.Hash if $!logging;
         %h<prompts> = $!prompts.Hash if $!prompts;
         %h<resources> = $!resources.Hash if $!resources;
@@ -575,7 +596,7 @@ class ServerCapabilities is export {
 
     method from-hash(%h --> ServerCapabilities) {
         my %args;
-        %args<experimental> = %h<experimental>.defined;
+        %args<experimental> = %h<experimental> if %h<experimental>.defined && %h<experimental> ~~ Hash;
         %args<logging> = %h<logging> ?? LoggingCapability.new !! LoggingCapability;
         %args<prompts> = %h<prompts> ?? PromptsCapability.new(|%h<prompts>) !! PromptsCapability;
         %args<resources> = %h<resources> ?? ResourcesCapability.new(|%h<resources>) !! ResourcesCapability;
@@ -684,7 +705,7 @@ class ElicitationResponse is export {
 
 #| Full client capabilities
 class ClientCapabilities is export {
-    has Bool $.experimental;
+    has Hash $.experimental;
     has RootsCapability $.roots;
     has SamplingCapability $.sampling;
     has ElicitationCapability $.elicitation;
@@ -692,7 +713,7 @@ class ClientCapabilities is export {
 
     method Hash(--> Hash) {
         my %h;
-        %h<experimental> = {} if $!experimental;
+        %h<experimental> = $!experimental if $!experimental;
         %h<roots> = $!roots.Hash if $!roots;
         %h<sampling> = $!sampling.Hash if $!sampling;
         %h<elicitation> = $!elicitation.Hash if $!elicitation;

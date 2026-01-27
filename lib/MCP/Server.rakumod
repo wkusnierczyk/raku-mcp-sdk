@@ -74,6 +74,9 @@ class Server is export {
     has %!tasks;  # taskId => { task => Task, promise => Promise, result => Any }
     has Int $!default-poll-interval = 1000;
 
+    # Extension registry
+    has %!extensions;  # name => { version => Str, settings => Hash, methods => Hash of &handler, notifications => Hash of &handler }
+
     #| Encode an offset into a cursor string
     method !encode-cursor(Int $offset --> Str) {
         MIME::Base64.encode(to-json({ offset => $offset }).encode, :str)
@@ -209,6 +212,22 @@ class Server is export {
         %!completers{"resource:$uri"} = &completer;
     }
 
+    #| Register an extension with method/notification handlers
+    method register-extension(Str :$name!, Str :$version, Hash :$settings, Hash :$methods, Hash :$notifications) {
+        die "Extension name must contain '/': $name" unless $name.contains('/');
+        %!extensions{$name} = {
+            version       => $version // '',
+            settings      => $settings // {},
+            methods       => $methods // {},
+            notifications => $notifications // {},
+        };
+    }
+
+    #| Remove a registered extension
+    method unregister-extension(Str $name) {
+        %!extensions{$name}:delete;
+    }
+
     #| Get server capabilities based on registered handlers
     method capabilities(--> MCP::Types::ServerCapabilities) {
         my %args;
@@ -223,6 +242,16 @@ class Server is export {
                 cancel => {},
                 requests => { tools => { call => {} } },
             };
+        }
+        if %!extensions {
+            my %experimental;
+            for %!extensions.kv -> $ext-name, %ext {
+                %experimental{$ext-name} = {
+                    version  => %ext<version>,
+                    settings => %ext<settings>,
+                };
+            }
+            %args<experimental> = %experimental;
         }
         MCP::Types::ServerCapabilities.new(|%args)
     }
@@ -356,6 +385,14 @@ class Server is export {
     }
 
     multi method dispatch-request($req) {
+        # Check if this is an extension method
+        for %!extensions.kv -> $ext-name, %ext {
+            if %ext<methods>{$req.method}:exists {
+                my &handler = %ext<methods>{$req.method};
+                return handler($req.params // {});
+            }
+        }
+
         die X::MCP::JSONRPC.new(
             error => MCP::JSONRPC::Error.from-code(
                 MCP::JSONRPC::MethodNotFound,
@@ -395,6 +432,14 @@ class Server is export {
                 # Silently ignore unknown/completed requests per spec
             }
             default {
+                # Check extension notification handlers
+                for %!extensions.kv -> $ext-name, %ext {
+                    if %ext<notifications>{$notif.method}:exists {
+                        my &handler = %ext<notifications>{$notif.method};
+                        handler($notif.params // {});
+                        return;
+                    }
+                }
                 # Unknown notification - ignore per spec
             }
         }

@@ -12,11 +12,11 @@ This document compares the current implementation of the Raku MCP SDK against th
 |----------|--------|-------|
 | **Base Protocol** | ✅ Mostly Complete | JSON-RPC 2.0, lifecycle, basic message handling |
 | **Transports** | ✅ Mostly Complete | Stdio complete, Streamable HTTP complete |
-| **Server Features** | ⚠️ Partial | Tools/Resources/Prompts basic support |
-| **Client Features** | ✅ Done | Sampling with tools, includeContext, stopReason |
+| **Server Features** | ✅ Mostly Complete | Tools/Resources/Prompts + pagination; missing resource templates and prompts list_changed |
+| **Client Features** | ✅ Done | Sampling with tools, includeContext, stopReason, completion |
 | **Utilities** | ⚠️ Partial | Logging, progress, cancellation implemented |
 | **Authorization** | ✅ Done | OAuth 2.1 with PKCE |
-| **New 2025-11-25 Features** | ⚠️ Partial | Elicitation done, Tasks/Extensions missing |
+| **New 2025-11-25 Features** | ✅ Mostly Complete | Elicitation, Tasks, Sampling-with-tools, Extensions done |
 
 ---
 
@@ -52,7 +52,6 @@ This document compares the current implementation of the Raku MCP SDK against th
 #### ⚠️ Partial
 - **Lifecycle**: Initialize/initialized handshake works, but:
   - Missing proper version negotiation (server should respond with supported version if client's isn't supported)
-  - Missing `instructions` parsing from server in client
   
 #### ❌ Missing
 - **JSON-RPC batching**: Not supported (though removed in 2025-06-18, re-evaluate if needed)
@@ -174,11 +173,9 @@ This document compares the current implementation of the Raku MCP SDK against th
 - Both sides have `cancel-request` method for explicit cancellation
 - `is-cancelled` method for handlers to check cancellation status
 
-#### ❌ Ping
+#### ✅ Ping
 - Server responds to `ping` requests
-- Missing:
-  - Client-side `ping` for keepalive
-  - Timeout handling
+- Client has `ping()` helper
 
 #### ✅ Completion (autocomplete)
 - `completion/complete` request handling
@@ -219,10 +216,12 @@ Long-running operation support:
 - `notifications/tasks/status` on state changes
 - Tool-level `execution.taskSupport` via builder
 
-#### ❌ Extensions Framework
-- Extension capability negotiation
-- Extension settings
-- Namespaced extension methods
+#### ✅ Extensions Framework
+- Extension capability negotiation via `experimental` hash
+- Extension settings and versioning
+- Namespaced extension methods and notification dispatch
+- Server: `register-extension()`, `unregister-extension()`
+- Client: `register-extension()`, `server-extensions()`, `supports-extension()`
 
 #### ❌ Authorization Extensions
 - SEP-1046: OAuth client credentials (M2M)
@@ -233,7 +232,7 @@ Long-running operation support:
 - `notify-elicitation-complete()` for completion notifications
 - `URLElicitationRequired` error code (-32042)
 
-#### ❌ Sampling with Tools (SEP-1577)
+#### ✅ Sampling with Tools (SEP-1577)
 - Tool definitions in sampling requests
 - Server-side agentic loops
 
@@ -245,9 +244,9 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 
 | Feature | Python SDK | Raku SDK |
 |---------|-----------|----------|
-| Tools | ✅ Full | ⚠️ Basic + annotations |
+| Tools | ✅ Full | ✅ Full + annotations |
 | Resources | ✅ Full + templates + subscriptions | ✅ Full + subscriptions (no templates) |
-| Prompts | ✅ Full | ⚠️ Basic |
+| Prompts | ✅ Full | ✅ Full (no list_changed notification) |
 | Sampling | ✅ Full + tools | ✅ Full + tools |
 | Roots | ✅ Full | ✅ Full |
 | Elicitation | ✅ Full + URL mode | ✅ Full |
@@ -255,8 +254,9 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 | Streamable HTTP | ✅ Full client + server | ✅ Full |
 | SSE Transport | ✅ Full | ❌ No |
 | Tasks | ✅ Experimental | ✅ Done (experimental) |
-| Completion | ✅ Full | ❌ No |
+| Completion | ✅ Full | ✅ Full |
 | Pagination | ✅ Full | ✅ Full |
+| Extensions | ✅ Experimental | ✅ Done (experimental) |
 
 ---
 
@@ -276,8 +276,8 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 9. ~~**Implement OAuth 2.1**~~ ✅ **Done** - PKCE, token management, server validation
 
 ### Lower Priority (Advanced Features)
-10. **Tasks framework** - Long-running operations (experimental)
-11. **Extensions framework** - Plugin architecture
+10. ~~**Tasks framework**~~ ✅ **Done** - Long-running operations (experimental)
+11. ~~**Extensions framework**~~ ✅ **Done** - Extension registration, dispatch, capability negotiation
 12. ~~**Sampling with tools**~~ ✅ **Done** - Tools, toolChoice, includeContext, stopReason
 
 ---
@@ -287,8 +287,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 Current implementation targets: **2025-11-25** ✅
 
 Key features still needed for full 2025-11-25 compliance:
-- Add Extensions framework
-- Update capability negotiation for new features
+- Implement authorization extensions (SEP-1046, SEP-990)
 
 ---
 
@@ -298,15 +297,18 @@ Current tests cover:
 - ✅ Types serialization
 - ✅ JSON-RPC encoding/decoding
 - ✅ Builder patterns
-- ✅ Basic server/client lifecycle
+- ✅ Transport interface
+- ✅ Server dispatch and lifecycle
+- ✅ Client initialization
+- ✅ Top-level MCP exports
 - ✅ Sampling validation
+- ✅ HTTP transport
+- ✅ OAuth 2.1 types, PKCE, server/client handlers
+- ✅ Tasks framework (async tools, polling, cancellation)
+- ✅ Extensions framework (registration, dispatch, capabilities)
 
 Missing tests for:
-- ✅ Resource subscriptions - **Implemented**
-- ✅ Pagination - **Implemented**
-- ✅ Cancellation - **Implemented**
 - ❌ Progress tracking
-- ❌ HTTP transport (partial)
 - ❌ Error edge cases
 - ❌ Concurrent operations
 
@@ -314,12 +316,13 @@ Missing tests for:
 
 ## Conclusion
 
-The Raku MCP SDK provides a solid foundation with core protocol support, but significant work remains to achieve full specification compliance. The highest impact improvements would be:
+The Raku MCP SDK provides comprehensive MCP specification coverage. Remaining gaps are:
 
-1. Completing HTTP transport for production deployment
-2. ~~Adding resource subscriptions for real-time updates~~ ✅ **Done**
-3. ~~Implementing pagination for scalability~~ ✅ **Done**
-4. ~~Adding roots support for filesystem servers~~ ✅ **Done**
-5. ~~Implementing the authorization framework for secure connections~~ ✅ **Done**
+- Resource templates (URI templates with placeholders)
+- `notifications/prompts/list_changed`
+- `logging/setLevel` request handling
+- Dynamic client registration (OAuth)
+- Authorization extensions (SEP-1046, SEP-990)
+- SSE transport (legacy)
 
 The SDK's architecture is well-designed and should accommodate these additions without major refactoring.

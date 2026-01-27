@@ -178,6 +178,46 @@ subtest 'Resource builder and normalization', {
     is $file.mimeType, 'text/plain', 'file-resource guesses mime type';
     ok $file.uri.starts-with('file://'), 'file-resource sets uri';
 
+    # Test from-file MIME type guessing for various extensions
+    my $tmp-dir = $*TMPDIR;
+    for <html css js json xml png jpg jpeg gif svg pdf md> -> $ext {
+        my $f = $tmp-dir.add("mcp-test-$*PID.$ext");
+        $f.spurt("test");
+        my $fr = file-resource($f);
+        ok $fr.mimeType.defined, "from-file guesses mime for .$ext";
+        $f.unlink;
+    }
+
+    # Unknown extension falls back to octet-stream
+    my $unk = $tmp-dir.add("mcp-test-$*PID.xyz");
+    $unk.spurt("test");
+    my $fr-unk = file-resource($unk);
+    is $fr-unk.mimeType, 'application/octet-stream', 'unknown ext -> octet-stream';
+    $unk.unlink;
+
+    # from-file with custom uri/name overrides
+    my $f2 = $tmp-dir.add("mcp-test-$*PID.json");
+    $f2.spurt('{}');
+    my $custom = resource().from-file($f2.IO).uri('custom://x').name('Custom').build;
+    is $custom.uri, 'custom://x', 'from-file uri override';
+    is $custom.name, 'Custom', 'from-file name override';
+    is $custom.mimeType, 'application/json', 'from-file mime still guessed';
+    $f2.unlink;
+
+    # Resource reader returning arbitrary object (default fallback)
+    my $fallback-res = RegisteredResource.new(
+        uri => 'fb://', name => 'Fallback',
+        reader => { 42 }
+    );
+    is $fallback-res.read[0].text, '42', 'fallback normalizes to Str';
+
+    # ResourceContents reader
+    my $rc-res = RegisteredResource.new(
+        uri => 'rc://', name => 'RC',
+        reader => { MCP::Types::ResourceContents.new(uri => 'rc://', text => 'direct') }
+    );
+    is $rc-res.read[0].text, 'direct', 'ResourceContents preserved';
+
     dies-ok { resource().build }, 'resource requires uri';
     dies-ok { resource().uri('x').build }, 'resource requires name';
     dies-ok { resource().uri('x').name('y').build }, 'resource requires reader';
@@ -210,6 +250,34 @@ subtest 'Prompt builder and normalization', {
     my $assistant = assistant-message('a');
     is $user.role, 'user', 'user-message role';
     is $assistant.role, 'assistant', 'assistant-message role';
+
+    # required-argument with description
+    my $p3 = prompt()
+        .name('q')
+        .required-argument('name', description => 'Your name')
+        .generator(-> :%params { "Hi %params<name>" })
+        .build;
+    my $args = $p3.to-prompt.arguments;
+    is $args[0].name, 'name', 'required-argument name';
+    ok $args[0].required, 'required-argument is required';
+    is $args[0].description, 'Your name', 'required-argument description';
+
+    # Generator returning array of PromptMessage
+    my $p4 = RegisteredPrompt.new(
+        name => 'multi',
+        generator => {
+            [
+                MCP::Types::PromptMessage.new(role => 'user', content => MCP::Types::TextContent.new(text => 'a')),
+                MCP::Types::PromptMessage.new(role => 'assistant', content => MCP::Types::TextContent.new(text => 'b')),
+            ]
+        }
+    );
+    is $p4.get({})[0].content.text, 'a', 'array of PromptMessage first';
+    is $p4.get({})[1].content.text, 'b', 'array of PromptMessage second';
+
+    # Generator returning non-string fallback
+    my $p5 = RegisteredPrompt.new(name => 'num', generator => { 99 });
+    is $p5.get({})[0].content.text, '99', 'non-string fallback';
 
     dies-ok { prompt().build }, 'prompt requires name';
     dies-ok { prompt().name('p').build }, 'prompt requires generator';
