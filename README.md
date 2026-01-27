@@ -441,10 +441,10 @@ make test        # Run test suite
     <tr><td><code>ci</code></td><td>CI pipeline</td><td><code>dependencies → lint → test</code></td></tr>
     <tr><td><code>ci-full</code></td><td>Full CI pipeline</td><td><code>dependencies-dev → lint → test → coverage</code></td></tr>
     <tr><th colspan="3" align="left">Version management</th></tr>
-    <tr><td><code>version</code></td><td>Show or update project version</td><td><code>make version 1.2.3 "Release description"</code> updates Makefile + META6.json and creates a local annotated tag</td></tr>
-    <tr><td><code>bump-patch</code></td><td>Patch bump placeholder</td><td>Not implemented</td></tr>
-    <tr><td><code>bump-minor</code></td><td>Minor bump placeholder</td><td>Not implemented</td></tr>
-    <tr><td><code>bump-major</code></td><td>Major bump placeholder</td><td>Not implemented</td></tr>
+    <tr><td><code>version</code></td><td>Show or update project version</td><td><code>make TAG=1.2.3 DESCRIPTION="Release description" version</code> updates Makefile + META6.json + README and creates a local annotated tag</td></tr>
+    <tr><td><code>bump-patch</code></td><td>Patch bump</td><td><code>make bump-patch</code> bumps to the next patch version and tags it</td></tr>
+    <tr><td><code>bump-minor</code></td><td>Minor bump</td><td><code>make bump-minor</code> bumps to the next minor version and tags it</td></tr>
+    <tr><td><code>bump-major</code></td><td>Major bump</td><td><code>make bump-major</code> bumps to the next major version and tags it</td></tr>
     <tr><th colspan="3" align="left">Cleaning</th></tr>
     <tr><td><code>clean</code></td><td>Remove build/coverage/dist</td><td>Runs clean-build/clean-coverage/clean-dist</td></tr>
     <tr><td><code>clean-build</code></td><td>Remove precomp/build dirs</td><td>Removes <code>.precomp</code> and <code>.build</code></td></tr>
@@ -462,6 +462,30 @@ make test        # Run test suite
 | `NO_COLOR=1` | Disable colored output |
 | `FILE=<path>` | Specify file for `test-file` target |
 | `EXAMPLE=<name>` | Specify example for `run-example` target |
+
+### Versioning
+
+Use `make version` to set an explicit version and create a local annotated tag (no push):
+
+```bash
+make TAG=0.10.0 DESCRIPTION="Release description" version
+```
+
+Or use positional arguments:
+
+```bash
+make version 0.10.0 "Release description"
+```
+
+For quick bumps, use:
+
+```bash
+make bump-patch    # x.y.(z+1)
+make bump-minor    # x.(y+1).0
+make bump-major    # (x+1).0.0
+```
+
+If `DESCRIPTION` is omitted, it defaults to `Update version to v<TAG>`.
 
 ### Coverage Prerequisites
 
@@ -557,7 +581,7 @@ Building this repository was supported by:
 $ make about
 
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
-├─ version:    0.9.0
+├─ version:    0.14.0
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT
