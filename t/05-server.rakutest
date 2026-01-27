@@ -724,6 +724,67 @@ subtest 'Server elicitation', {
     is @notifications[0].params<elicitationId>, 'test-123', 'notification has elicitationId';
 };
 
+# Test tool output schemas
+subtest 'Tool output schemas', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'test', version => '0.1'),
+        transport => $transport,
+    );
+
+    # Add tool with outputSchema via named parameters
+    $server.add-tool(
+        name => 'weather',
+        description => 'Get weather',
+        output-schema => {
+            type => 'object',
+            properties => {
+                temperature => { type => 'number' },
+                conditions => { type => 'string' },
+            },
+        },
+        handler => -> :%params { { temperature => 72, conditions => 'sunny' } }
+    );
+
+    # Add tool without outputSchema
+    $server.add-tool(
+        name => 'echo',
+        description => 'Echo text',
+        handler => -> :%params { %params<msg> // 'hello' }
+    );
+
+    # tools/list should include outputSchema
+    my $list = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1, method => 'tools/list',
+    ));
+    my @tools = $list<tools>.Array;
+    my $weather-def = @tools.grep(*<name> eq 'weather').head;
+    my $echo-def = @tools.grep(*<name> eq 'echo').head;
+
+    ok $weather-def<outputSchema>.defined, 'tools/list includes outputSchema';
+    is $weather-def<outputSchema><type>, 'object', 'outputSchema type in listing';
+    nok $echo-def<outputSchema>.defined, 'no outputSchema for tool without it';
+
+    # tools/call should return structuredContent
+    my $call = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'tools/call',
+        params => { name => 'weather', arguments => {} },
+    ));
+    ok $call<structuredContent>.defined, 'tools/call has structuredContent';
+    is $call<structuredContent><temperature>, 72, 'structuredContent temperature';
+    is $call<structuredContent><conditions>, 'sunny', 'structuredContent conditions';
+    ok $call<content>.elems >= 1, 'content fallback present';
+
+    # tools/call without outputSchema should not have structuredContent
+    my $echo-call = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 3,
+        method => 'tools/call',
+        params => { name => 'echo', arguments => {} },
+    ));
+    nok $echo-call<structuredContent>.defined, 'no structuredContent without outputSchema';
+};
+
 # Test completion/complete
 subtest 'Completion support', {
     my $transport = TestTransport::TestTransport.new;

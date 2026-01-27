@@ -67,6 +67,17 @@ subtest 'Client connect and requests', {
     is $tools-result<tools>[0].name, 't', 'list-tools returns Tool';
     nok $tools-result<nextCursor>.defined, 'list-tools has no nextCursor when not paginated';
 
+    # list-tools with outputSchema
+    my $tools-p2 = $client.list-tools;
+    my %tool-with-schema = name => 'weather', description => 'Get weather',
+        outputSchema => { type => 'object', properties => { temp => { type => 'number' } } };
+    respond-to-last($transport, {
+        tools => [ %tool-with-schema.item ]
+    });
+    my $tools-result2 = await $tools-p2;
+    ok $tools-result2<tools>[0].outputSchema.defined, 'list-tools parses outputSchema';
+    is $tools-result2<tools>[0].outputSchema<type>, 'object', 'outputSchema type preserved';
+
     my $call-p = $client.call-tool('add', arguments => { a => 1, b => 2 });
     my %content = type => 'text', text => 'ok';
     respond-to-last($transport, {
@@ -75,6 +86,28 @@ subtest 'Client connect and requests', {
     });
     my $call = await $call-p;
     is $call.content[0].text, 'ok', 'call-tool parses content';
+
+    # call-tool with structuredContent
+    my $call-p2 = $client.call-tool('weather', arguments => { city => 'NYC' });
+    my %sc-content = type => 'text', text => 'sunny 72F';
+    respond-to-last($transport, {
+        content => [ %sc-content.item ],
+        isError => False,
+        structuredContent => { temperature => 72, conditions => 'sunny' },
+    });
+    my $call2 = await $call-p2;
+    ok $call2.structuredContent.defined, 'call-tool parses structuredContent';
+    is $call2.structuredContent<temperature>, 72, 'structuredContent temperature';
+    is $call2.content[0].text, 'sunny 72F', 'content fallback also present';
+
+    # call-tool without structuredContent
+    my $call-p3 = $client.call-tool('echo', arguments => { msg => 'hi' });
+    respond-to-last($transport, {
+        content => [ { type => 'text', text => 'hi' } ],
+        isError => False,
+    });
+    my $call3 = await $call-p3;
+    nok $call3.structuredContent.defined, 'no structuredContent when absent';
 
     my $res-p = $client.list-resources;
     my %resource = uri => 'info://x', name => 'X', mimeType => 'text/plain';

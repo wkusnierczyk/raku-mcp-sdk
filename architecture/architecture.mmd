@@ -1,38 +1,63 @@
-%% MCP SDK architecture overview
-flowchart LR
-  subgraph Apps[User Applications]
-    AppServer[Server App]
-    AppClient[Client App]
-  end
+graph TD
+    %% Raku MCP SDK Architecture
+    %% Vertical layout for narrow displays
 
-  subgraph SDK[Raku MCP SDK]
-    MCP[MCP (re-exports)]
-    Server[MCP::Server::Server]
-    Client[MCP::Client::Client]
-    JSONRPC[MCP::JSONRPC]
-    Types[MCP::Types]
-    Builders[Tool/Resource/Prompt Builders]
-    TransportBase[MCP::Transport::Base]
-    TransportStdio[MCP::Transport::Stdio]
-  end
+    %% Styling
+    classDef sdk fill:#f0f8ff,stroke:#4682b4,stroke-width:2px;
+    classDef user fill:#fff0f5,stroke:#c71585,stroke-width:2px;
+    classDef transport fill:#f5fffa,stroke:#2e8b57,stroke-width:2px;
+    classDef protocol fill:#fffacd,stroke:#b8860b,stroke-width:2px;
 
-  AppServer --> Server
-  AppClient --> Client
+    subgraph UserLayer ["User Application"]
+        direction TB
+        A["Client App<br>(e.g. IDE)"]
+        B["Server App<br>(e.g. DB)"]
+    end
 
-  MCP --> Server
-  MCP --> Client
-  MCP --> Types
+    MCP["MCP<br/>(re-exports)"]
+    
+    A --> MCP
+    B --> MCP
 
-  Server --> JSONRPC
-  Client --> JSONRPC
-  JSONRPC --> Types
+    MCP --> Client[MCP::Client::Client]
+    MCP --> Server[MCP::Server::Server]
+    MCP --> Types
 
-  Server --> Builders
-  Builders --> Types
+    subgraph Features ["Server Features"]
+        direction TB
+        Tool[MCP::Server::Tool]
+        Resource[MCP::Server::Resource]
+        Prompt[MCP::Server::Prompt]
+    end
 
-  Server --> TransportBase
-  Client --> TransportBase
-  TransportStdio --> TransportBase
+    Server --> Tool
+    Server --> Resource
+    Server --> Prompt
 
-  Server <--> |stdio framed messages| TransportStdio
-  Client <--> |stdio framed messages| TransportStdio
+    subgraph Protocol ["Protocol & Transport"]
+        direction TB
+        JSONRPC[MCP::JSONRPC]
+        Types[MCP::Types]
+        Transport["Transport Role<br/>MCP::Transport::Base::Transport"]
+        Stdio["MCP::Transport::Stdio::StdioTransport"]
+        HTTP["MCP::Transport::StreamableHTTP"]
+    end
+
+    Client --> JSONRPC
+    Server --> JSONRPC
+    JSONRPC --> Types
+    
+    Client --> Transport
+    Server --> Transport
+    Transport -.-> Stdio
+    Transport -.-> HTTP
+    
+    Tool -.-> Types
+    Resource -.-> Types
+    Prompt -.-> Types
+
+    %% Apply classes
+    class A,B user;
+    class MCP,Client,Server,Tool,Resource,Prompt sdk;
+    class JSONRPC,Types protocol;
+    class Transport,Stdio,HTTP transport;

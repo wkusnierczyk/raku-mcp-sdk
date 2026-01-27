@@ -41,7 +41,7 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
 | Tasks (experimental) | ❌ Planned | |
 | Extensions framework | ❌ Planned | |
 | Completion | ✅ Done | Prompt and resource autocomplete with handler registration |
-| Tool output schemas | ❌ Planned | `outputSchema` for structured tool results |
+| Tool output schemas | ✅ Done | `outputSchema` and `structuredContent` for structured results |
 | Tool metadata | ❌ Planned | icon metadata + tool name validation guidance |
 | OAuth 2.1 | ❌ Planned | OIDC discovery, incremental consent, client ID metadata |
 
@@ -435,9 +435,10 @@ make coverage
 
 ## Architecture
 
-The diagram below shows how the core components interact. 
-The Mermaid source is in `architecture/architecture.mmd` and the rendered image is in
-`architecture/architecture.png`.
+The diagram below shows how the core components interact.
+* The Mermaid source is in `architecture/architecture.mmd`.
+* The rendered image is in `architecture/architecture.png`.
+
 Regenerate the PNG with `make architecture-diagram`.
 
 ![Architecture diagram](architecture/architecture.png)

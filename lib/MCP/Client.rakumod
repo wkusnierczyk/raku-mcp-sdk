@@ -221,6 +221,7 @@ class Client is export {
                     self!parse-content($_)
                 }).Array,
                 isError => $promise.result<isError> // False,
+                structuredContent => $promise.result<structuredContent>,
             )
         })
     }
