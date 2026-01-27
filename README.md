@@ -467,7 +467,7 @@ Contributions are welcome! Please see the [DESIGN.md](DESIGN.md) document for ar
 
 ## License
 
-MIT License - see LICENSE file.
+MIT License - see the [LICENSE](LICENSE) file and the [MIT License](https://opensource.org/licenses/MIT).
 
 ## References
 
