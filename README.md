@@ -472,9 +472,9 @@ Contributions are welcome. You can:
 
 **Note**
 * Pushing directly to `main` is <strong style="color: red;">disallowed</strong>.  
-* Merging to `main` without positive review and passing checks is <strong style="color: red;">disallowed</strong>.
-* Merging to `main` of stalled pull requests is <strong style="color: red;">disallowed</strong>. You need to merge `main` into your branch, or rebase your branch onto `main` before being able to merge into `main`.
-* Merging to `main` with the whole multi-commit history of your branch is <strong style="color: red;">disallowed</strong>. You can only merge-squash as one commit, with a detailed description of your changes.
+* Merging into `main` without positive review and passing checks is <strong style="color: red;">disallowed</strong>.
+* Merging into `main` of stalled pull requests is <strong style="color: red;">disallowed</strong>. You need to merge `main` into your branch, or rebase your branch onto `main` before being able to merge into `main`.
+* Merging into `main` with the whole multi-commit history of your branch is <strong style="color: red;">disallowed</strong>. You can only merge-squash as one commit, with a detailed description of your changes.
 
 
 ## License
