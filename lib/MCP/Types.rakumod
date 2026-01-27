@@ -203,12 +203,14 @@ class Tool is export {
     has Str $.name is required;
     has Str $.description;
     has Hash $.inputSchema;
+    has Hash $.outputSchema;
     has ToolAnnotations $.annotations;
 
     method Hash(--> Hash) {
         my %h = name => $!name;
         %h<description> = $_ with $!description;
         %h<inputSchema> = $_ with $!inputSchema;
+        %h<outputSchema> = $_ with $!outputSchema;
         %h<annotations> = $!annotations.Hash if $!annotations;
         %h
     }
@@ -217,6 +219,7 @@ class Tool is export {
         my %args = name => %h<name>;
         %args<description> = %h<description> if %h<description>.defined;
         %args<inputSchema> = %h<inputSchema> if %h<inputSchema>.defined;
+        %args<outputSchema> = %h<outputSchema> if %h<outputSchema>.defined;
         %args<annotations> = %h<annotations> ?? ToolAnnotations.new(|%h<annotations>) !! ToolAnnotations;
         self.new(|%args)
     }
@@ -226,12 +229,12 @@ class Tool is export {
 class CallToolResult is export {
     has @.content;   # Array of Content objects
     has Bool $.isError = False;
+    has $.structuredContent;  # Optional structured output matching outputSchema
 
     method Hash(--> Hash) {
-        {
-            content => @!content.map(*.Hash).Array,
-            isError => $!isError
-        }
+        my %h = content => @!content.map(*.Hash).Array, isError => $!isError;
+        %h<structuredContent> = $_ with $!structuredContent;
+        %h
     }
 }
 

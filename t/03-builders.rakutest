@@ -84,6 +84,45 @@ subtest 'Tool builder and normalization', {
 
     dies-ok { tool().build }, 'tool requires name';
     dies-ok { tool().name('x').build }, 'tool requires handler';
+
+    # Test output schema support
+    my $weather = tool()
+        .name('get-weather')
+        .description('Get weather')
+        .output-schema({
+            type => 'object',
+            properties => {
+                temperature => { type => 'number' },
+                conditions => { type => 'string' },
+            }
+        })
+        .handler(-> :%params { { temperature => 72, conditions => 'sunny' } })
+        .build;
+
+    ok $weather.outputSchema.defined, 'outputSchema set on RegisteredTool';
+    is $weather.outputSchema<type>, 'object', 'outputSchema has type';
+    my $weather-tool = $weather.to-tool;
+    ok $weather-tool.outputSchema.defined, 'outputSchema on Tool definition';
+    is $weather-tool.outputSchema<properties><temperature><type>, 'number', 'outputSchema property type';
+
+    # Hash in tool listing
+    my %tool-hash = $weather-tool.Hash;
+    ok %tool-hash<outputSchema>:exists, 'outputSchema in Hash';
+
+    # Tool with outputSchema returns structuredContent for Hash results
+    my $weather-result = $weather.call({});
+    ok $weather-result.structuredContent.defined, 'structuredContent set';
+    is $weather-result.structuredContent<temperature>, 72, 'structuredContent has temperature';
+    is $weather-result.structuredContent<conditions>, 'sunny', 'structuredContent has conditions';
+    ok $weather-result.content.elems >= 1, 'content fallback also present';
+
+    # Tool without outputSchema does not set structuredContent for Hash
+    my $no-schema = RegisteredTool.new(
+        name => 'plain',
+        handler => -> :%params { { x => 1 } }
+    );
+    my $plain-result = $no-schema.call({});
+    nok $plain-result.structuredContent.defined, 'no structuredContent without outputSchema';
 };
 
 subtest 'Resource builder and normalization', {

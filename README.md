@@ -41,7 +41,7 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
 | Tasks (experimental) | ❌ Planned | |
 | Extensions framework | ❌ Planned | |
 | Completion | ✅ Done | Prompt and resource autocomplete with handler registration |
-| Tool output schemas | ❌ Planned | `outputSchema` for structured tool results |
+| Tool output schemas | ✅ Done | `outputSchema` and `structuredContent` for structured results |
 | Tool metadata | ❌ Planned | icon metadata + tool name validation guidance |
 | OAuth 2.1 | ❌ Planned | OIDC discovery, incremental consent, client ID metadata |
 

@@ -122,15 +122,16 @@ class Server is export {
         Str :$name!,
         Str :$description,
         Hash :$schema,
+        Hash :$output-schema,
         :&handler!
     ) {
-        my $tool = MCP::Server::Tool::tool()
+        my $builder = MCP::Server::Tool::tool()
             .name($name)
             .description($description // '')
             .schema($schema // { type => 'object', properties => {} })
-            .handler(&handler)
-            .build;
-        self.add-tool($tool);
+            .handler(&handler);
+        $builder.output-schema($output-schema) if $output-schema;
+        self.add-tool($builder.build);
     }
 
     #| Add a resource to the server

@@ -88,7 +88,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 
 **Missing**:
 - ✅ Tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) - **Implemented** via builder API
-- ❌ `outputSchema` for structured tool outputs (2025-06-18 feature)
+- ✅ `outputSchema` for structured tool outputs (2025-06-18 feature)
 - ❌ Tool name validation (SEP-986: must match `^[a-zA-Z0-9_-]{1,64}$`)
 - ✅ `tools/list` pagination support - **Implemented**
 
@@ -265,7 +265,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 5. ~~**Implement proper cancellation**~~ ✅ **Done** - Request cancellation with notifications
 
 ### Medium Priority (Enhanced Functionality)
-6. **Add tool output schemas** - Better structured responses
+6. ~~**Add tool output schemas**~~ ✅ **Done** - outputSchema and structuredContent support
 7. ~~**Implement elicitation**~~ ✅ **Done** - Form and URL mode with handler callbacks
 8. ~~**Add completion/autocomplete**~~ ✅ **Done** - Prompt and resource completion with handler registration
 9. **Implement OAuth 2.1** - Required for authenticated servers

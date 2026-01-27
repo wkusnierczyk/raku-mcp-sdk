@@ -21,6 +21,7 @@ class RegisteredTool is export {
     has Str $.name is required;
     has Str $.description;
     has Hash $.inputSchema;
+    has Hash $.outputSchema;
     has MCP::Types::ToolAnnotations $.annotations;
     has &.handler is required;
 
@@ -30,6 +31,7 @@ class RegisteredTool is export {
             name => $!name,
             description => $!description,
             inputSchema => $!inputSchema,
+            outputSchema => $!outputSchema,
             annotations => $!annotations,
         )
     }
@@ -78,6 +80,18 @@ class RegisteredTool is export {
             when MCP::Types::Content {
                 return MCP::Types::CallToolResult.new(content => [$result]);
             }
+            when Hash {
+                # If tool has outputSchema, treat Hash as structuredContent
+                if $!outputSchema {
+                    return MCP::Types::CallToolResult.new(
+                        structuredContent => $result,
+                        content => [MCP::Types::TextContent.new(text => $result.raku)],
+                    );
+                }
+                return MCP::Types::CallToolResult.new(
+                    content => [MCP::Types::TextContent.new(text => $result.Str)]
+                );
+            }
             when Str {
                 return MCP::Types::CallToolResult.new(
                     content => [MCP::Types::TextContent.new(text => $result)]
@@ -100,6 +114,7 @@ class ToolBuilder is export {
     has Str $!name;
     has Str $!description;
     has Hash $!inputSchema = { type => 'object', properties => {}, required => [] };
+    has Hash $!outputSchema;
     has MCP::Types::ToolAnnotations $!annotations;
     has &!handler;
 
@@ -115,6 +130,16 @@ class ToolBuilder is export {
 
     method schema(Hash $schema --> ToolBuilder) {
         $!inputSchema = $schema;
+        self
+    }
+
+    method input-schema(Hash $schema --> ToolBuilder) {
+        $!inputSchema = $schema;
+        self
+    }
+
+    method output-schema(Hash $schema --> ToolBuilder) {
+        $!outputSchema = $schema;
         self
     }
 
@@ -204,6 +229,7 @@ class ToolBuilder is export {
             name => $!name,
             description => $!description,
             inputSchema => $!inputSchema,
+            outputSchema => $!outputSchema,
             annotations => $!annotations,
             handler => &!handler,
         )
