@@ -53,6 +53,9 @@ constant ModelHint is export = MCP::Types::ModelHint;
 constant ModelPreferences is export = MCP::Types::ModelPreferences;
 constant ToolChoice is export = MCP::Types::ToolChoice;
 constant CreateMessageResult is export = MCP::Types::CreateMessageResult;
+constant Task is export = MCP::Types::Task;
+constant TaskStatus is export = MCP::Types::TaskStatus;
+constant CreateTaskResult is export = MCP::Types::CreateTaskResult;
 
 #| Re-exported log level constants
 constant Debug is export = MCP::Types::Debug;

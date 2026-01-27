@@ -70,6 +70,10 @@ class Server is export {
     # Resource subscriptions tracking
     has %!subscriptions;  # uri => True (SetHash-like)
 
+    # Task registry
+    has %!tasks;  # taskId => { task => Task, promise => Promise, result => Any }
+    has Int $!default-poll-interval = 1000;
+
     #| Encode an offset into a cursor string
     method !encode-cursor(Int $offset --> Str) {
         MIME::Base64.encode(to-json({ offset => $offset }).encode, :str)
@@ -207,13 +211,20 @@ class Server is export {
 
     #| Get server capabilities based on registered handlers
     method capabilities(--> MCP::Types::ServerCapabilities) {
-        MCP::Types::ServerCapabilities.new(
-            tools => %!tools ?? MCP::Types::ToolsCapability.new(listChanged => True) !! MCP::Types::ToolsCapability,
-            resources => %!resources ?? MCP::Types::ResourcesCapability.new(listChanged => True, subscribe => True) !! MCP::Types::ResourcesCapability,
-            prompts => %!prompts ?? MCP::Types::PromptsCapability.new(listChanged => True) !! MCP::Types::PromptsCapability,
-            logging => MCP::Types::LoggingCapability.new,
-            completions => %!completers ?? MCP::Types::CompletionsCapability.new !! MCP::Types::CompletionsCapability,
-        )
+        my %args;
+        %args<tools> = %!tools ?? MCP::Types::ToolsCapability.new(listChanged => True) !! MCP::Types::ToolsCapability;
+        %args<resources> = %!resources ?? MCP::Types::ResourcesCapability.new(listChanged => True, subscribe => True) !! MCP::Types::ResourcesCapability;
+        %args<prompts> = %!prompts ?? MCP::Types::PromptsCapability.new(listChanged => True) !! MCP::Types::PromptsCapability;
+        %args<logging> = MCP::Types::LoggingCapability.new;
+        %args<completions> = %!completers ?? MCP::Types::CompletionsCapability.new !! MCP::Types::CompletionsCapability;
+        if %!tools {
+            %args<tasks> = {
+                list => {},
+                cancel => {},
+                requests => { tools => { call => {} } },
+            };
+        }
+        MCP::Types::ServerCapabilities.new(|%args)
     }
 
     #| Start serving requests
@@ -328,6 +339,22 @@ class Server is export {
         self!handle-completion($req.params);
     }
 
+    multi method dispatch-request($req where *.method eq 'tasks/get') {
+        self!get-task($req.params);
+    }
+
+    multi method dispatch-request($req where *.method eq 'tasks/result') {
+        self!get-task-result($req.params);
+    }
+
+    multi method dispatch-request($req where *.method eq 'tasks/cancel') {
+        self!cancel-task($req.params);
+    }
+
+    multi method dispatch-request($req where *.method eq 'tasks/list') {
+        self!list-tasks($req.params);
+    }
+
     multi method dispatch-request($req) {
         die X::MCP::JSONRPC.new(
             error => MCP::JSONRPC::Error.from-code(
@@ -407,9 +434,165 @@ class Server is export {
             )
         );
 
+        # If task hint is present, run as async task
+        if %params<task> && %params<task><ttl> {
+            return self!call-tool-as-task($tool, %params);
+        }
+
         my %arguments = %params<arguments> // {};
         my $result = $tool.call(%arguments);
         $result.Hash;
+    }
+
+    #| Generate a unique task ID
+    method !generate-task-id(--> Str) {
+        "task-" ~ (^2**64).pick.base(16).lc
+    }
+
+    #| ISO 8601 timestamp
+    method !iso-now(--> Str) {
+        DateTime.now(formatter => { sprintf "%04d-%02d-%02dT%02d:%02d:%02dZ", .year, .month, .day, .hour, .minute, .second.Int }).Str
+    }
+
+    #| Run a tool call as an async task
+    method !call-tool-as-task($tool, %params --> Hash) {
+        my $task-id = self!generate-task-id;
+        my $now = self!iso-now;
+        my $ttl = %params<task><ttl>;
+
+        my $task = MCP::Types::Task.new(
+            taskId => $task-id,
+            status => MCP::Types::TaskWorking,
+            createdAt => $now,
+            lastUpdatedAt => $now,
+            ttl => $ttl.Int,
+            pollInterval => $!default-poll-interval,
+        );
+
+        my %arguments = %params<arguments> // {};
+        my $promise = start {
+            $tool.call(%arguments)
+        };
+
+        %!tasks{$task-id} = { task => $task, promise => $promise, result => Any };
+
+        # On completion, update task status and notify
+        $promise.then(-> $p {
+            my $now2 = self!iso-now;
+            if $p.status ~~ Kept {
+                my $result = $p.result;
+                %!tasks{$task-id}<result> = $result.Hash;
+                %!tasks{$task-id}<task> = MCP::Types::Task.new(
+                    taskId => $task-id,
+                    status => MCP::Types::TaskCompleted,
+                    createdAt => %!tasks{$task-id}<task>.createdAt,
+                    lastUpdatedAt => $now2,
+                    ttl => $ttl.Int,
+                    pollInterval => $!default-poll-interval,
+                );
+            } else {
+                %!tasks{$task-id}<task> = MCP::Types::Task.new(
+                    taskId => $task-id,
+                    status => MCP::Types::TaskFailed,
+                    statusMessage => $p.cause.message,
+                    createdAt => %!tasks{$task-id}<task>.createdAt,
+                    lastUpdatedAt => $now2,
+                    ttl => $ttl.Int,
+                    pollInterval => $!default-poll-interval,
+                );
+            }
+            try self.notify('notifications/tasks/status', %!tasks{$task-id}<task>.Hash);
+        });
+
+        MCP::Types::CreateTaskResult.new(task => $task).Hash;
+    }
+
+    #| Get a task by ID
+    method !get-task(%params --> Hash) {
+        my $task-id = %params<taskId> // die X::MCP::JSONRPC.new(
+            error => MCP::JSONRPC::Error.from-code(
+                MCP::JSONRPC::InvalidParams,
+                "Missing required parameter: taskId"
+            )
+        );
+
+        my $entry = %!tasks{$task-id} // die X::MCP::JSONRPC.new(
+            error => MCP::JSONRPC::Error.from-code(
+                MCP::JSONRPC::InvalidParams,
+                "Unknown task: $task-id"
+            )
+        );
+
+        $entry<task>.Hash
+    }
+
+    #| Get task result (blocks until terminal)
+    method !get-task-result(%params --> Hash) {
+        my $task-id = %params<taskId> // die X::MCP::JSONRPC.new(
+            error => MCP::JSONRPC::Error.from-code(
+                MCP::JSONRPC::InvalidParams,
+                "Missing required parameter: taskId"
+            )
+        );
+
+        my $entry = %!tasks{$task-id} // die X::MCP::JSONRPC.new(
+            error => MCP::JSONRPC::Error.from-code(
+                MCP::JSONRPC::InvalidParams,
+                "Unknown task: $task-id"
+            )
+        );
+
+        # If not terminal, block until the promise settles
+        unless $entry<task>.is-terminal {
+            my $p = $entry<promise>;
+            try { $p.result }
+            # Give the .then callback a moment to update state
+            sleep 0.05;
+        }
+
+        # Return stored result or task status
+        my %result;
+        %result<task> = %!tasks{$task-id}<task>.Hash;
+        %result<result> = $_ with %!tasks{$task-id}<result>;
+        %result
+    }
+
+    #| Cancel a task
+    method !cancel-task(%params --> Hash) {
+        my $task-id = %params<taskId> // die X::MCP::JSONRPC.new(
+            error => MCP::JSONRPC::Error.from-code(
+                MCP::JSONRPC::InvalidParams,
+                "Missing required parameter: taskId"
+            )
+        );
+
+        my $entry = %!tasks{$task-id} // die X::MCP::JSONRPC.new(
+            error => MCP::JSONRPC::Error.from-code(
+                MCP::JSONRPC::InvalidParams,
+                "Unknown task: $task-id"
+            )
+        );
+
+        unless $entry<task>.is-terminal {
+            my $now = self!iso-now;
+            %!tasks{$task-id}<task> = MCP::Types::Task.new(
+                taskId => $task-id,
+                status => MCP::Types::TaskCancelled,
+                createdAt => $entry<task>.createdAt,
+                lastUpdatedAt => $now,
+                ttl => $entry<task>.ttl,
+                pollInterval => $entry<task>.pollInterval,
+            );
+            try self.notify('notifications/tasks/status', %!tasks{$task-id}<task>.Hash);
+        }
+
+        %!tasks{$task-id}<task>.Hash
+    }
+
+    #| List tasks with pagination
+    method !list-tasks($params?) {
+        my @tasks = %!tasks.values.map(*<task>.Hash).Array;
+        self!paginate(@tasks, $params, key => 'tasks')
     }
 
     #| List resources

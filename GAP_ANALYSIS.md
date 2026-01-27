@@ -208,13 +208,16 @@ OAuth 2.1 authorization framework:
 
 ### New Features in 2025-11-25
 
-#### ❌ Tasks (Experimental)
+#### ✅ Tasks (Experimental)
 Long-running operation support:
-- Task creation with `_meta.task` hint
+- Task creation with `task` hint in `tools/call`
 - Task states: `working`, `input_required`, `completed`, `failed`, `cancelled`
 - `tasks/get` for status polling
 - `tasks/cancel` for cancellation
-- Task result retrieval
+- `tasks/result` for blocking result retrieval
+- `tasks/list` for listing all tasks
+- `notifications/tasks/status` on state changes
+- Tool-level `execution.taskSupport` via builder
 
 #### ❌ Extensions Framework
 - Extension capability negotiation
@@ -251,7 +254,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 | OAuth 2.1 | ✅ Full | ✅ Core (no dynamic registration) |
 | Streamable HTTP | ✅ Full client + server | ✅ Full |
 | SSE Transport | ✅ Full | ❌ No |
-| Tasks | ✅ Experimental | ❌ No |
+| Tasks | ✅ Experimental | ✅ Done (experimental) |
 | Completion | ✅ Full | ❌ No |
 | Pagination | ✅ Full | ✅ Full |
 
@@ -284,7 +287,6 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 Current implementation targets: **2025-11-25** ✅
 
 Key features still needed for full 2025-11-25 compliance:
-- Add Tasks support (experimental)
 - Add Extensions framework
 - Update capability negotiation for new features
 

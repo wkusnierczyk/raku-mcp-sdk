@@ -38,7 +38,7 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
 | Sampling | ⚠️ Partial | Basic support, missing tools/toolChoice/includeContext/stopReason |
 | HTTP Transport | ✅ Done | Full client/server with session management, SSE, resumption |
 | Elicitation | ✅ Done | Form and URL modes with handler callbacks |
-| Tasks (experimental) | ❌ Planned | |
+| Tasks (experimental) | ✅ Done | Async tool execution, status polling, cancellation |
 | Extensions framework | ❌ Planned | |
 | Completion | ✅ Done | Prompt and resource autocomplete with handler registration |
 | Tool output schemas | ✅ Done | `outputSchema` and `structuredContent` for structured results |

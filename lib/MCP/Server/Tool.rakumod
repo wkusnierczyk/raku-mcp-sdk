@@ -23,6 +23,7 @@ class RegisteredTool is export {
     has Hash $.inputSchema;
     has Hash $.outputSchema;
     has MCP::Types::ToolAnnotations $.annotations;
+    has MCP::Types::TaskExecution $.execution;
     has &.handler is required;
 
     #| Get the Tool definition for listing
@@ -33,6 +34,7 @@ class RegisteredTool is export {
             inputSchema => $!inputSchema,
             outputSchema => $!outputSchema,
             annotations => $!annotations,
+            execution => $!execution,
         )
     }
 
@@ -116,6 +118,7 @@ class ToolBuilder is export {
     has Hash $!inputSchema = { type => 'object', properties => {}, required => [] };
     has Hash $!outputSchema;
     has MCP::Types::ToolAnnotations $!annotations;
+    has MCP::Types::TaskExecution $!execution;
     has &!handler;
 
     method name(Str $name --> ToolBuilder) {
@@ -216,6 +219,18 @@ class ToolBuilder is export {
         self
     }
 
+    #| Set task support level (forbidden, optional, required)
+    method task-support(Str $level --> ToolBuilder) {
+        my $ts = do given $level {
+            when 'forbidden' { MCP::Types::TaskForbidden }
+            when 'optional'  { MCP::Types::TaskOptional }
+            when 'required'  { MCP::Types::TaskRequired }
+            default          { MCP::Types::TaskOptional }
+        };
+        $!execution = MCP::Types::TaskExecution.new(taskSupport => $ts);
+        self
+    }
+
     method handler(&handler --> ToolBuilder) {
         &!handler = &handler;
         self
@@ -231,6 +246,7 @@ class ToolBuilder is export {
             inputSchema => $!inputSchema,
             outputSchema => $!outputSchema,
             annotations => $!annotations,
+            execution => $!execution,
             handler => &!handler,
         )
     }

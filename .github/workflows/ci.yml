@@ -47,7 +47,7 @@ jobs:
             raku-${{ runner.os }}-
 
       - name: Install dependencies
-        run: zef install --deps-only .
+        run: zef install --deps-only . --/test
 
       - name: Validate META6.json
         run: make lint-meta
@@ -94,7 +94,7 @@ jobs:
             raku-${{ runner.os }}-
 
       - name: Install dependencies
-        run: zef install --deps-only .
+        run: zef install --deps-only . --/test
 
       - name: Ensure JSON::Fast is installed
         run: zef install JSON::Fast
@@ -136,7 +136,7 @@ jobs:
             raku-${{ runner.os }}-
 
       - name: Install dependencies
-        run: zef install --deps-only .
+        run: zef install --deps-only . --/test
 
       - name: Install RaCoCo
         run: zef install App::RaCoCo
@@ -215,7 +215,7 @@ jobs:
           raku-version: ${{ env.RAKU_VERSION }}
 
       - name: Install dependencies
-        run: zef install --deps-only .
+        run: zef install --deps-only . --/test
 
       - name: Build module
         run: |
