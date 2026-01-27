@@ -29,7 +29,7 @@ sub respond-to-init(TestTransport::TestTransport $transport) {
 }
 
 sub wait-for-response(TestTransport::TestTransport $transport, Int $id, Int $timeout = 100) {
-    for ^$timeout * 10 {
+    for ^($timeout * 10) {
         my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
         my $resp = @responses.first({ .id.Str eq $id.Str });
         return $resp if $resp;
@@ -80,6 +80,11 @@ subtest 'Sampling handler returns result', {
     $transport.emit($req);
 
     my $resp = wait-for-response($transport, 42);
+    unless $resp.defined {
+        flunk 'response emitted';
+        diag 'sampling response not received in time';
+        return;
+    }
     isa-ok $resp, MCP::JSONRPC::Response, 'response emitted';
     if $resp.error {
         diag "sampling error: {$resp.error.code} {$resp.error.message}";
@@ -123,6 +128,11 @@ subtest 'Sampling rejects tools when capability missing', {
     $transport.emit($req);
 
     my $resp = wait-for-response($transport, 7);
+    unless $resp.defined {
+        flunk 'response emitted';
+        diag 'sampling error response not received in time';
+        return;
+    }
     isa-ok $resp, MCP::JSONRPC::Response, 'response emitted';
     if $resp.error {
         diag "sampling error (tool result): {$resp.error.code} {$resp.error.message}";
@@ -163,6 +173,11 @@ subtest 'Sampling enforces tool result placement', {
     $transport.emit($req);
 
     my $resp = wait-for-response($transport, 9);
+    unless $resp.defined {
+        flunk 'response emitted';
+        diag 'sampling error response not received in time';
+        return;
+    }
     isa-ok $resp, MCP::JSONRPC::Response, 'response emitted';
     ok $resp.error.defined, 'error returned';
     is $resp.error.code, MCP::JSONRPC::InvalidParams.value, 'invalid params';
@@ -210,6 +225,11 @@ subtest 'Sampling with tools passes tools to handler', {
     $transport.emit($req);
 
     my $resp = wait-for-response($transport, 50);
+    unless $resp.defined {
+        flunk 'response emitted';
+        diag 'sampling response not received in time';
+        return;
+    }
     ok !$resp.error, 'no error with tools';
     ok $received-tools.defined, 'handler received tools';
     is $received-tools[0]<name>, 'calculator', 'tool name passed through';
@@ -243,6 +263,11 @@ subtest 'Sampling validates tool definitions', {
         }
     ));
     my $resp = wait-for-response($transport, 60);
+    unless $resp.defined {
+        flunk 'response emitted';
+        diag 'sampling error response not received in time';
+        return;
+    }
     ok $resp.error.defined, 'error for missing inputSchema';
     is $resp.error.code, MCP::JSONRPC::InvalidParams.value, 'invalid params code';
 
@@ -257,6 +282,11 @@ subtest 'Sampling validates tool definitions', {
         }
     ));
     my $resp2 = wait-for-response($transport, 61);
+    unless $resp2.defined {
+        flunk 'response emitted';
+        diag 'sampling error response not received in time';
+        return;
+    }
     ok $resp2.error.defined, 'error for missing name';
 };
 
@@ -286,6 +316,11 @@ subtest 'Sampling rejects includeContext without capability', {
         }
     ));
     my $resp = wait-for-response($transport, 70);
+    unless $resp.defined {
+        flunk 'response emitted';
+        diag 'sampling error response not received in time';
+        return;
+    }
     ok $resp.error.defined, 'error when includeContext without capability';
     is $resp.error.code, MCP::JSONRPC::InvalidParams.value, 'invalid params';
 };
@@ -320,6 +355,11 @@ subtest 'Sampling accepts includeContext with capability', {
         }
     ));
     my $resp = wait-for-response($transport, 80);
+    unless $resp.defined {
+        flunk 'response emitted';
+        diag 'sampling response not received in time';
+        return;
+    }
     ok !$resp.error, 'no error with includeContext capability';
     is $received-context, 'allServers', 'includeContext passed to handler';
 };
