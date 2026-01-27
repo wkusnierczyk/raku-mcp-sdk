@@ -26,6 +26,7 @@ subtest 'Error codes', {
     is MethodNotFound.value, -32601, 'MethodNotFound code';
     is InvalidParams.value, -32602, 'InvalidParams code';
     is InternalError.value, -32603, 'InternalError code';
+    is URLElicitationRequired.value, -32042, 'URLElicitationRequired code';
 };
 
 # Test Error class

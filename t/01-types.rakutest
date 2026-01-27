@@ -16,7 +16,7 @@ use lib 'lib';
 
 use MCP::Types;
 
-plan 24;
+plan 27;
 
 # Test Implementation
 subtest 'Implementation', {
@@ -300,6 +300,73 @@ subtest 'Root', {
     my $restored = Root.from-hash({ uri => 'file:///restored', name => 'Restored' });
     is $restored.uri, 'file:///restored', 'from-hash restores uri';
     is $restored.name, 'Restored', 'from-hash restores name';
+};
+
+# Test ElicitationAction enum
+subtest 'ElicitationAction', {
+    is ElicitAccept.value, 'accept', 'accept value';
+    is ElicitDecline.value, 'decline', 'decline value';
+    is ElicitCancel.value, 'cancel', 'cancel value';
+};
+
+# Test ElicitationCapability
+subtest 'ElicitationCapability', {
+    # Default (form only)
+    my $cap-default = ElicitationCapability.new;
+    ok $cap-default.supports-form, 'default supports form';
+    nok $cap-default.supports-url, 'default does not support url';
+    my %h-default = $cap-default.Hash;
+    ok %h-default<form>:exists, 'default Hash has form';
+    nok %h-default<url>:exists, 'default Hash has no url';
+
+    # Both modes
+    my $cap-both = ElicitationCapability.new(:form, :url);
+    ok $cap-both.supports-form, 'both supports form';
+    ok $cap-both.supports-url, 'both supports url';
+    my %h-both = $cap-both.Hash;
+    ok %h-both<form>:exists, 'both Hash has form';
+    ok %h-both<url>:exists, 'both Hash has url';
+
+    # from-hash
+    my $from-empty = ElicitationCapability.from-hash({});
+    ok $from-empty.supports-form, 'empty hash defaults to form';
+    nok $from-empty.supports-url, 'empty hash has no url';
+
+    my $from-url = ElicitationCapability.from-hash({ url => {} });
+    ok $from-url.supports-url, 'from-hash with url';
+};
+
+# Test ElicitationResponse
+subtest 'ElicitationResponse', {
+    # Accept with content
+    my $accept = ElicitationResponse.new(
+        action => ElicitAccept,
+        content => { name => 'test', age => 25 }
+    );
+    is $accept.action, ElicitAccept, 'accept action';
+    is $accept.content<name>, 'test', 'accept has content';
+    my %h-accept = $accept.Hash;
+    is %h-accept<action>, 'accept', 'Hash has action';
+    is %h-accept<content><name>, 'test', 'Hash has content';
+
+    # Decline
+    my $decline = ElicitationResponse.new(action => ElicitDecline);
+    is $decline.action, ElicitDecline, 'decline action';
+    my %h-decline = $decline.Hash;
+    is %h-decline<action>, 'decline', 'decline Hash';
+    nok %h-decline<content>:exists, 'decline has no content';
+
+    # Cancel
+    my $cancel = ElicitationResponse.new(action => ElicitCancel);
+    is $cancel.action, ElicitCancel, 'cancel action';
+
+    # from-hash
+    my $restored = ElicitationResponse.from-hash({
+        action => 'accept',
+        content => { email => 'test@example.com' }
+    });
+    is $restored.action, ElicitAccept, 'from-hash restores accept';
+    is $restored.content<email>, 'test@example.com', 'from-hash restores content';
 };
 
 done-testing;

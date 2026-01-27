@@ -502,8 +502,59 @@ class SamplingCapability is export {
     }
 }
 
+#| Elicitation action responses
+enum ElicitationAction is export (
+    ElicitAccept  => 'accept',
+    ElicitDecline => 'decline',
+    ElicitCancel  => 'cancel',
+);
+
+#| Elicitation capability with mode support
 class ElicitationCapability is export {
-    method Hash(--> Hash) { {} }
+    has Bool $.form = True;  # Form mode enabled by default
+    has Bool $.url = False;  # URL mode disabled by default
+
+    method Hash(--> Hash) {
+        my %h;
+        %h<form> = {} if $!form;
+        %h<url> = {} if $!url;
+        %h
+    }
+
+    method from-hash(%h --> ElicitationCapability) {
+        self.new(
+            form => %h<form>:exists || !%h.keys,  # Empty = form only
+            url => %h<url>:exists
+        )
+    }
+
+    method supports-form(--> Bool) { $!form }
+    method supports-url(--> Bool) { $!url }
+}
+
+#| Elicitation response from client
+class ElicitationResponse is export {
+    has ElicitationAction $.action is required;
+    has %.content;  # Present only for form mode accept
+
+    method Hash(--> Hash) {
+        my %h = action => $!action.value;
+        %h<content> = %!content if %!content && $!action === ElicitAccept;
+        %h
+    }
+
+    method from-hash(%h --> ElicitationResponse) {
+        my $action = do given %h<action> {
+            when 'accept'  { ElicitAccept }
+            when 'decline' { ElicitDecline }
+            when 'cancel'  { ElicitCancel }
+            default        { ElicitCancel }
+        };
+        self.new(
+            action => $action,
+            content => %h<content> // {}
+        )
+    }
 }
 
 #| Full client capabilities
