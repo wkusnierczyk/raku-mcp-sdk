@@ -20,9 +20,28 @@ This document compares the current implementation of the Raku MCP SDK against th
 
 ---
 
+## Table of Contents
+
+- [Detailed Analysis](#detailed-analysis)
+  - [Base Protocol](#base-protocol)
+  - [Transports](#transports)
+  - [Server Features](#server-features)
+  - [Client Features](#client-features)
+  - [Utilities](#utilities)
+  - [Authorization (2025-03-26+)](#authorization-2025-03-26)
+  - [New Features in 2025-11-25](#new-features-in-2025-11-25)
+  - [Comparison with Python SDK](#comparison-with-python-sdk)
+- [Priority Recommendations](#priority-recommendations)
+  - [High Priority (Core Functionality)](#high-priority-core-functionality)
+  - [Medium Priority (Enhanced Functionality)](#medium-priority-enhanced-functionality)
+  - [Lower Priority (Advanced Features)](#lower-priority-advanced-features)
+- [Protocol Version](#protocol-version)
+- [Test Coverage Gaps](#test-coverage-gaps)
+- [Conclusion](#conclusion)
+
 ## Detailed Analysis
 
-### 1. Base Protocol
+### Base Protocol
 
 #### ✅ Implemented
 - JSON-RPC 2.0 message format (`MCP::JSONRPC`)
@@ -40,7 +59,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 
 ---
 
-### 2. Transports
+### Transports
 
 #### ✅ Stdio Transport (`MCP::Transport::Stdio`)
 - Complete implementation
@@ -60,7 +79,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 
 ---
 
-### 3. Server Features
+### Server Features
 
 #### ✅ Tools (`MCP::Server::Tool`)
 - Tool registration with name, description, schema
@@ -95,7 +114,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 
 ---
 
-### 4. Client Features
+### Client Features
 
 #### ⚠️ Sampling (`MCP::Client` sampling-handler)
 - Basic `sampling/createMessage` handling
@@ -131,7 +150,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 
 ---
 
-### 5. Utilities
+### Utilities
 
 #### ⚠️ Progress Tracking
 - `progress()` method exists on Server
@@ -170,7 +189,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 
 ---
 
-### 6. Authorization (2025-03-26+)
+### Authorization (2025-03-26+)
 
 #### ❌ Not Implemented
 The entire authorization framework is missing:
@@ -184,7 +203,7 @@ The entire authorization framework is missing:
 
 ---
 
-### 7. New Features in 2025-11-25
+### New Features in 2025-11-25
 
 #### ❌ Tasks (Experimental)
 Long-running operation support:
