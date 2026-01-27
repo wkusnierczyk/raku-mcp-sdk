@@ -16,7 +16,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 | **Client Features** | ⚠️ Partial | Sampling basic support |
 | **Utilities** | ⚠️ Partial | Logging, progress, cancellation implemented |
 | **Authorization** | ❌ Missing | OAuth 2.1 not implemented |
-| **New 2025-11-25 Features** | ⚠️ Partial | Elicitation done, Tasks/Extensions missing |
+| **New 2025-11-25 Features** | ⚠️ Partial | Elicitation done, Tasks done (experimental), Extensions missing |
 
 ---
 
@@ -206,13 +206,16 @@ The entire authorization framework is missing:
 
 ### New Features in 2025-11-25
 
-#### ❌ Tasks (Experimental)
+#### ✅ Tasks (Experimental)
 Long-running operation support:
-- Task creation with `_meta.task` hint
+- Task creation with `task` hint in `tools/call`
 - Task states: `working`, `input_required`, `completed`, `failed`, `cancelled`
 - `tasks/get` for status polling
 - `tasks/cancel` for cancellation
-- Task result retrieval
+- `tasks/result` for blocking result retrieval
+- `tasks/list` for listing all tasks
+- `notifications/tasks/status` on state changes
+- Tool-level `execution.taskSupport` via builder
 
 #### ❌ Extensions Framework
 - Extension capability negotiation
@@ -249,7 +252,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 | OAuth 2.1 | ✅ Full | ❌ No |
 | Streamable HTTP | ✅ Full client + server | ✅ Full |
 | SSE Transport | ✅ Full | ❌ No |
-| Tasks | ✅ Experimental | ❌ No |
+| Tasks | ✅ Experimental | ✅ Done (experimental) |
 | Completion | ✅ Full | ❌ No |
 | Pagination | ✅ Full | ✅ Full |
 
@@ -282,7 +285,6 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 Current implementation targets: **2025-11-25** ✅
 
 Key features still needed for full 2025-11-25 compliance:
-- Add Tasks support (experimental)
 - Add Extensions framework
 - Update capability negotiation for new features
 

@@ -198,6 +198,93 @@ class ToolResultContent does Content is export {
     }
 }
 
+#| Task status values
+enum TaskStatus is export (
+    TaskWorking       => 'working',
+    TaskInputRequired => 'input_required',
+    TaskCompleted     => 'completed',
+    TaskFailed        => 'failed',
+    TaskCancelled     => 'cancelled',
+);
+
+#| Task support level for tool execution
+enum TaskSupport is export (
+    TaskForbidden => 'forbidden',
+    TaskOptional  => 'optional',
+    TaskRequired  => 'required',
+);
+
+#| Task execution configuration for tools
+class TaskExecution is export {
+    has TaskSupport $.taskSupport is required;
+
+    method Hash(--> Hash) {
+        { taskSupport => $!taskSupport.value }
+    }
+
+    method from-hash(%h --> TaskExecution) {
+        my $ts = do given %h<taskSupport> {
+            when 'forbidden' { TaskForbidden }
+            when 'optional'  { TaskOptional }
+            when 'required'  { TaskRequired }
+            default          { TaskOptional }
+        };
+        self.new(taskSupport => $ts)
+    }
+}
+
+#| A task representing an async operation
+class Task is export {
+    has Str $.taskId is required;
+    has TaskStatus $.status is required;
+    has Str $.statusMessage;
+    has Str $.createdAt;
+    has Str $.lastUpdatedAt;
+    has Int $.ttl;
+    has Int $.pollInterval;
+
+    method Hash(--> Hash) {
+        my %h = taskId => $!taskId, status => $!status.value;
+        %h<statusMessage> = $_ with $!statusMessage;
+        %h<createdAt> = $_ with $!createdAt;
+        %h<lastUpdatedAt> = $_ with $!lastUpdatedAt;
+        %h<ttl> = $_ with $!ttl;
+        %h<pollInterval> = $_ with $!pollInterval;
+        %h
+    }
+
+    method from-hash(%h --> Task) {
+        my $status = do given %h<status> {
+            when 'working'        { TaskWorking }
+            when 'input_required' { TaskInputRequired }
+            when 'completed'      { TaskCompleted }
+            when 'failed'         { TaskFailed }
+            when 'cancelled'      { TaskCancelled }
+            default               { TaskWorking }
+        };
+        my %args = taskId => %h<taskId>, status => $status;
+        %args<statusMessage> = %h<statusMessage> if %h<statusMessage>.defined;
+        %args<createdAt> = %h<createdAt> if %h<createdAt>.defined;
+        %args<lastUpdatedAt> = %h<lastUpdatedAt> if %h<lastUpdatedAt>.defined;
+        %args<ttl> = %h<ttl> if %h<ttl>.defined;
+        %args<pollInterval> = %h<pollInterval> if %h<pollInterval>.defined;
+        self.new(|%args)
+    }
+
+    method is-terminal(--> Bool) {
+        $!status === TaskCompleted || $!status === TaskFailed || $!status === TaskCancelled
+    }
+}
+
+#| Result wrapping a created task
+class CreateTaskResult is export {
+    has Task $.task is required;
+
+    method Hash(--> Hash) {
+        { task => $!task.Hash }
+    }
+}
+
 #| Tool definition
 class Tool is export {
     has Str $.name is required;
@@ -205,6 +292,7 @@ class Tool is export {
     has Hash $.inputSchema;
     has Hash $.outputSchema;
     has ToolAnnotations $.annotations;
+    has TaskExecution $.execution;
 
     method Hash(--> Hash) {
         my %h = name => $!name;
@@ -212,6 +300,7 @@ class Tool is export {
         %h<inputSchema> = $_ with $!inputSchema;
         %h<outputSchema> = $_ with $!outputSchema;
         %h<annotations> = $!annotations.Hash if $!annotations;
+        %h<execution> = $!execution.Hash if $!execution;
         %h
     }
 
@@ -221,6 +310,7 @@ class Tool is export {
         %args<inputSchema> = %h<inputSchema> if %h<inputSchema>.defined;
         %args<outputSchema> = %h<outputSchema> if %h<outputSchema>.defined;
         %args<annotations> = %h<annotations> ?? ToolAnnotations.new(|%h<annotations>) !! ToolAnnotations;
+        %args<execution> = TaskExecution.from-hash(%h<execution>) if %h<execution>.defined;
         self.new(|%args)
     }
 }
@@ -469,6 +559,7 @@ class ServerCapabilities is export {
     has ResourcesCapability $.resources;
     has ToolsCapability $.tools;
     has CompletionsCapability $.completions;
+    has Hash $.tasks;
 
     method Hash(--> Hash) {
         my %h;
@@ -478,18 +569,20 @@ class ServerCapabilities is export {
         %h<resources> = $!resources.Hash if $!resources;
         %h<tools> = $!tools.Hash if $!tools;
         %h<completions> = $!completions.Hash if $!completions;
+        %h<tasks> = $!tasks if $!tasks;
         %h
     }
 
     method from-hash(%h --> ServerCapabilities) {
-        self.new(
-            experimental => %h<experimental>.defined,
-            logging => %h<logging> ?? LoggingCapability.new !! LoggingCapability,
-            prompts => %h<prompts> ?? PromptsCapability.new(|%h<prompts>) !! PromptsCapability,
-            resources => %h<resources> ?? ResourcesCapability.new(|%h<resources>) !! ResourcesCapability,
-            tools => %h<tools> ?? ToolsCapability.new(|%h<tools>) !! ToolsCapability,
-            completions => %h<completions> ?? CompletionsCapability.new !! CompletionsCapability,
-        )
+        my %args;
+        %args<experimental> = %h<experimental>.defined;
+        %args<logging> = %h<logging> ?? LoggingCapability.new !! LoggingCapability;
+        %args<prompts> = %h<prompts> ?? PromptsCapability.new(|%h<prompts>) !! PromptsCapability;
+        %args<resources> = %h<resources> ?? ResourcesCapability.new(|%h<resources>) !! ResourcesCapability;
+        %args<tools> = %h<tools> ?? ToolsCapability.new(|%h<tools>) !! ToolsCapability;
+        %args<completions> = %h<completions> ?? CompletionsCapability.new !! CompletionsCapability;
+        %args<tasks> = %h<tasks> if %h<tasks>.defined;
+        self.new(|%args)
     }
 }
 
@@ -595,6 +688,7 @@ class ClientCapabilities is export {
     has RootsCapability $.roots;
     has SamplingCapability $.sampling;
     has ElicitationCapability $.elicitation;
+    has Hash $.tasks;
 
     method Hash(--> Hash) {
         my %h;
@@ -602,6 +696,7 @@ class ClientCapabilities is export {
         %h<roots> = $!roots.Hash if $!roots;
         %h<sampling> = $!sampling.Hash if $!sampling;
         %h<elicitation> = $!elicitation.Hash if $!elicitation;
+        %h<tasks> = $!tasks if $!tasks;
         %h
     }
 }

@@ -309,6 +309,63 @@ class Client is export {
         })
     }
 
+    #| Call a tool as an async task
+    method call-tool-as-task(Str $name, :%arguments, Int :$ttl = 30000 --> Promise) {
+        self.request('tools/call', {
+            name => $name,
+            arguments => %arguments,
+            task => { ttl => $ttl },
+        }).then(-> $promise {
+            MCP::Types::Task.from-hash($promise.result<task>)
+        })
+    }
+
+    #| Get task status
+    method get-task(Str $task-id --> Promise) {
+        self.request('tasks/get', { taskId => $task-id }).then(-> $promise {
+            MCP::Types::Task.from-hash($promise.result)
+        })
+    }
+
+    #| Get task result (blocks until terminal on server side)
+    method get-task-result(Str $task-id --> Promise) {
+        self.request('tasks/result', { taskId => $task-id }).then(-> $promise {
+            $promise.result
+        })
+    }
+
+    #| Cancel a task
+    method cancel-task(Str $task-id --> Promise) {
+        self.request('tasks/cancel', { taskId => $task-id }).then(-> $promise {
+            MCP::Types::Task.from-hash($promise.result)
+        })
+    }
+
+    #| List tasks
+    method list-tasks(Str :$cursor --> Promise) {
+        my %params = $cursor ?? (cursor => $cursor) !! ();
+        self.request('tasks/list', %params || Nil).then(-> $promise {
+            {
+                tasks => ($promise.result<tasks> // []).map({ MCP::Types::Task.from-hash($_) }).Array,
+                ($promise.result<nextCursor> ?? (nextCursor => $promise.result<nextCursor>) !! Empty),
+            }
+        })
+    }
+
+    #| Poll until task completes, then fetch result
+    method await-task(Str $task-id, Int :$poll-ms = 1000 --> Promise) {
+        start {
+            loop {
+                my $task = await self.get-task($task-id);
+                if $task.is-terminal {
+                    my $res = await self.get-task-result($task-id);
+                    last $res;
+                }
+                await Promise.in($poll-ms / 1000);
+            }
+        }
+    }
+
     #| Ping the server
     method ping(--> Promise) {
         self.request('ping').then({ True })

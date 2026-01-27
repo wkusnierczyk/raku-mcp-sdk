@@ -1,0 +1,303 @@
+use v6.d;
+use Test;
+use lib 'lib';
+use lib 't/lib';
+
+use MCP::Server;
+use MCP::Types;
+need MCP::JSONRPC;
+use MCP::Server::Tool;
+need TestTransport;
+use JSON::Fast;
+
+=begin pod
+=head1 NAME
+
+11-tasks.rakutest - Tests for MCP Tasks framework
+
+=head1 DESCRIPTION
+
+Covers Task types, async tool execution, task status polling,
+cancellation, listing, and capabilities.
+
+=end pod
+
+use MONKEY-TYPING;
+augment class MCP::Server::Server {
+    method handle-message-public($msg) { self!handle-message($msg) }
+}
+
+# --- Type tests ---
+
+subtest 'Task types', {
+    # TaskStatus enum
+    is MCP::Types::TaskWorking.value, 'working', 'TaskWorking value';
+    is MCP::Types::TaskCompleted.value, 'completed', 'TaskCompleted value';
+    is MCP::Types::TaskFailed.value, 'failed', 'TaskFailed value';
+    is MCP::Types::TaskCancelled.value, 'cancelled', 'TaskCancelled value';
+    is MCP::Types::TaskInputRequired.value, 'input_required', 'TaskInputRequired value';
+
+    # Task construction and Hash roundtrip
+    my $task = MCP::Types::Task.new(
+        taskId => 'task-abc',
+        status => MCP::Types::TaskWorking,
+        createdAt => '2025-01-01T00:00:00Z',
+        lastUpdatedAt => '2025-01-01T00:00:00Z',
+        ttl => 5000,
+        pollInterval => 1000,
+    );
+    is $task.taskId, 'task-abc', 'Task taskId';
+    is $task.status, MCP::Types::TaskWorking, 'Task status';
+    nok $task.is-terminal, 'working is not terminal';
+
+    my %h = $task.Hash;
+    is %h<taskId>, 'task-abc', 'Hash taskId';
+    is %h<status>, 'working', 'Hash status string';
+    is %h<ttl>, 5000, 'Hash ttl';
+
+    # from-hash roundtrip
+    my $task2 = MCP::Types::Task.from-hash(%h);
+    is $task2.taskId, 'task-abc', 'from-hash taskId';
+    is $task2.status, MCP::Types::TaskWorking, 'from-hash status';
+
+    # is-terminal for each status
+    ok MCP::Types::Task.new(taskId => 'x', status => MCP::Types::TaskCompleted).is-terminal, 'completed is terminal';
+    ok MCP::Types::Task.new(taskId => 'x', status => MCP::Types::TaskFailed).is-terminal, 'failed is terminal';
+    ok MCP::Types::Task.new(taskId => 'x', status => MCP::Types::TaskCancelled).is-terminal, 'cancelled is terminal';
+    nok MCP::Types::Task.new(taskId => 'x', status => MCP::Types::TaskInputRequired).is-terminal, 'input_required is not terminal';
+};
+
+subtest 'CreateTaskResult', {
+    my $task = MCP::Types::Task.new(taskId => 'task-1', status => MCP::Types::TaskWorking);
+    my $ctr = MCP::Types::CreateTaskResult.new(task => $task);
+    my %h = $ctr.Hash;
+    ok %h<task>:exists, 'CreateTaskResult Hash has task';
+    is %h<task><taskId>, 'task-1', 'Nested task data';
+};
+
+subtest 'TaskExecution', {
+    my $exec = MCP::Types::TaskExecution.new(taskSupport => MCP::Types::TaskRequired);
+    is $exec.Hash<taskSupport>, 'required', 'TaskExecution Hash';
+
+    my $exec2 = MCP::Types::TaskExecution.from-hash({ taskSupport => 'optional' });
+    is $exec2.taskSupport, MCP::Types::TaskOptional, 'TaskExecution from-hash';
+};
+
+subtest 'Tool with execution', {
+    my $tool = MCP::Types::Tool.new(
+        name => 'slow',
+        execution => MCP::Types::TaskExecution.new(taskSupport => MCP::Types::TaskRequired),
+    );
+    my %h = $tool.Hash;
+    is %h<execution><taskSupport>, 'required', 'Tool Hash includes execution';
+
+    my $tool2 = MCP::Types::Tool.from-hash(%h);
+    ok $tool2.execution.defined, 'Tool from-hash restores execution';
+    is $tool2.execution.taskSupport, MCP::Types::TaskRequired, 'Tool from-hash execution value';
+};
+
+# --- Server integration tests ---
+
+sub make-server() {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport,
+    );
+
+    # Add a slow tool (simulates async work)
+    $server.add-tool(
+        name => 'slow-add',
+        description => 'Slow addition',
+        schema => { type => 'object', properties => { a => { type => 'number' }, b => { type => 'number' } } },
+        handler => -> :%params {
+            sleep 0.1;
+            MCP::Types::CallToolResult.new(
+                content => [MCP::Types::TextContent.new(text => (~(%params<a> + %params<b>)))],
+            )
+        }
+    );
+
+    ($server, $transport)
+}
+
+subtest 'Task creation via tools/call with task hint', {
+    my ($server, $transport) = make-server();
+
+    my $result = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'tools/call',
+        params => { name => 'slow-add', arguments => { a => 2, b => 3 }, task => { ttl => 5000 } }
+    ));
+
+    ok $result<task>:exists, 'Response has task field';
+    is $result<task><status>, 'working', 'Task starts as working';
+    ok $result<task><taskId>.starts-with('task-'), 'Task ID has prefix';
+    ok $result<task><ttl>.defined, 'Task has ttl';
+};
+
+subtest 'tasks/get returns task status', {
+    my ($server, $transport) = make-server();
+
+    my $create = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'tools/call',
+        params => { name => 'slow-add', arguments => { a => 1, b => 2 }, task => { ttl => 5000 } }
+    ));
+    my $task-id = $create<task><taskId>;
+
+    my $status = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'tasks/get',
+        params => { taskId => $task-id }
+    ));
+
+    ok $status<taskId>:exists, 'tasks/get returns taskId';
+    is $status<taskId>, $task-id, 'Correct task ID';
+    ok $status<status> eq 'working' || $status<status> eq 'completed', 'Status is working or completed';
+};
+
+subtest 'tasks/result blocks until completion', {
+    my ($server, $transport) = make-server();
+
+    my $create = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'tools/call',
+        params => { name => 'slow-add', arguments => { a => 10, b => 20 }, task => { ttl => 5000 } }
+    ));
+    my $task-id = $create<task><taskId>;
+
+    my $result = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'tasks/result',
+        params => { taskId => $task-id }
+    ));
+
+    is $result<task><status>, 'completed', 'Task completed after result fetch';
+    ok $result<result>:exists, 'Result contains result data';
+    is $result<result><content>[0]<text>, '30', 'Correct tool result';
+};
+
+subtest 'tasks/cancel cancels a working task', {
+    my ($server, $transport) = make-server();
+
+    # Add a very slow tool
+    $server.add-tool(
+        name => 'very-slow',
+        description => 'Very slow',
+        handler => -> { sleep 10; 'done' }
+    );
+
+    my $create = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'tools/call',
+        params => { name => 'very-slow', arguments => {}, task => { ttl => 30000 } }
+    ));
+    my $task-id = $create<task><taskId>;
+
+    my $cancel = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'tasks/cancel',
+        params => { taskId => $task-id }
+    ));
+
+    is $cancel<status>, 'cancelled', 'Task cancelled';
+
+    # Verify notification was sent
+    my @notifs = $transport.sent.grep({ $_ ~~ MCP::JSONRPC::Notification && .method eq 'notifications/tasks/status' });
+    ok @notifs.elems >= 1, 'Status notification sent on cancel';
+};
+
+subtest 'tasks/list lists tasks', {
+    my ($server, $transport) = make-server();
+
+    # Create two tasks
+    for 1..2 -> $i {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => $i,
+            method => 'tools/call',
+            params => { name => 'slow-add', arguments => { a => $i, b => $i }, task => { ttl => 5000 } }
+        ));
+    }
+
+    my $list = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 3,
+        method => 'tasks/list',
+        params => {}
+    ));
+
+    ok $list<tasks>:exists, 'tasks/list returns tasks';
+    is $list<tasks>.elems, 2, 'Two tasks listed';
+};
+
+subtest 'Task status notification on completion', {
+    my ($server, $transport) = make-server();
+
+    my $create = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'tools/call',
+        params => { name => 'slow-add', arguments => { a => 1, b => 1 }, task => { ttl => 5000 } }
+    ));
+    my $task-id = $create<task><taskId>;
+
+    # Wait for completion
+    sleep 0.3;
+
+    my @notifs = $transport.sent.grep({
+        $_ ~~ MCP::JSONRPC::Notification && .method eq 'notifications/tasks/status'
+    });
+    ok @notifs.elems >= 1, 'Status notification emitted on completion';
+    my $notif-params = @notifs[0].params;
+    is $notif-params<taskId>, $task-id, 'Notification has correct taskId';
+    is $notif-params<status>, 'completed', 'Notification shows completed';
+};
+
+subtest 'Task capabilities in server', {
+    my ($server, $transport) = make-server();
+
+    my $caps = $server.capabilities.Hash;
+    ok $caps<tasks>:exists, 'Server capabilities include tasks';
+    ok $caps<tasks><list>:exists, 'tasks.list capability';
+    ok $caps<tasks><cancel>:exists, 'tasks.cancel capability';
+    ok $caps<tasks><requests><tools><call>:exists, 'tasks.requests.tools.call capability';
+};
+
+subtest 'Tool builder task-support', {
+    my $tool = tool()
+        .name('async-tool')
+        .description('An async tool')
+        .handler(-> { 'ok' })
+        .task-support('required')
+        .build;
+
+    my $listing = $tool.to-tool;
+    ok $listing.execution.defined, 'Tool has execution';
+    is $listing.execution.taskSupport, MCP::Types::TaskRequired, 'taskSupport is required';
+    is $listing.Hash<execution><taskSupport>, 'required', 'Hash includes execution';
+};
+
+subtest 'tasks/get unknown task errors', {
+    my ($server, $transport) = make-server();
+
+    dies-ok {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 1,
+            method => 'tasks/get',
+            params => { taskId => 'nonexistent' }
+        ));
+    }, 'Unknown task raises error';
+};
+
+subtest 'ServerCapabilities tasks roundtrip', {
+    my $caps = MCP::Types::ServerCapabilities.new(
+        tasks => { list => {}, cancel => {} },
+    );
+    my %h = $caps.Hash;
+    ok %h<tasks>:exists, 'Hash includes tasks';
+
+    my $caps2 = MCP::Types::ServerCapabilities.from-hash(%h);
+    ok $caps2.tasks.defined, 'from-hash restores tasks';
+    ok $caps2.tasks<list>:exists, 'tasks.list restored';
+};
+
+done-testing;
