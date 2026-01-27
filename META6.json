@@ -37,9 +37,7 @@
         "llm",
         "ai",
         "json-rpc",
-        "tools",
-        "claude",
-        "anthropic"
+        "tools"
     ],
     "source-url": "https://github.com/wkusnierczyk/raku-mcp-sdk.git"
 }
