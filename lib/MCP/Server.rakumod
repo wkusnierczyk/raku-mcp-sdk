@@ -53,6 +53,7 @@ class Server is export {
     has %!tools;      # name => RegisteredTool
     has %!resources;  # uri => RegisteredResource
     has %!prompts;    # name => RegisteredPrompt
+    has %!completers; # "prompt:name" or "resource:uri" => &completer
 
     # State
     has Bool $!initialized = False;
@@ -193,6 +194,16 @@ class Server is export {
         self.add-prompt($builder.build);
     }
 
+    #| Register a completion handler for a prompt argument
+    method add-prompt-completer(Str $prompt-name, &completer) {
+        %!completers{"prompt:$prompt-name"} = &completer;
+    }
+
+    #| Register a completion handler for a resource URI
+    method add-resource-completer(Str $uri, &completer) {
+        %!completers{"resource:$uri"} = &completer;
+    }
+
     #| Get server capabilities based on registered handlers
     method capabilities(--> MCP::Types::ServerCapabilities) {
         MCP::Types::ServerCapabilities.new(
@@ -200,6 +211,7 @@ class Server is export {
             resources => %!resources ?? MCP::Types::ResourcesCapability.new(listChanged => True, subscribe => True) !! MCP::Types::ResourcesCapability,
             prompts => %!prompts ?? MCP::Types::PromptsCapability.new(listChanged => True) !! MCP::Types::PromptsCapability,
             logging => MCP::Types::LoggingCapability.new,
+            completions => %!completers ?? MCP::Types::CompletionsCapability.new !! MCP::Types::CompletionsCapability,
         )
     }
 
@@ -309,6 +321,10 @@ class Server is export {
 
     multi method dispatch-request($req where *.method eq 'prompts/get') {
         self!get-prompt($req.params);
+    }
+
+    multi method dispatch-request($req where *.method eq 'completion/complete') {
+        self!handle-completion($req.params);
     }
 
     multi method dispatch-request($req) {
@@ -550,6 +566,63 @@ class Server is export {
     method notify-resource-updated(Str $uri) {
         return unless self.is-subscribed($uri);
         self.notify('notifications/resources/updated', { uri => $uri });
+    }
+
+    #| Handle completion/complete request
+    method !handle-completion(%params) {
+        my $ref = %params<ref> // die X::MCP::JSONRPC.new(
+            error => MCP::JSONRPC::Error.from-code(
+                MCP::JSONRPC::InvalidParams,
+                "Missing required parameter: ref"
+            )
+        );
+
+        my $argument = %params<argument> // die X::MCP::JSONRPC.new(
+            error => MCP::JSONRPC::Error.from-code(
+                MCP::JSONRPC::InvalidParams,
+                "Missing required parameter: argument"
+            )
+        );
+
+        my $ref-type = $ref<type> // '';
+        my $key = do given $ref-type {
+            when 'ref/prompt'   { "prompt:{$ref<name> // ''}" }
+            when 'ref/resource' { "resource:{$ref<uri> // ''}" }
+            default {
+                die X::MCP::JSONRPC.new(
+                    error => MCP::JSONRPC::Error.from-code(
+                        MCP::JSONRPC::InvalidParams,
+                        "Unknown ref type: $ref-type"
+                    )
+                );
+            }
+        };
+
+        unless %!completers{$key}:exists {
+            return { completion => { values => [] } };
+        }
+        my &completer = %!completers{$key};
+
+        my $arg-name = $argument<name> // '';
+        my $arg-value = $argument<value> // '';
+
+        my $result = &completer($arg-name, $arg-value, |(%params<context> // {}));
+
+        # Normalize result
+        if $result ~~ MCP::Types::CompletionResult {
+            return { completion => $result.Hash };
+        } elsif $result ~~ Hash && ($result<values>:exists) {
+            # Truncate to 100 values per spec
+            my @vals = $result<values>.head(100).Array;
+            my %completion = values => @vals;
+            %completion<total> = $_ with $result<total>;
+            %completion<hasMore> = $_ with $result<hasMore>;
+            return { completion => %completion };
+        } elsif $result ~~ Positional {
+            return { completion => { values => $result.head(100).Array } };
+        } else {
+            return { completion => { values => [] } };
+        }
     }
 
     #| Notify clients that the resource list has changed

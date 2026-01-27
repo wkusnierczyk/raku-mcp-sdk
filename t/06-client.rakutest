@@ -510,4 +510,61 @@ subtest 'Client elicitation support', {
     is @responses[0].error.code, MCP::JSONRPC::MethodNotFound.value, 'error is MethodNotFound';
 };
 
+# Test completion support
+subtest 'Completion support', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = MCP::Client::Client.new(
+        info => MCP::Types::Implementation.new(name => 'test-client', version => '0.1'),
+        transport => $transport,
+    );
+
+    # Simulate init response in background
+    start {
+        sleep 0.1;
+        respond-to-last($transport, {
+            protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+            capabilities => { completions => {} },
+            serverInfo => { name => 'test-server', version => '0.1' },
+            instructions => 'test',
+        });
+    }
+    await $client.connect;
+
+    # Test complete-prompt
+    start {
+        sleep 0.1;
+        respond-to-last($transport, {
+            completion => { values => ['python', 'perl'], hasMore => False },
+        });
+    }
+    my $result = await $client.complete-prompt('code-review',
+        argument-name => 'language',
+        value => 'p',
+    );
+    ok $result ~~ MCP::Types::CompletionResult, 'result is CompletionResult';
+    is $result.values.elems, 2, 'has 2 values';
+    is $result.values[0], 'python', 'first value correct';
+
+    # Test complete-resource
+    start {
+        sleep 0.1;
+        respond-to-last($transport, {
+            completion => { values => ['file:///a'], total => 5, hasMore => True },
+        });
+    }
+    my $result2 = await $client.complete-resource('file:///projects',
+        argument-name => 'uri',
+        value => 'file:',
+    );
+    is $result2.values.elems, 1, 'resource completion has values';
+    is $result2.total, 5, 'has total';
+    ok $result2.hasMore, 'hasMore is true';
+
+    # Verify request was sent correctly
+    my @requests = $transport.sent.grep(MCP::JSONRPC::Request).grep(*.method eq 'completion/complete');
+    is @requests.elems, 2, 'sent 2 completion requests';
+    is @requests[0].params<ref><type>, 'ref/prompt', 'first request is prompt ref';
+    is @requests[1].params<ref><type>, 'ref/resource', 'second request is resource ref';
+};
+
 done-testing;

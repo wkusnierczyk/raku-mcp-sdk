@@ -432,6 +432,32 @@ class ToolsCapability is export {
     }
 }
 
+class CompletionsCapability is export {
+    method Hash(--> Hash) { {} }
+}
+
+#| Completion result from server
+class CompletionResult is export {
+    has @.values;  # Array of Str, max 100
+    has Int $.total;
+    has Bool $.hasMore;
+
+    method Hash(--> Hash) {
+        my %h = values => @!values.Array;
+        %h<total> = $_ with $!total;
+        %h<hasMore> = $_ with $!hasMore;
+        %h
+    }
+
+    method from-hash(%h --> CompletionResult) {
+        my @vals = |(%h<values> // []);
+        my %args;
+        %args<total> = %h<total> if %h<total>.defined;
+        %args<hasMore> = %h<hasMore> if %h<hasMore>.defined;
+        self.new(values => @vals, |%args)
+    }
+}
+
 #| Full server capabilities
 class ServerCapabilities is export {
     has Bool $.experimental;
@@ -439,6 +465,7 @@ class ServerCapabilities is export {
     has PromptsCapability $.prompts;
     has ResourcesCapability $.resources;
     has ToolsCapability $.tools;
+    has CompletionsCapability $.completions;
 
     method Hash(--> Hash) {
         my %h;
@@ -447,6 +474,7 @@ class ServerCapabilities is export {
         %h<prompts> = $!prompts.Hash if $!prompts;
         %h<resources> = $!resources.Hash if $!resources;
         %h<tools> = $!tools.Hash if $!tools;
+        %h<completions> = $!completions.Hash if $!completions;
         %h
     }
 
@@ -457,6 +485,7 @@ class ServerCapabilities is export {
             prompts => %h<prompts> ?? PromptsCapability.new(|%h<prompts>) !! PromptsCapability,
             resources => %h<resources> ?? ResourcesCapability.new(|%h<resources>) !! ResourcesCapability,
             tools => %h<tools> ?? ToolsCapability.new(|%h<tools>) !! ToolsCapability,
+            completions => %h<completions> ?? CompletionsCapability.new !! CompletionsCapability,
         )
     }
 }

@@ -288,6 +288,26 @@ class Client is export {
         })
     }
 
+    #| Request completion for a prompt argument
+    method complete-prompt(Str $prompt-name, Str :$argument-name!, Str :$value! --> Promise) {
+        self.request('completion/complete', {
+            ref => { type => 'ref/prompt', name => $prompt-name },
+            argument => { name => $argument-name, value => $value },
+        }).then(-> $promise {
+            MCP::Types::CompletionResult.from-hash($promise.result<completion> // {})
+        })
+    }
+
+    #| Request completion for a resource URI
+    method complete-resource(Str $uri, Str :$argument-name!, Str :$value! --> Promise) {
+        self.request('completion/complete', {
+            ref => { type => 'ref/resource', uri => $uri },
+            argument => { name => $argument-name, value => $value },
+        }).then(-> $promise {
+            MCP::Types::CompletionResult.from-hash($promise.result<completion> // {})
+        })
+    }
+
     #| Ping the server
     method ping(--> Promise) {
         self.request('ping').then({ True })

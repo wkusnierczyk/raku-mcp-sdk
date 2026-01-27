@@ -40,7 +40,7 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
 | Elicitation | ✅ Done | Form and URL modes with handler callbacks |
 | Tasks (experimental) | ❌ Planned | |
 | Extensions framework | ❌ Planned | |
-| Completion | ❌ Planned | Autocomplete/complete endpoints |
+| Completion | ✅ Done | Prompt and resource autocomplete with handler registration |
 | Tool output schemas | ❌ Planned | `outputSchema` for structured tool results |
 | Tool metadata | ❌ Planned | icon metadata + tool name validation guidance |
 | OAuth 2.1 | ❌ Planned | OIDC discovery, incremental consent, client ID metadata |
