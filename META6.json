@@ -27,8 +27,7 @@
     "depends": [
         "JSON::Fast",
         "Cro::HTTP",
-        "MIME::Base64",
-        "Digest::SHA256::Native"
+        "MIME::Base64"
     ],
     "test-depends": [
         "Test",
