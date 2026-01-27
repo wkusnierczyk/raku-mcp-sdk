@@ -17,10 +17,9 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'  # Pre-release tags like v1.0.0-beta.1
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
 
 env:
   RAKU_VERSION: '2024.01'
@@ -32,6 +31,9 @@ jobs:
   validate:
     name: Validate Release
     runs-on: ubuntu-latest
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
     outputs:
       version: ${{ steps.extract.outputs.version }}
       prerelease: ${{ steps.extract.outputs.prerelease }}
@@ -39,11 +41,21 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Extract version from tag
         id: extract
         run: |
-          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          TAG="${{ github.event.workflow_run.head_branch }}"
+
+          # Guard: only allow semver tags like v1.2.3 or v1.2.3-beta.1
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Release workflow only supports semver tags (v*.*.*). Got: ${TAG}"
+            exit 1
+          fi
+
+          TAG_VERSION="${TAG#v}"
           echo "version=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
 
           # Check if this is a pre-release
@@ -57,7 +69,8 @@ jobs:
 
       - name: Validate version matches META6.json
         run: |
-          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          TAG="${{ github.event.workflow_run.head_branch }}"
+          TAG_VERSION="${TAG#v}"
           META_VERSION=$(grep -oP '"version"\s*:\s*"\K[^"]+' META6.json)
 
           echo "Tag version:  ${TAG_VERSION}" >&2
@@ -71,48 +84,12 @@ jobs:
           echo "✓ Version validated: ${TAG_VERSION}" >&2
 
   # ----------------------------------------------------------------------------
-  # Test - Run full test suite
-  # ----------------------------------------------------------------------------
-  test:
-    name: Test (${{ matrix.os }} / Raku ${{ matrix.raku-version }})
-    runs-on: ${{ matrix.os }}
-    needs: validate
-
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - os: ubuntu-latest
-            raku-version: '2024.01'
-          - os: macos-latest
-            raku-version: '2024.01'
-          - os: windows-latest
-            raku-version: 'latest'
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Raku
-        uses: Raku/setup-raku@v1
-        with:
-          raku-version: ${{ matrix.raku-version }}
-
-      - name: Install dependencies
-        run: zef install --deps-only .
-
-      - name: Run tests
-        run: |
-          zef install App::Prove6 || true
-          prove6 -I. -v t/
-
-  # ----------------------------------------------------------------------------
   # Build - Create distribution archive
   # ----------------------------------------------------------------------------
   build:
     name: Build Distribution
     runs-on: ubuntu-latest
-    needs: [validate, test]
+    needs: validate
     outputs:
       artifact_name: ${{ steps.archive.outputs.artifact_name }}
       archive_filename: ${{ steps.archive.outputs.archive_filename }}
@@ -120,6 +97,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Setup Raku
         uses: Raku/setup-raku@v1
@@ -182,6 +161,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0  # Fetch all history for changelog generation
 
       - name: Download build artifact
