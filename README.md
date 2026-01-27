@@ -75,6 +75,7 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
 - [Contributing](#contributing)
 - [License](#license)
 - [References](#references)
+- [Acknowledgments](#acknowledgments)
 - [About](#about)
 
 ## Introduction
@@ -463,11 +464,24 @@ MCP/
 
 ## Contributing
 
-Contributions are welcome! Please see the [DESIGN.md](DESIGN.md) document for architecture details.
+Contributions are welcome. You can:
+
+* Open or join a [discussion](https://github.com/wkusnierczyk/raku-mcp-sdk/discussions).
+* Open an [issue](https://github.com/wkusnierczyk/raku-mcp-sdk/issues) for bugs, feature requests, or questions.
+* Fork or clone the repository, create a branch, push it, and open a [pull request](https://github.com/wkusnierczyk/raku-mcp-sdk/pulls).
+
+> **Note**
+> * Pushing directly to `main` is <strong style="color: red;">disallowed</strong>.  
+> * Merging into `main` without positive review and passing checks is <strong style="color: red;">disallowed</strong>.
+> * Merging into `main` of stalled pull requests is <strong style="color: red;">disallowed</strong>.  
+>   You need to merge `main` into your branch, or rebase your branch onto `main` before being able to merge into `main`.
+> * Merging into `main` with the whole multi-commit history of your branch is <strong style="color: red;">disallowed</strong>.  
+>   You can only squash-merge as one commit, with a detailed description of your changes.
+
 
 ## License
 
-MIT License - see LICENSE file.
+MIT License - see the [LICENSE](LICENSE) file and the [MIT License](https://opensource.org/licenses/MIT) site.
 
 ## References
 
@@ -476,15 +490,25 @@ MIT License - see LICENSE file.
 - [Official Python SDK](https://github.com/modelcontextprotocol/python-sdk)
 - [Raku Documentation](https://docs.raku.org/)
 
+## Acknowledgments
+
+Building this repository was supported by:
+
+- [**Claude**](https://www.anthropic.com/claude) (Claude Opus 4.5)  
+  Claude was used to draft and revise the implementation plan, and to generate code stubs and draft the implementation.
+- [**ChatGPT**](https://openai.com/chatgpt) (Codex / GPT-5)  
+  ChatGPT was used to review, explain, and critically asses the generated code.
+- [**Gemini**](https://deepmind.google/technologies/gemini/) (Gemini 3 Pro)  
+  Gemini was used to investigate the status of MCP, Raku, and the (missing) implementation of MCP as a Raku SDK.
+
 ## About
 
 ```bash
 $ make about
 
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
-├─ version:    x.y.z
+├─ version:    0.9.0
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
-├─ support:    Claude Opus 4.5 <noreply@anthropic.com>
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT
 ```
