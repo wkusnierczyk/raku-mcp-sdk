@@ -16,7 +16,7 @@ use lib 'lib';
 
 use MCP::Types;
 
-plan 29;
+plan 31;
 
 # Test Implementation
 subtest 'Implementation', {
@@ -61,6 +61,59 @@ subtest 'Tool', {
     my %h = $tool.Hash;
     is %h<name>, 'test_tool', 'Hash has name';
     is %h<description>, 'A test tool', 'Hash has description';
+};
+
+# Test Tool with outputSchema
+subtest 'Tool outputSchema', {
+    my $schema = { type => 'object', properties => { temp => { type => 'number' } } };
+    my $tool = Tool.new(
+        name => 'weather',
+        description => 'Get weather',
+        outputSchema => $schema,
+    );
+    ok $tool.outputSchema.defined, 'outputSchema is defined';
+    is $tool.outputSchema<type>, 'object', 'outputSchema type correct';
+
+    # Hash serialization
+    my %h = $tool.Hash;
+    ok %h<outputSchema>:exists, 'Hash has outputSchema';
+    is %h<outputSchema><type>, 'object', 'Hash outputSchema type';
+
+    # from-hash roundtrip
+    my $restored = Tool.from-hash(%h);
+    ok $restored.outputSchema.defined, 'from-hash restores outputSchema';
+    is $restored.outputSchema<properties><temp><type>, 'number', 'from-hash preserves schema detail';
+
+    # Tool without outputSchema
+    my $no-schema = Tool.new(name => 'plain');
+    my %h2 = $no-schema.Hash;
+    nok %h2<outputSchema>:exists, 'no outputSchema when not set';
+
+    my $restored2 = Tool.from-hash(%h2);
+    nok $restored2.outputSchema.defined, 'from-hash without outputSchema';
+};
+
+# Test CallToolResult with structuredContent
+subtest 'CallToolResult structuredContent', {
+    my $result = CallToolResult.new(
+        content => [TextContent.new(text => 'fallback')],
+        structuredContent => { temperature => 72, conditions => 'sunny' },
+    );
+    ok $result.structuredContent.defined, 'structuredContent defined';
+    is $result.structuredContent<temperature>, 72, 'structuredContent value';
+
+    my %h = $result.Hash;
+    ok %h<structuredContent>:exists, 'Hash has structuredContent';
+    is %h<structuredContent><conditions>, 'sunny', 'Hash structuredContent value';
+    ok %h<content>.elems >= 1, 'Hash also has content';
+
+    # Without structuredContent
+    my $plain = CallToolResult.new(
+        content => [TextContent.new(text => 'ok')],
+    );
+    nok $plain.structuredContent.defined, 'no structuredContent when not set';
+    my %h2 = $plain.Hash;
+    nok %h2<structuredContent>:exists, 'Hash has no structuredContent';
 };
 
 # Test ToolAnnotations
