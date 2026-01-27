@@ -471,10 +471,10 @@ Contributions are welcome. You can:
 * Fork or clone the repository, create a branch, push it, and open a [pull request](https://github.com/wkusnierczyk/raku-mcp-sdk/pulls).
 
 **Note**
-* Pushing directly to `main` is disallowed.  
-* Merging to `main` without positive review and passing checks is disallowed.
-* Merging to `main` of stalled pull requests is disallowed. You need to merge `main` into your branch, or rebase your branch onto `main` before being able to merge into `main`.
-* Merging to `main` with the whole multi-commit history of your branch is disallowed. You can only merge-squash as one commit, with a detailed description of your changes.
+* Pushing directly to `main` is <strong style="color: red;">disallowed</strong>.  
+* Merging to `main` without positive review and passing checks is <strong style="color: red;">disallowed</strong>.
+* Merging to `main` of stalled pull requests is <strong style="color: red;">disallowed</strong>. You need to merge `main` into your branch, or rebase your branch onto `main` before being able to merge into `main`.
+* Merging to `main` with the whole multi-commit history of your branch is <strong style="color: red;">disallowed</strong>. You can only merge-squash as one commit, with a detailed description of your changes.
 
 
 ## License
