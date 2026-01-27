@@ -16,7 +16,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 | **Client Features** | ✅ Done | Sampling with tools, includeContext, stopReason, completion |
 | **Utilities** | ⚠️ Partial | Logging, progress, cancellation implemented |
 | **Authorization** | ✅ Done | OAuth 2.1 with PKCE |
-| **New 2025-11-25 Features** | ⚠️ Partial | Elicitation + Tasks + Sampling-with-tools done; Extensions missing |
+| **New 2025-11-25 Features** | ✅ Mostly Complete | Elicitation, Tasks, Sampling-with-tools, Extensions done |
 
 ---
 
@@ -256,6 +256,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 | Tasks | ✅ Experimental | ✅ Done (experimental) |
 | Completion | ✅ Full | ✅ Full |
 | Pagination | ✅ Full | ✅ Full |
+| Extensions | ✅ Experimental | ✅ Done (experimental) |
 
 ---
 
@@ -276,7 +277,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 
 ### Lower Priority (Advanced Features)
 10. ~~**Tasks framework**~~ ✅ **Done** - Long-running operations (experimental)
-11. **Extensions framework** - Plugin architecture
+11. ~~**Extensions framework**~~ ✅ **Done** - Extension registration, dispatch, capability negotiation
 12. ~~**Sampling with tools**~~ ✅ **Done** - Tools, toolChoice, includeContext, stopReason
 
 ---
@@ -286,9 +287,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 Current implementation targets: **2025-11-25** ✅
 
 Key features still needed for full 2025-11-25 compliance:
-- Add Extensions framework
 - Implement authorization extensions (SEP-1046, SEP-990)
-- Update capability negotiation for new features
 
 ---
 
@@ -298,15 +297,18 @@ Current tests cover:
 - ✅ Types serialization
 - ✅ JSON-RPC encoding/decoding
 - ✅ Builder patterns
-- ✅ Basic server/client lifecycle
+- ✅ Transport interface
+- ✅ Server dispatch and lifecycle
+- ✅ Client initialization
+- ✅ Top-level MCP exports
 - ✅ Sampling validation
+- ✅ HTTP transport
+- ✅ OAuth 2.1 types, PKCE, server/client handlers
+- ✅ Tasks framework (async tools, polling, cancellation)
+- ✅ Extensions framework (registration, dispatch, capabilities)
 
 Missing tests for:
-- ✅ Resource subscriptions - **Implemented**
-- ✅ Pagination - **Implemented**
-- ✅ Cancellation - **Implemented**
 - ❌ Progress tracking
-- ❌ HTTP transport (partial)
 - ❌ Error edge cases
 - ❌ Concurrent operations
 
@@ -314,12 +316,13 @@ Missing tests for:
 
 ## Conclusion
 
-The Raku MCP SDK provides a solid foundation with core protocol support, but significant work remains to achieve full specification compliance. The highest impact improvements would be:
+The Raku MCP SDK provides comprehensive MCP specification coverage. Remaining gaps are:
 
-1. Completing HTTP transport for production deployment
-2. ~~Adding resource subscriptions for real-time updates~~ ✅ **Done**
-3. ~~Implementing pagination for scalability~~ ✅ **Done**
-4. ~~Adding roots support for filesystem servers~~ ✅ **Done**
-5. ~~Implementing the authorization framework for secure connections~~ ✅ **Done**
+- Resource templates (URI templates with placeholders)
+- `notifications/prompts/list_changed`
+- `logging/setLevel` request handling
+- Dynamic client registration (OAuth)
+- Authorization extensions (SEP-1046, SEP-990)
+- SSE transport (legacy)
 
 The SDK's architecture is well-designed and should accommodate these additions without major refactoring.
