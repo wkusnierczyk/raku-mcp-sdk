@@ -468,7 +468,7 @@ Contributions are welcome. You can:
 
 * Open or join a [discussion](https://github.com/wkusnierczyk/raku-mcp-sdk/discussions).
 * Open an [issue](https://github.com/wkusnierczyk/raku-mcp-sdk/issues) for bugs, feature requests, or questions.
-* Fork or clone the reposotory, create a branch, push it, and open a [pull request](https://github.com/wkusnierczyk/raku-mcp-sdk/pulls).
+* Fork or clone the repository, create a branch, push it, and open a [pull request](https://github.com/wkusnierczyk/raku-mcp-sdk/pulls).
 
 **Note**
 * Pushing directly to `main` is disallowed.  
