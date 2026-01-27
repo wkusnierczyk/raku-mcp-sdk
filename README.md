@@ -66,6 +66,7 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
   - [Tools](#tools)
   - [Resources](#resources)
   - [Prompts](#prompts)
+- [Examples](#examples)
 - [Development](#development)
   - [Makefile Targets](#makefile-targets)
   - [Environment Variables](#environment-variables)
@@ -259,6 +260,50 @@ say $call-result.content[0].text;  # "Hello, World!"
 # Read resources
 my @contents = await $client.read-resource('info://about');
 say @contents[0].text;
+```
+
+## Examples
+
+The `examples/` directory contains runnable, minimal reference implementations that demonstrate common MCP SDK patterns. Use them to quickly validate your environment, see how transports and handlers fit together, and copy a solid starting point for your own servers and clients.
+
+To list available examples:
+
+```
+# execute without naming any example
+make run-examples
+
+Available examples:
+  • advanced-client      # In-process loopback covering pagination, completions, roots, and elicitation
+  • advanced-server      # Pagination, resource subscriptions, and cancellation
+  • http-server          # Streamable HTTP server transport
+  • sampling-client      # Client-side sampling handler
+  • simple-server        # Stdio server with tools, resources, and prompts
+```
+
+Run any example with:
+
+```bash
+# execute naming an example
+make run-example EXAMPLE=advanced-server
+
+→ Running example: advanced-server...
+
+== Pagination ==
+Page 1 tools: tool-beta, tool-epsilon
+Page 1 nextCursor present: yes
+Page 2 tools: tool-alpha, tool-delta
+Page 2 nextCursor present: yes
+
+== Resource Subscriptions ==
+Subscribe result keys: 
+Update notifications sent: 1
+Last notification method: notifications/resources/updated
+
+== Cancellation ==
+Marked cancelled: yes
+Responses sent after cancellation: 0
+
+Done.
 ```
 
 ## Features
