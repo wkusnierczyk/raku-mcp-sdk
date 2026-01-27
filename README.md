@@ -75,6 +75,7 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
 - [Contributing](#contributing)
 - [License](#license)
 - [References](#references)
+- [Acknowledgments](#acknowledgments)
 - [About](#about)
 
 ## Introduction
@@ -467,7 +468,7 @@ Contributions are welcome! Please see the [DESIGN.md](DESIGN.md) document for ar
 
 ## License
 
-MIT License - see the [LICENSE](LICENSE) file and the [MIT License](https://opensource.org/licenses/MIT).
+MIT License - see the [LICENSE](LICENSE) file and the [MIT License](https://opensource.org/licenses/MIT) site.
 
 ## References
 
@@ -475,6 +476,17 @@ MIT License - see the [LICENSE](LICENSE) file and the [MIT License](https://open
 - [Official TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 - [Official Python SDK](https://github.com/modelcontextprotocol/python-sdk)
 - [Raku Documentation](https://docs.raku.org/)
+
+## Acknowledgments
+
+Building this repository was supported by:
+
+- [**Claude**](https://www.anthropic.com/claude) (Claude Opus 4.5)  
+  Claude was used to draft and revise the implementation plan, and to generate code stubs and draft the implementation.
+- [**ChatGPT**](https://openai.com/chatgpt) (Codex / GPT-5)  
+  ChatGPT was used to review, explain, and critically asses the generated code.
+- [**Gemini**](https://deepmind.google/technologies/gemini/) (Gemini 3 Pro)  
+  Gemini was used to investigate the status of MCP, Raku, and the (missing) implementation of MCP as a Raku SDK.
 
 ## About
 
@@ -484,7 +496,6 @@ $ make about
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
 ├─ version:    x.y.z
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
-├─ support:    Claude Opus 4.5 <noreply@anthropic.com>
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT
 ```
