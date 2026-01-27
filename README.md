@@ -43,7 +43,7 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
 | Completion | ✅ Done | Prompt and resource autocomplete with handler registration |
 | Tool output schemas | ✅ Done | `outputSchema` and `structuredContent` for structured results |
 | Tool metadata | ❌ Planned | icon metadata + tool name validation guidance |
-| OAuth 2.1 | ❌ Planned | OIDC discovery, incremental consent, client ID metadata |
+| OAuth 2.1 | ✅ Done | PKCE, token management, server validation, metadata discovery |
 
 ## Table of contents
 

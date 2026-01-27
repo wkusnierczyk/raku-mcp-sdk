@@ -15,7 +15,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 | **Server Features** | ⚠️ Partial | Tools/Resources/Prompts basic support |
 | **Client Features** | ⚠️ Partial | Sampling basic support |
 | **Utilities** | ⚠️ Partial | Logging, progress, cancellation implemented |
-| **Authorization** | ❌ Missing | OAuth 2.1 not implemented |
+| **Authorization** | ✅ Done | OAuth 2.1 with PKCE |
 | **New 2025-11-25 Features** | ⚠️ Partial | Elicitation done, Tasks/Extensions missing |
 
 ---
@@ -192,15 +192,17 @@ This document compares the current implementation of the Raku MCP SDK against th
 
 ### Authorization (2025-03-26+)
 
-#### ❌ Not Implemented
-The entire authorization framework is missing:
+#### ✅ Implemented
+OAuth 2.1 authorization framework:
 
-- OAuth 2.1 with PKCE
-- Dynamic client registration
-- Token refresh
-- Resource indicators (RFC 8707)
-- Authorization server metadata discovery
-- Protected resource metadata
+- ✅ OAuth 2.1 with PKCE (S256)
+- ✅ Token refresh
+- ✅ Resource indicators (RFC 8707)
+- ✅ Authorization server metadata discovery (RFC 8414 + OIDC fallback)
+- ✅ Protected resource metadata (RFC 9728)
+- ✅ Server-side token validation with WWW-Authenticate headers
+- ✅ Client-side automatic token management and 401 retry
+- ❌ Dynamic client registration
 
 ---
 
@@ -246,7 +248,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 | Sampling | ✅ Full + tools | ⚠️ Basic |
 | Roots | ✅ Full | ✅ Full |
 | Elicitation | ✅ Full + URL mode | ✅ Full |
-| OAuth 2.1 | ✅ Full | ❌ No |
+| OAuth 2.1 | ✅ Full | ✅ Core (no dynamic registration) |
 | Streamable HTTP | ✅ Full client + server | ✅ Full |
 | SSE Transport | ✅ Full | ❌ No |
 | Tasks | ✅ Experimental | ❌ No |
@@ -268,7 +270,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 6. ~~**Add tool output schemas**~~ ✅ **Done** - outputSchema and structuredContent support
 7. ~~**Implement elicitation**~~ ✅ **Done** - Form and URL mode with handler callbacks
 8. ~~**Add completion/autocomplete**~~ ✅ **Done** - Prompt and resource completion with handler registration
-9. **Implement OAuth 2.1** - Required for authenticated servers
+9. ~~**Implement OAuth 2.1**~~ ✅ **Done** - PKCE, token management, server validation
 
 ### Lower Priority (Advanced Features)
 10. **Tasks framework** - Long-running operations (experimental)
@@ -316,6 +318,6 @@ The Raku MCP SDK provides a solid foundation with core protocol support, but sig
 2. ~~Adding resource subscriptions for real-time updates~~ ✅ **Done**
 3. ~~Implementing pagination for scalability~~ ✅ **Done**
 4. ~~Adding roots support for filesystem servers~~ ✅ **Done**
-5. Implementing the authorization framework for secure connections
+5. ~~Implementing the authorization framework for secure connections~~ ✅ **Done**
 
 The SDK's architecture is well-designed and should accommodate these additions without major refactoring.
