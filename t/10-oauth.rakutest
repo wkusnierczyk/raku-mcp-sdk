@@ -5,7 +5,7 @@ use lib 'lib';
 use MCP::OAuth;
 use MCP::OAuth::Server;
 
-plan 7;
+plan 9;
 
 # === 1. PKCE ===
 subtest 'PKCE', {
@@ -120,7 +120,47 @@ subtest 'OAuthServerHandler', {
     ok $www.contains('Bearer'), 'www-authenticate starts with Bearer';
 };
 
-# === 6. OAuthClientHandler authorization-url ===
+# === 6. OAuthServerHandler scope header and Forbidden path ===
+subtest 'OAuthServerHandler www-authenticate-scope-header', {
+    plan 3;
+    my $handler = OAuthServerHandler.new(
+        resource-identifier => 'https://api.example.com',
+        authorization-servers => ['https://auth.example.com'],
+        scopes-supported => ['read', 'write'],
+        token-validator => -> Str $token { { valid => False, scopes => ['read', 'write'], message => 'Insufficient scope' } },
+    );
+
+    my $scope-header = $handler.www-authenticate-scope-header(['read', 'write']);
+    ok $scope-header.contains('Bearer'), 'scope header starts with Bearer';
+    ok $scope-header.contains('insufficient_scope'), 'scope header has error';
+    ok $scope-header.contains('read write'), 'scope header has scopes';
+};
+
+subtest 'OAuthServerHandler Forbidden with scopes', {
+    plan 2;
+    my $handler = OAuthServerHandler.new(
+        resource-identifier => 'https://api.example.com',
+        authorization-servers => ['https://auth.example.com'],
+        scopes-supported => ['admin'],
+        token-validator => -> Str $token {
+            { valid => False, scopes => ['admin'], message => 'Need admin' }
+        },
+    );
+
+    my $req = class { method header($n) { 'Bearer some-token' } }.new;
+    try {
+        $handler.validate-request($req);
+        CATCH {
+            when X::MCP::OAuth::Forbidden {
+                ok True, 'Forbidden exception thrown';
+                ok .message.contains('Need admin') || .message.contains('Insufficient'), 'Forbidden message';
+            }
+            default { flunk "Wrong exception: {.^name}" }
+        }
+    }
+};
+
+# === 7. OAuthClientHandler authorization-url ===
 subtest 'OAuthClientHandler authorization-url', {
     plan 3;
     use MCP::OAuth::Client;

@@ -85,6 +85,15 @@ subtest 'Transport error types', {
 
     my $send = MCP::Transport::Base::X::Transport::Send.new(message => 'nope');
     ok $send.message.contains('Send error'), 'send error prefix';
+
+    # cause property
+    my $with-cause = MCP::Transport::Base::X::Transport.new(message => 'fail', cause => 'root');
+    is $with-cause.cause, 'root', 'cause property set';
+
+    # Exception hierarchy
+    ok $conn ~~ MCP::Transport::Base::X::Transport, 'Connection is-a Transport error';
+    ok $send ~~ MCP::Transport::Base::X::Transport, 'Send is-a Transport error';
+    ok $conn ~~ Exception, 'Connection is-a Exception';
 };
 
 done-testing;

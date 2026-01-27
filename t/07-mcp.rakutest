@@ -42,6 +42,27 @@ subtest 'MCP exports', {
         .generator({ 'hi' })
         .build;
     is $prompt.name, 'p', 'prompt builder available';
+
+    # file-resource convenience
+    my $tmp = $*TMPDIR.add("mcp-export-test-$*PID.txt");
+    $tmp.spurt("exported");
+    my $fr = file-resource($tmp);
+    ok $fr.uri.starts-with('file://'), 'file-resource exported';
+    $tmp.unlink;
+
+    # Additional type exports
+    is ImageContent.^name, 'MCP::Types::ImageContent', 'ImageContent export';
+    is AudioContent.^name, 'MCP::Types::AudioContent', 'AudioContent export';
+    is ResourceLink.^name, 'MCP::Types::ResourceLink', 'ResourceLink export';
+    is ToolUseContent.^name, 'MCP::Types::ToolUseContent', 'ToolUseContent export';
+    is ToolResultContent.^name, 'MCP::Types::ToolResultContent', 'ToolResultContent export';
+    is ModelHint.^name, 'MCP::Types::ModelHint', 'ModelHint export';
+    is ModelPreferences.^name, 'MCP::Types::ModelPreferences', 'ModelPreferences export';
+    is ToolChoice.^name, 'MCP::Types::ToolChoice', 'ToolChoice export';
+    is CreateMessageResult.^name, 'MCP::Types::CreateMessageResult', 'CreateMessageResult export';
+    is Task.^name, 'MCP::Types::Task', 'Task export';
+    is CreateTaskResult.^name, 'MCP::Types::CreateTaskResult', 'CreateTaskResult export';
+    ok StdioTransport.^name.contains('Stdio'), 'StdioTransport export';
 };
 
 done-testing;
