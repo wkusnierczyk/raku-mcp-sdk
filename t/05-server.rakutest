@@ -656,4 +656,72 @@ subtest 'Server list-roots', {
     is @empty-roots.elems, 0, 'empty roots returns empty array';
 };
 
+subtest 'Server elicitation', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'test', version => '0.1'),
+        transport => $transport,
+    );
+
+    # Test elicit (form mode)
+    $transport.clear-sent;
+    my $elicit-promise = $server.elicit(
+        message => 'Please enter your name',
+        schema => {
+            type => 'object',
+            properties => {
+                name => { type => 'string' }
+            },
+            required => ['name']
+        }
+    );
+
+    # Verify request was sent
+    my @requests = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @requests.elems, 1, 'elicit sends request';
+    is @requests[0].method, 'elicitation/create', 'request method is elicitation/create';
+    is @requests[0].params<mode>, 'form', 'mode is form';
+    is @requests[0].params<message>, 'Please enter your name', 'message is correct';
+    ok @requests[0].params<requestedSchema>:exists, 'requestedSchema exists';
+
+    # Simulate client response
+    $server.handle-response-public(MCP::JSONRPC::Response.success(@requests[0].id, {
+        action => 'accept',
+        content => { name => 'Alice' }
+    }));
+
+    my $response = await $elicit-promise;
+    isa-ok $response, MCP::Types::ElicitationResponse, 'response is ElicitationResponse';
+    is $response.action, MCP::Types::ElicitAccept, 'action is accept';
+    is $response.content<name>, 'Alice', 'content has name';
+
+    # Test elicit-url (URL mode)
+    $transport.clear-sent;
+    my $url-promise = $server.elicit-url(
+        message => 'Please provide your API key',
+        url => 'https://example.com/auth',
+        elicitation-id => 'test-123'
+    );
+
+    @requests = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @requests.elems, 1, 'elicit-url sends request';
+    is @requests[0].params<mode>, 'url', 'mode is url';
+    is @requests[0].params<url>, 'https://example.com/auth', 'url is correct';
+    is @requests[0].params<elicitationId>, 'test-123', 'elicitationId is correct';
+
+    $server.handle-response-public(MCP::JSONRPC::Response.success(@requests[0].id, {
+        action => 'accept'
+    }));
+    my $url-response = await $url-promise;
+    is $url-response.action, MCP::Types::ElicitAccept, 'URL elicit returns accept';
+
+    # Test notify-elicitation-complete
+    $transport.clear-sent;
+    $server.notify-elicitation-complete('test-123');
+    my @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifications.elems, 1, 'notification sent';
+    is @notifications[0].method, 'notifications/elicitation/complete', 'notification method';
+    is @notifications[0].params<elicitationId>, 'test-123', 'notification has elicitationId';
+};
+
 done-testing;

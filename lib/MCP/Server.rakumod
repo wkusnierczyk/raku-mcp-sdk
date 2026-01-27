@@ -567,4 +567,38 @@ class Server is export {
             }).Array
         })
     }
+
+    #| Request user input via form mode elicitation
+    #| Returns a Promise that resolves to an ElicitationResponse
+    method elicit(Str :$message!, :%schema! --> Promise) {
+        self.request('elicitation/create', {
+            mode => 'form',
+            message => $message,
+            requestedSchema => %schema,
+        }).then(-> $p {
+            my $result = $p.result;
+            MCP::Types::ElicitationResponse.from-hash($result)
+        })
+    }
+
+    #| Request user interaction via URL mode elicitation
+    #| Returns a Promise that resolves to an ElicitationResponse
+    method elicit-url(Str :$message!, Str :$url!, Str :$elicitation-id! --> Promise) {
+        self.request('elicitation/create', {
+            mode => 'url',
+            message => $message,
+            url => $url,
+            elicitationId => $elicitation-id,
+        }).then(-> $p {
+            my $result = $p.result;
+            MCP::Types::ElicitationResponse.from-hash($result)
+        })
+    }
+
+    #| Notify client that a URL mode elicitation has completed
+    method notify-elicitation-complete(Str $elicitation-id) {
+        self.notify('notifications/elicitation/complete', {
+            elicitationId => $elicitation-id,
+        });
+    }
 }

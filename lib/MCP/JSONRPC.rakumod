@@ -27,11 +27,12 @@ use JSON::Fast;
 
 #| Standard JSON-RPC 2.0 error codes
 enum ErrorCode is export (
-    ParseError      => -32700,
-    InvalidRequest  => -32600,
-    MethodNotFound  => -32601,
-    InvalidParams   => -32602,
-    InternalError   => -32603,
+    ParseError              => -32700,
+    InvalidRequest          => -32600,
+    MethodNotFound          => -32601,
+    InvalidParams           => -32602,
+    InternalError           => -32603,
+    URLElicitationRequired  => -32042,
 );
 
 #| Base role for all JSON-RPC messages
@@ -69,12 +70,13 @@ class Error is export {
     #| Create an Error from a standard JSON-RPC error code
     method from-code(ErrorCode $code, Str $message?, :$data --> Error) {
         my $msg = $message // do given $code {
-            when ParseError     { 'Parse error' }
-            when InvalidRequest { 'Invalid request' }
-            when MethodNotFound { 'Method not found' }
-            when InvalidParams  { 'Invalid params' }
-            when InternalError  { 'Internal error' }
-            default             { 'Unknown error' }
+            when ParseError              { 'Parse error' }
+            when InvalidRequest          { 'Invalid request' }
+            when MethodNotFound          { 'Method not found' }
+            when InvalidParams           { 'Invalid params' }
+            when InternalError           { 'Internal error' }
+            when URLElicitationRequired  { 'URL elicitation required' }
+            default                      { 'Unknown error' }
         };
         self.new(code => $code.value, message => $msg, :$data)
     }

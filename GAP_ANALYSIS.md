@@ -16,7 +16,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 | **Client Features** | ⚠️ Partial | Sampling basic support |
 | **Utilities** | ⚠️ Partial | Logging, progress, cancellation implemented |
 | **Authorization** | ❌ Missing | OAuth 2.1 not implemented |
-| **New 2025-11-25 Features** | ❌ Missing | Tasks, Extensions, URL Elicitation |
+| **New 2025-11-25 Features** | ⚠️ Partial | Elicitation done, Tasks/Extensions missing |
 
 ---
 
@@ -116,12 +116,18 @@ This document compares the current implementation of the Raku MCP SDK against th
 - Server-side:
   - `list-roots()` method to request roots from client
 
-#### ❌ Elicitation (2025-06-18 feature)
-- `ElicitationCapability` type exists but not implemented
-- Missing:
-  - `elicitation/create` request (server → client)
-  - Schema-based user input collection
-  - URL mode elicitation (SEP-1036) for OAuth flows
+#### ✅ Elicitation (2025-06-18 feature)
+- `ElicitationCapability` with form/url mode support
+- `ElicitationAction` enum (accept/decline/cancel)
+- `ElicitationResponse` type with content
+- Server-side:
+  - `elicit(message, schema)` for form mode requests
+  - `elicit-url(message, url, elicitation-id)` for URL mode
+  - `notify-elicitation-complete(elicitation-id)` for completion
+- Client-side:
+  - `elicitation-handler` callback for handling requests
+  - Capability negotiation with form/url modes
+  - `URLElicitationRequired` error code (-32042)
 
 ---
 
@@ -197,9 +203,10 @@ Long-running operation support:
 - SEP-1046: OAuth client credentials (M2M)
 - SEP-990: Enterprise IdP policy controls
 
-#### ❌ URL Mode Elicitation (SEP-1036)
-- Browser-based credential collection
-- Out-of-band OAuth flows
+#### ✅ URL Mode Elicitation (SEP-1036)
+- `elicit-url()` method for URL mode requests
+- `notify-elicitation-complete()` for completion notifications
+- `URLElicitationRequired` error code (-32042)
 
 #### ❌ Sampling with Tools (SEP-1577)
 - Tool definitions in sampling requests
@@ -218,7 +225,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 | Prompts | ✅ Full | ⚠️ Basic |
 | Sampling | ✅ Full + tools | ⚠️ Basic |
 | Roots | ✅ Full | ✅ Full |
-| Elicitation | ✅ Full + URL mode | ❌ No |
+| Elicitation | ✅ Full + URL mode | ✅ Full |
 | OAuth 2.1 | ✅ Full | ❌ No |
 | Streamable HTTP | ✅ Full client + server | ✅ Full |
 | SSE Transport | ✅ Full | ❌ No |
@@ -239,26 +246,14 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 
 ### Medium Priority (Enhanced Functionality)
 6. **Add tool output schemas** - Better structured responses
-7. **Implement elicitation** - Server-initiated user input
+7. ~~**Implement elicitation**~~ ✅ **Done** - Form and URL mode with handler callbacks
 8. **Add completion/autocomplete** - Better UX for prompt arguments
 9. **Implement OAuth 2.1** - Required for authenticated servers
 
 ### Lower Priority (Advanced Features)
 10. **Tasks framework** - Long-running operations (experimental)
 11. **Extensions framework** - Plugin architecture
-12. **URL mode elicitation** - Advanced OAuth flows
-13. **Sampling with tools** - Advanced agentic capabilities
-
----
-
-## Type System Gaps
-
-The following types are defined but not fully utilized:
-
-```raku
-# Defined but unused/incomplete:
-- ElicitationCapability - defined, not implemented
-```
+12. **Sampling with tools** - Advanced agentic capabilities
 
 ---
 

@@ -37,7 +37,7 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
 | Roots | ✅ Done | Client roots, server list-roots |
 | Sampling | ⚠️ Partial | Basic support, missing tools/toolChoice/includeContext/stopReason |
 | HTTP Transport | ✅ Done | Full client/server with session management, SSE, resumption |
-| Elicitation | ❌ Planned | Client-side support incl. URL mode |
+| Elicitation | ✅ Done | Form and URL modes with handler callbacks |
 | Tasks (experimental) | ❌ Planned | |
 | Extensions framework | ❌ Planned | |
 | Completion | ❌ Planned | Autocomplete/complete endpoints |

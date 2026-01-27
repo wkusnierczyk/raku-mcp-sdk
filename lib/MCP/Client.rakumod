@@ -50,6 +50,7 @@ class Client is export {
     has MCP::Types::ClientCapabilities $.capabilities = MCP::Types::ClientCapabilities.new;
     has MCP::Transport::Base::Transport $.transport is required;
     has &.sampling-handler;
+    has &.elicitation-handler;  # Handler for elicitation requests
     has @.roots;  # Array of Root objects or Hashes with uri/name
 
     # State
@@ -96,6 +97,11 @@ class Client is export {
         my %capabilities = $!capabilities.Hash;
         if @!roots {
             %capabilities<roots> = { listChanged => True };
+        }
+        # Add elicitation capability if handler is configured
+        if &!elicitation-handler.defined {
+            %capabilities<elicitation> //= {};
+            %capabilities<elicitation><form> = {};
         }
 
         self.request('initialize', {
@@ -148,6 +154,9 @@ class Client is export {
         given $req.method {
             when 'sampling/createMessage' {
                 self!handle-sampling-request($req);
+            }
+            when 'elicitation/create' {
+                self!handle-elicitation-request($req);
             }
             when 'roots/list' {
                 self!handle-roots-list-request($req);
@@ -565,5 +574,76 @@ class Client is export {
                 $message
             )
         );
+    }
+
+    #| Handle elicitation/create request from server
+    method !handle-elicitation-request(MCP::JSONRPC::Request $req) {
+        unless &!elicitation-handler.defined {
+            my $error = MCP::JSONRPC::Error.from-code(
+                MCP::JSONRPC::MethodNotFound,
+                "Client does not support elicitation"
+            );
+            my $response = MCP::JSONRPC::Response.error($req.id, $error);
+            $!transport.send($response);
+            return;
+        }
+
+        my $params = $req.params // {};
+        my %params = $params ~~ Hash ?? $params !! {};
+
+        # Validate mode is supported
+        my $mode = %params<mode> // 'form';
+        if $mode eq 'url' && !self!elicitation-supports-url {
+            my $error = MCP::JSONRPC::Error.from-code(
+                MCP::JSONRPC::InvalidParams,
+                "Client does not support URL mode elicitation"
+            );
+            my $response = MCP::JSONRPC::Response.error($req.id, $error);
+            $!transport.send($response);
+            return;
+        }
+
+        $! = Nil;
+        my $result = try {
+            my $out = &!elicitation-handler(%params);
+            if $out ~~ Promise {
+                $out = $out.result;
+            }
+            $out
+        };
+
+        my $failure = $!;
+        my $response;
+        if $failure.defined {
+            my $ex = $failure ~~ Failure ?? $failure.exception !! $failure;
+            if $ex ~~ X::MCP::Client::Error {
+                $response = MCP::JSONRPC::Response.error($req.id, $ex.error);
+            } else {
+                my $err = MCP::JSONRPC::Error.from-code(
+                    MCP::JSONRPC::InternalError,
+                    ($ex ?? $ex.message !! 'Elicitation request failed')
+                );
+                $response = MCP::JSONRPC::Response.error($req.id, $err);
+            }
+        } else {
+            my $payload = self!coerce-elicitation-result($result);
+            $response = MCP::JSONRPC::Response.success($req.id, $payload);
+        }
+
+        $!transport.send($response);
+    }
+
+    #| Convert elicitation handler result to response payload
+    method !coerce-elicitation-result($result --> Hash) {
+        return $result.Hash if $result ~~ MCP::Types::ElicitationResponse;
+        return $result if $result ~~ Hash && ($result<action>:exists);
+        # Default to cancel if result is not in expected format
+        return { action => 'cancel' }
+    }
+
+    #| Check if URL mode elicitation is supported
+    method !elicitation-supports-url(--> Bool) {
+        my $elicitation = $!capabilities.elicitation;
+        $elicitation.defined && $elicitation.supports-url
     }
 }
