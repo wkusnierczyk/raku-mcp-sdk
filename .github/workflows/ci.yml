@@ -10,6 +10,14 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      run_coverage:
+        description: 'Run coverage job (slow; currently non-gating)'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+        default: 'false'
 
 permissions:
   contents: write
@@ -19,7 +27,6 @@ env:
   RAKU_VERSION: '2024.01'
   # Coverage is slow and currently non-gating; keep it off until we enforce a threshold.
   # TODO: Enable coverage and fail CI if coverage drops below an agreed threshold.
-  RUN_COVERAGE: 'false'
 
 jobs:
   # ----------------------------------------------------------------------------
@@ -117,7 +124,7 @@ jobs:
     name: Coverage
     runs-on: ubuntu-latest
     needs: test
-    if: ${{ env.RUN_COVERAGE == 'true' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_coverage == 'true' }}
 
     steps:
       - name: Checkout repository
