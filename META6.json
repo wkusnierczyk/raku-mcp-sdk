@@ -1,7 +1,7 @@
 {
     "name": "MCP",
     "description": "Model Context Protocol SDK for Raku - Build MCP servers and clients",
-    "version": "0.11.1",
+    "version": "0.12.0",
     "perl": "6.d",
     "auth": "github:wkusnierczyk",
     "license": "MIT",
@@ -19,7 +19,10 @@
         "MCP::Server::Tool": "lib/MCP/Server/Tool.rakumod",
         "MCP::Server::Resource": "lib/MCP/Server/Resource.rakumod",
         "MCP::Server::Prompt": "lib/MCP/Server/Prompt.rakumod",
-        "MCP::Client": "lib/MCP/Client.rakumod"
+        "MCP::Client": "lib/MCP/Client.rakumod",
+        "MCP::OAuth": "lib/MCP/OAuth.rakumod",
+        "MCP::OAuth::Client": "lib/MCP/OAuth/Client.rakumod",
+        "MCP::OAuth::Server": "lib/MCP/OAuth/Server.rakumod"
     },
     "depends": [
         "JSON::Fast",

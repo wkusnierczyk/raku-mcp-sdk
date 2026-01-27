@@ -96,6 +96,9 @@ jobs:
       - name: Install dependencies
         run: zef install --deps-only .
 
+      - name: Ensure JSON::Fast is installed
+        run: zef install JSON::Fast
+
       - name: Run tests
         run: |
           zef install App::Prove6 || true

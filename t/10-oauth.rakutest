@@ -1,0 +1,160 @@
+use v6.d;
+use Test;
+use lib 'lib';
+
+use MCP::OAuth;
+use MCP::OAuth::Server;
+
+plan 7;
+
+# === 1. PKCE ===
+subtest 'PKCE', {
+    plan 4;
+    my $pkce = PKCE.new;
+
+    my $verifier = $pkce.generate-verifier;
+    is $verifier.chars, 64, 'verifier is 64 characters';
+    ok $verifier ~~ /^<[A..Za..z0..9\-._~]>+$/, 'verifier uses valid characters';
+
+    my $challenge = $pkce.generate-challenge($verifier);
+    ok $challenge.chars > 0, 'challenge is non-empty';
+    nok $challenge ~~ /<[+=\/]>/, 'challenge is base64url (no +, =, /)';
+};
+
+# === 2. ProtectedResourceMetadata ===
+subtest 'ProtectedResourceMetadata', {
+    plan 4;
+    my $meta = ProtectedResourceMetadata.new(
+        resource => 'https://api.example.com',
+        authorization-servers => ['https://auth.example.com'],
+        scopes-supported => ['read', 'write'],
+    );
+    is $meta.resource, 'https://api.example.com', 'resource set';
+    my %h = $meta.Hash;
+    is %h<resource>, 'https://api.example.com', 'Hash roundtrip resource';
+    is %h<authorization_servers>[0], 'https://auth.example.com', 'Hash roundtrip auth servers';
+
+    my $from = ProtectedResourceMetadata.from-hash(%h);
+    is $from.resource, 'https://api.example.com', 'from-hash roundtrip';
+};
+
+# === 3. AuthServerMetadata ===
+subtest 'AuthServerMetadata', {
+    plan 4;
+    my $meta = AuthServerMetadata.new(
+        issuer => 'https://auth.example.com',
+        authorization-endpoint => 'https://auth.example.com/authorize',
+        token-endpoint => 'https://auth.example.com/token',
+        grant-types-supported => ['authorization_code'],
+        code-challenge-methods-supported => ['S256'],
+    );
+    is $meta.issuer, 'https://auth.example.com', 'issuer set';
+    my %h = $meta.Hash;
+    is %h<token_endpoint>, 'https://auth.example.com/token', 'Hash roundtrip token endpoint';
+
+    my $from = AuthServerMetadata.from-hash(%h);
+    is $from.issuer, 'https://auth.example.com', 'from-hash roundtrip issuer';
+    is $from.token-endpoint, 'https://auth.example.com/token', 'from-hash roundtrip token endpoint';
+};
+
+# === 4. TokenResponse ===
+subtest 'TokenResponse', {
+    plan 4;
+    my $token = TokenResponse.new(
+        access-token => 'abc123',
+        token-type => 'Bearer',
+        expires-in => 3600,
+        refresh-token => 'refresh456',
+        scope => 'read write',
+    );
+    is $token.access-token, 'abc123', 'access token set';
+    nok $token.is-expired, 'fresh token is not expired';
+
+    # Simulate expired token
+    my $expired = TokenResponse.new(
+        access-token => 'old',
+        expires-in => 1,
+        created-at => now - 100,
+    );
+    ok $expired.is-expired, 'old token is expired';
+
+    my $from = TokenResponse.from-hash({
+        access_token => 'xyz',
+        token_type => 'Bearer',
+        expires_in => 7200,
+    });
+    is $from.access-token, 'xyz', 'from-hash roundtrip';
+};
+
+# === 5. OAuthServerHandler ===
+subtest 'OAuthServerHandler', {
+    plan 5;
+    my $handler = OAuthServerHandler.new(
+        resource-identifier => 'https://api.example.com',
+        authorization-servers => ['https://auth.example.com'],
+        scopes-supported => ['read', 'write'],
+        token-validator => -> Str $token {
+            if $token eq 'valid-token' {
+                { valid => True, sub => 'user1' }
+            } else {
+                { valid => False, message => 'Invalid token' }
+            }
+        },
+    );
+
+    my %meta = $handler.resource-metadata;
+    is %meta<resource>, 'https://api.example.com', 'resource-metadata returns correct resource';
+    ok %meta<authorization_servers>:exists, 'resource-metadata has auth servers';
+
+    # Mock request with valid token
+    my $valid-req = class { method header($n) { 'Bearer valid-token' } }.new;
+    my %result = $handler.validate-request($valid-req);
+    ok %result<valid>, 'valid token passes validation';
+
+    # Mock request with invalid token
+    my $invalid-req = class { method header($n) { 'Bearer bad-token' } }.new;
+    dies-ok { $handler.validate-request($invalid-req) }, 'invalid token throws';
+
+    # WWW-Authenticate header format
+    my $www = $handler.www-authenticate-header;
+    ok $www.contains('Bearer'), 'www-authenticate starts with Bearer';
+};
+
+# === 6. OAuthClientHandler authorization-url ===
+subtest 'OAuthClientHandler authorization-url', {
+    plan 3;
+    use MCP::OAuth::Client;
+
+    my $client-handler = OAuthClientHandler.new(
+        resource-url => 'https://api.example.com',
+        client-id => 'test-client',
+        scopes => ['read'],
+        authorization-callback => -> Str $url { 'auth-code-123' },
+    );
+
+    # Manually set auth metadata to avoid HTTP calls
+    $client-handler.auth-metadata = AuthServerMetadata.new(
+        issuer => 'https://auth.example.com',
+        authorization-endpoint => 'https://auth.example.com/authorize',
+        token-endpoint => 'https://auth.example.com/token',
+    );
+
+    my $url = $client-handler.authorization-url;
+    ok $url.contains('code_challenge='), 'URL contains code_challenge';
+    ok $url.contains('client_id='), 'URL contains client_id';
+    ok $url.contains('resource='), 'URL contains resource';
+};
+
+# === 7. Transport backwards compatibility ===
+subtest 'Transport backwards compatibility', {
+    plan 1;
+    use MCP::Transport::StreamableHTTP;
+
+    # Server transport without oauth-handler should work fine
+    my $transport = StreamableHTTPServerTransport.new(
+        path => '/mcp',
+    );
+    nok $transport.oauth-handler.defined, 'oauth-handler is optional (not defined by default)';
+};
+
+done-testing;

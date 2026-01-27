@@ -20,6 +20,7 @@ use MCP::JSONRPC;
 use MCP::Transport::Base;
 need MCP::Types;
 use JSON::Fast;
+use MCP::OAuth;
 # Cro::HTTP is loaded dynamically to keep this transport optional.
 
 my constant DEFAULT_PROTOCOL_FALLBACK = '2025-11-25';
@@ -96,6 +97,7 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
     has Bool $.require-session = False;
     has Bool $.allow-session-delete = True;
     has Int $.stream-history-size = 200;
+    has $.oauth-handler;
     has Supplier $!incoming;
     has Supply $!incoming-supply;
     has Bool $!running = False;
@@ -177,7 +179,17 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
                 return False unless $self!validate-origin($req, $resp, &content);
                 return False unless $self!validate-protocol($req, $resp, &content);
                 return False unless $self!validate-session($req, $resp, &content);
+                return False unless $self!validate-oauth($req, $resp, &content);
                 return True;
+            }
+
+            if $self.oauth-handler.defined {
+                my &get-wk = self!cro-sub('Cro::HTTP::Router', 'get');
+                &get-wk(-> '.well-known', 'oauth-protected-resource' {
+                    my $resp = &response();
+                    $resp.status = 200;
+                    &content('application/json', $self.oauth-handler.resource-metadata);
+                });
             }
 
             &get(-> *@ {
@@ -333,6 +345,29 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
         False
     }
 
+    method !validate-oauth($req, $resp, &content --> Bool) {
+        return True unless $!oauth-handler.defined;
+        try {
+            $!oauth-handler.validate-request($req);
+            return True;
+            CATCH {
+                when X::MCP::OAuth::Unauthorized {
+                    $resp.status = 401;
+                    $resp.append-header('WWW-Authenticate', $!oauth-handler.www-authenticate-header);
+                    &content('application/json', self!jsonrpc-error(.message));
+                    return False;
+                }
+                when X::MCP::OAuth::Forbidden {
+                    $resp.status = 403;
+                    $resp.append-header('WWW-Authenticate', $!oauth-handler.www-authenticate-scope-header(.scopes));
+                    &content('application/json', self!jsonrpc-error(.message));
+                    return False;
+                }
+            }
+        }
+        False
+    }
+
     method !accepts-post($req --> Bool) {
         my $accept = $req.header('Accept') // '';
         $accept.contains('application/json') && $accept.contains('text/event-stream')
@@ -459,6 +494,7 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
     has Str $.endpoint is required;
     has Str $.protocol-version = MCP::Types::LATEST_PROTOCOL_VERSION;
     has $.client;
+    has $.oauth-handler;
     has Supplier $!incoming;
     has Supply $!incoming-supply;
     has Bool $!running = False;
@@ -489,6 +525,10 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
             if $!session-id.defined {
                 $headers.push('MCP-Session-Id' => $!session-id);
             }
+            if $!oauth-handler.defined {
+                my $auth = await $!oauth-handler.authorization-header;
+                $headers.push('Authorization' => $auth);
+            }
             $!client //= self!cro-client;
             my $resp = await $!client.post(
                 $!endpoint,
@@ -496,6 +536,24 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
                 content-type => 'application/json',
                 body => $msg.to-json
             );
+
+            # Handle 401 by re-authenticating and retrying once
+            if $resp.status == 401 && $!oauth-handler.defined {
+                await $!oauth-handler.handle-unauthorized;
+                my $retry-headers = [
+                    Accept => DEFAULT_ACCEPT_POST,
+                    'MCP-Protocol-Version' => $!protocol-version,
+                ];
+                $retry-headers.push('MCP-Session-Id' => $!session-id) if $!session-id.defined;
+                my $auth = await $!oauth-handler.authorization-header;
+                $retry-headers.push('Authorization' => $auth);
+                $resp = await $!client.post(
+                    $!endpoint,
+                    headers => $retry-headers,
+                    content-type => 'application/json',
+                    body => $msg.to-json
+                );
+            }
 
             self!capture-session-id($resp);
             return if $resp.status == 202;
@@ -541,6 +599,10 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
                 'MCP-Protocol-Version' => $!protocol-version,
                 'MCP-Session-Id' => $!session-id,
             );
+            if $!oauth-handler.defined {
+                my $auth = await $!oauth-handler.authorization-header;
+                @headers.push('Authorization' => $auth);
+            }
             $!client //= self!cro-client;
             try {
                 my $resp = await $!client.delete($!endpoint, headers => @headers);
@@ -572,6 +634,10 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
                 }
                 if $!last-event-id.defined {
                     @headers.push('Last-Event-ID' => $!last-event-id);
+                }
+                if $!oauth-handler.defined {
+                    my $auth = await $!oauth-handler.authorization-header;
+                    @headers.push('Authorization' => $auth);
                 }
                 $!client //= self!cro-client;
                 my $resp = await $!client.get($!endpoint, headers => @headers);

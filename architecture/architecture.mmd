@@ -43,21 +43,35 @@ graph TD
         HTTP["MCP::Transport::StreamableHTTP"]
     end
 
+    subgraph Auth ["Authorization"]
+        direction TB
+        OAuth[MCP::OAuth<br/>Types, PKCE]
+        OAuthClient[MCP::OAuth::Client]
+        OAuthServer[MCP::OAuth::Server]
+    end
+
     Client --> JSONRPC
     Server --> JSONRPC
     JSONRPC --> Types
-    
+
     Client --> Transport
     Server --> Transport
     Transport -.-> Stdio
     Transport -.-> HTTP
-    
+
+    HTTP --> OAuthClient
+    HTTP --> OAuthServer
+    OAuthClient --> OAuth
+    OAuthServer --> OAuth
+
     Tool -.-> Types
     Resource -.-> Types
     Prompt -.-> Types
 
     %% Apply classes
+    classDef auth fill:#fff5ee,stroke:#d2691e,stroke-width:2px;
     class A,B user;
     class MCP,Client,Server,Tool,Resource,Prompt sdk;
     class JSONRPC,Types protocol;
     class Transport,Stdio,HTTP transport;
+    class OAuth,OAuthClient,OAuthServer auth;
