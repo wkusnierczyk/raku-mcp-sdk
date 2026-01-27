@@ -435,9 +435,10 @@ make coverage
 
 ## Architecture
 
-The diagram below shows how the core components interact. 
-The Mermaid source is in `architecture/architecture.mmd` and the rendered image is in
-`architecture/architecture.png`.
+The diagram below shows how the core components interact.
+* The Mermaid source is in `architecture/architecture.mmd`.
+* The rendered image is in `architecture/architecture.png`.
+
 Regenerate the PNG with `make architecture-diagram`.
 
 ![Architecture diagram](architecture/architecture.png)
