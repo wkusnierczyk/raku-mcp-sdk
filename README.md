@@ -441,10 +441,10 @@ make test        # Run test suite
     <tr><td><code>ci</code></td><td>CI pipeline</td><td><code>dependencies → lint → test</code></td></tr>
     <tr><td><code>ci-full</code></td><td>Full CI pipeline</td><td><code>dependencies-dev → lint → test → coverage</code></td></tr>
     <tr><th colspan="3" align="left">Version management</th></tr>
-    <tr><td><code>version</code></td><td>Show or update project version</td><td><code>make TAG=1.2.3 DESCRIPTION="Release description" version</code> updates Makefile + META6.json + README and creates a local annotated tag</td></tr>
-    <tr><td><code>bump-patch</code></td><td>Patch bump</td><td><code>make bump-patch</code> bumps to the next patch version and tags it</td></tr>
-    <tr><td><code>bump-minor</code></td><td>Minor bump</td><td><code>make bump-minor</code> bumps to the next minor version and tags it</td></tr>
-    <tr><td><code>bump-major</code></td><td>Major bump</td><td><code>make bump-major</code> bumps to the next major version and tags it</td></tr>
+    <tr><td><code>version</code></td><td>Show or update project version</td><td><code>make TAG=1.2.3 DESCRIPTION="Release description" version</code> updates Makefile + META6.json + README (no tag)</td></tr>
+    <tr><td><code>bump-patch</code></td><td>Patch bump</td><td><code>make bump-patch</code> bumps to the next patch version (no tag)</td></tr>
+    <tr><td><code>bump-minor</code></td><td>Minor bump</td><td><code>make bump-minor</code> bumps to the next minor version (no tag)</td></tr>
+    <tr><td><code>bump-major</code></td><td>Major bump</td><td><code>make bump-major</code> bumps to the next major version (no tag)</td></tr>
     <tr><th colspan="3" align="left">Cleaning</th></tr>
     <tr><td><code>clean</code></td><td>Remove build/coverage/dist</td><td>Runs clean-build/clean-coverage/clean-dist</td></tr>
     <tr><td><code>clean-build</code></td><td>Remove precomp/build dirs</td><td>Removes <code>.precomp</code> and <code>.build</code></td></tr>
@@ -465,7 +465,7 @@ make test        # Run test suite
 
 ### Versioning
 
-Use `make version` to set an explicit version and create a local annotated tag (no push):
+Use `make version` to set an explicit version (no tag):
 
 ```bash
 make TAG=0.10.0 DESCRIPTION="Release description" version

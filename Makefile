@@ -665,10 +665,6 @@ ifneq ($(TAG),)
 		printf "$(CLR_RED)✗ Version must be semver: MAJOR.MINOR.PATCH$(CLR_RESET)\n" >&2; \
 		exit 1; \
 	fi
-	@if git rev-parse -q --verify "refs/tags/v$(TAG)" >/dev/null; then \
-		printf "$(CLR_RED)✗ Tag v$(TAG) already exists$(CLR_RESET)\n" >&2; \
-		exit 1; \
-	fi
 	$(call log-info,Updating project version to $(TAG)...)
 	$(Q)perl -0pi -e 's/^(\s*VERSION\s*:=\s*).*/$${1}$(TAG)/m' Makefile
 	$(Q)perl -0pi -e 's/"version"\s*:\s*"[^"]*"/"version": "$(TAG)"/' $(META_FILE)
@@ -686,9 +682,6 @@ ifneq ($(TAG),)
 		exit 1; \
 	fi
 	$(call log-success,Version updated in Makefile, $(META_FILE), and README.md)
-	$(call log-info,Creating git tag v$(TAG)...)
-	$(Q)git tag -a "v$(TAG)" -m "$(DESCRIPTION)"
-	$(call log-success,Tag created locally: v$(TAG))
 else
 	$(call log,$(PROJECT_NAME) v$(VERSION))
 endif
