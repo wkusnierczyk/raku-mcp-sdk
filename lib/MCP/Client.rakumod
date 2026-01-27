@@ -563,12 +563,23 @@ class Client is export {
         my $tools = %params<tools>;
         my $tool-choice = %params<toolChoice>;
         if ($tools.defined || $tool-choice.defined) && !self!sampling-supports-tools {
-            die X::MCP::Client::Error.new(
-                error => MCP::JSONRPC::Error.from-code(
-                    MCP::JSONRPC::InvalidParams,
-                    "Client does not support sampling tools"
-                )
-            );
+            self!invalid-sampling("Client does not support sampling tools");
+        }
+        # Validate tool definitions if present
+        if $tools.defined && $tools ~~ Positional {
+            for $tools.list -> $t {
+                my $entry = $t ~~ Associative ?? $t !! {};
+                unless $entry<name>.defined {
+                    self!invalid-sampling("Tool definition missing required 'name' field");
+                }
+                unless $entry<inputSchema>.defined {
+                    self!invalid-sampling("Tool definition missing required 'inputSchema' field");
+                }
+            }
+        }
+        # Validate includeContext against capability
+        if %params<includeContext>.defined && !self!sampling-supports-context {
+            self!invalid-sampling("Client does not support sampling includeContext");
         }
         if %params<messages>:exists && %params<messages>.defined {
             my $msgs = %params<messages>;
@@ -632,7 +643,13 @@ class Client is export {
 
     method !coerce-sampling-result($result --> Hash) {
         return $result.Hash if $result ~~ MCP::Types::CreateMessageResult;
-        return $result if $result ~~ Hash;
+        if $result ~~ Hash {
+            # Ensure stopReason is preserved
+            my %h = $result;
+            %h<role> //= 'assistant';
+            %h<model> //= 'unknown';
+            return %h;
+        }
         return {
             role => 'assistant',
             content => [ MCP::Types::TextContent.new(text => $result.Str).Hash ],
@@ -643,6 +660,11 @@ class Client is export {
     method !sampling-supports-tools(--> Bool) {
         my $sampling = $!capabilities.sampling;
         $sampling.defined && $sampling.tools
+    }
+
+    method !sampling-supports-context(--> Bool) {
+        my $sampling = $!capabilities.sampling;
+        $sampling.defined && $sampling.context
     }
 
     method !invalid-sampling(Str $message) {

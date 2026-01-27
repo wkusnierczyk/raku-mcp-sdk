@@ -121,6 +121,20 @@ sub make-server() {
     ($server, $transport)
 }
 
+sub wait-for-task-status(TestTransport::TestTransport $transport, Str $task-id, Str $status, Int $timeout = 100) {
+    for ^($timeout * 10) {
+        my @notifs = $transport.sent.grep({
+            $_ ~~ MCP::JSONRPC::Notification
+            && .method eq 'notifications/tasks/status'
+            && .params<taskId> eq $task-id
+            && .params<status> eq $status
+        });
+        return @notifs[0] if @notifs;
+        sleep 0.1;
+    }
+    Nil
+}
+
 subtest 'Task creation via tools/call with task hint', {
     my ($server, $transport) = make-server();
 
@@ -240,14 +254,13 @@ subtest 'Task status notification on completion', {
     ));
     my $task-id = $create<task><taskId>;
 
-    # Wait for completion
-    sleep 0.3;
-
-    my @notifs = $transport.sent.grep({
-        $_ ~~ MCP::JSONRPC::Notification && .method eq 'notifications/tasks/status'
-    });
-    ok @notifs.elems >= 1, 'Status notification emitted on completion';
-    my $notif-params = @notifs[0].params;
+    my $notif = wait-for-task-status($transport, $task-id, 'completed');
+    ok $notif.defined, 'Status notification emitted on completion';
+    unless $notif.defined {
+        diag 'Task completion notification not received in time';
+        return;
+    }
+    my $notif-params = $notif.params;
     is $notif-params<taskId>, $task-id, 'Notification has correct taskId';
     is $notif-params<status>, 'completed', 'Notification shows completed';
 };
