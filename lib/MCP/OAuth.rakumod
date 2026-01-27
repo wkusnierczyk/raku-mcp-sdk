@@ -136,7 +136,7 @@ class PKCE is export {
     }
 
     method !sha256-pure(Blob $data --> Blob) {
-        my constant UInt $MASK = 0xFFFF_FFFF;
+        constant $MASK = 0xFFFF_FFFF;
 
         my constant @K = (
             0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
