@@ -276,6 +276,7 @@ Available examples:
   • advanced-client      # In-process loopback covering pagination, completions, roots, and elicitation
   • advanced-server      # Pagination, resource subscriptions, and cancellation
   • http-server          # Streamable HTTP server transport
+  • oauth-server         # HTTP server with OAuth 2.1 token validation
   • sampling-client      # Client-side sampling handler
   • simple-server        # Stdio server with tools, resources, and prompts
 ```
@@ -489,23 +490,26 @@ Regenerate the PNG with `make architecture-diagram`.
 ![Architecture diagram](architecture/architecture.png)
 
 ## Project structure
-
 ```
 MCP/
-├── MCP.rakumod              # Main module, re-exports
+├── MCP.rakumod                     # Main module, re-exports
 ├── MCP/
-│   ├── Types.rakumod        # Protocol types
-│   ├── JSONRPC.rakumod      # JSON-RPC 2.0
+│   ├── Types.rakumod               # Protocol types
+│   ├── JSONRPC.rakumod             # JSON-RPC 2.0
 │   ├── Transport/
-│   │   ├── Base.rakumod          # Transport role
-│   │   ├── Stdio.rakumod         # Stdio transport
-│   │   └── StreamableHTTP.rakumod # HTTP transport with SSE
-│   ├── Server.rakumod       # Server implementation
+│   │   ├── Base.rakumod            # Transport role
+│   │   ├── Stdio.rakumod           # Stdio transport
+│   │   └── StreamableHTTP.rakumod  # HTTP transport with SSE
+│   ├── OAuth.rakumod               # OAuth 2.1 types, PKCE, exceptions
+│   ├── OAuth/
+│   │   ├── Client.rakumod          # Client-side OAuth flow
+│   │   └── Server.rakumod          # Server-side token validation
+│   ├── Server.rakumod              # Server implementation
 │   ├── Server/
-│   │   ├── Tool.rakumod     # Tool helpers
-│   │   ├── Resource.rakumod # Resource helpers
-│   │   └── Prompt.rakumod   # Prompt helpers
-│   └── Client.rakumod       # Client implementation
+│   │   ├── Tool.rakumod            # Tool helpers
+│   │   ├── Resource.rakumod        # Resource helpers
+│   │   └── Prompt.rakumod          # Prompt helpers
+│   └── Client.rakumod              # Client implementation
 ```
 
 ## Contributing
