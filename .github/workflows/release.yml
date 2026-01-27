@@ -98,6 +98,17 @@ jobs:
         with:
           raku-version: ${{ matrix.raku-version }}
 
+      - name: Cache Raku dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.raku
+            ~/.zef
+          key: raku-${{ runner.os }}-${{ matrix.raku-version }}-${{ hashFiles('META6.json') }}
+          restore-keys: |
+            raku-${{ runner.os }}-${{ matrix.raku-version }}-
+            raku-${{ runner.os }}-
+
       - name: Install dependencies
         run: zef install --deps-only .
 
@@ -125,6 +136,17 @@ jobs:
         uses: Raku/setup-raku@v1
         with:
           raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Cache Raku dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.raku
+            ~/.zef
+          key: raku-${{ runner.os }}-${{ env.RAKU_VERSION }}-${{ hashFiles('META6.json') }}
+          restore-keys: |
+            raku-${{ runner.os }}-${{ env.RAKU_VERSION }}-
+            raku-${{ runner.os }}-
 
       - name: Install dependencies
         run: zef install --deps-only .
@@ -332,6 +354,17 @@ jobs:
         uses: Raku/setup-raku@v1
         with:
           raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Cache Raku dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.raku
+            ~/.zef
+          key: raku-${{ runner.os }}-${{ env.RAKU_VERSION }}-${{ hashFiles('META6.json') }}
+          restore-keys: |
+            raku-${{ runner.os }}-${{ env.RAKU_VERSION }}-
+            raku-${{ runner.os }}-
 
       - name: Install fez
         run: zef install fez

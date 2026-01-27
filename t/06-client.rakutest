@@ -21,11 +21,16 @@ Covers initialization, request/response handling, and content parsing.
 
 sub respond-to-last(TestTransport::TestTransport $transport, $payload) {
     my $req;
-    for $transport.sent.reverse -> $msg {
-        if $msg ~~ MCP::JSONRPC::Request {
-            $req = $msg;
-            last;
+    # Be resilient to scheduler timing: wait briefly for a request to appear.
+    for ^200 {
+        for $transport.sent.reverse -> $msg {
+            if $msg ~~ MCP::JSONRPC::Request {
+                $req = $msg;
+                last;
+            }
         }
+        last if $req.defined;
+        sleep 0.01;
     }
     die "No request to respond to" unless $req.defined;
     $transport.emit(MCP::JSONRPC::Response.success($req.id, $payload));
