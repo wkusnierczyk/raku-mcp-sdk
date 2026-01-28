@@ -930,6 +930,11 @@ class Server is export {
         self.notify('notifications/resources/list_changed');
     }
 
+    #| Notify clients that the prompt list has changed
+    method notify-prompts-list-changed() {
+        self.notify('notifications/prompts/list_changed');
+    }
+
     #| Request roots from client
     #| Returns a Promise that resolves to an array of Root objects
     method list-roots(--> Promise) {

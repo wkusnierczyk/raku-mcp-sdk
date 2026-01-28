@@ -612,6 +612,26 @@ subtest 'Resource subscriptions', {
     is @notifications.elems, 0, 'no notification sent for unknown URI';
 };
 
+subtest 'Prompt list changed notification', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $server.add-prompt(
+        name => 'greet',
+        description => 'Greeting',
+        generator => -> :%params { 'hello' }
+    );
+
+    $transport.clear-sent;
+    $server.notify-prompts-list-changed();
+    my @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifications.elems, 1, 'notify-prompts-list-changed sends notification';
+    is @notifications[0].method, 'notifications/prompts/list_changed', 'prompt list changed notification method is correct';
+};
+
 subtest 'Server list-roots', {
     my $transport = TestTransport::TestTransport.new;
     my $server = Server.new(
