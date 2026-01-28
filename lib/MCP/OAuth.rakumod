@@ -32,6 +32,15 @@ class X::MCP::OAuth::Registration is Exception is export {
     }
 }
 
+class X::MCP::OAuth::TokenExchange is Exception is export {
+    has Str $.message = 'Token exchange failed';
+    has Str $.error;
+    has Str $.error-description;
+    method message(--> Str) {
+        $!error-description ?? "$!message: $!error ($!error-description)" !! $!message
+    }
+}
+
 # === Protected Resource Metadata (RFC 9728) ===
 
 class ProtectedResourceMetadata is export {
@@ -117,6 +126,26 @@ class TokenResponse is export {
             refresh-token => %h<refresh_token>,
             scope => %h<scope>,
         )
+    }
+}
+
+# === Token Exchange Response (RFC 8693) ===
+
+class TokenExchangeResponse is export {
+    has Str $.issued-token-type is required;
+    has Str $.access-token is required;  # The ID-JAG JWT
+    has Str $.token-type = 'N_A';
+    has Str $.scope;
+    has Int $.expires-in;
+
+    method from-hash(%h --> TokenExchangeResponse) {
+        my %args =
+            issued-token-type => %h<issued_token_type>,
+            access-token      => %h<access_token>;
+        %args<token-type>  = $_ with %h<token_type>;
+        %args<scope>       = $_ with %h<scope>;
+        %args<expires-in>  = .Int with %h<expires_in>;
+        self.new(|%args)
     }
 }
 

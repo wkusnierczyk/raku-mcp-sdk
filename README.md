@@ -44,7 +44,7 @@ Raku MCP SDK is **work in progress** (WIP).
 | Completion | ✅ Done | Prompt and resource autocomplete with handler registration |
 | Tool output schemas | ✅ Done | `outputSchema` and `structuredContent` for structured results |
 | Tool metadata | ⚠️ Partial | Tool name validation (SEP-986); icon metadata planned |
-| OAuth 2.1 | ✅ Done | PKCE, token management, server validation, metadata discovery, dynamic client registration, M2M client credentials |
+| OAuth 2.1 | ✅ Done | PKCE, token management, server validation, metadata discovery, dynamic client registration, M2M client credentials, enterprise IdP (SEP-990) |
 
 ## Table of contents
 
@@ -572,7 +572,7 @@ Building this repository was supported by:
 $ make about
 
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
-├─ version:    0.24.0
+├─ version:    0.25.0
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT
