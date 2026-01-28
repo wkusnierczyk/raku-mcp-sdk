@@ -102,13 +102,8 @@ else
     Q :=
 endif
 
-# Version command args (allow: make version 1.2.3 "Description")
-VERSION_INPUT := $(word 2, $(MAKECMDGOALS))
-VERSION_ARGS_DESC := $(wordlist 3, 999, $(MAKECMDGOALS))
-# Allow passing TAG/DESCRIPTION via variables, or via positional args.
-TAG ?= $(VERSION_INPUT)
-DESCRIPTION ?= $(strip $(VERSION_ARGS_DESC))
-DESCRIPTION := $(if $(DESCRIPTION),$(DESCRIPTION),$(if $(TAG),Update version to v$(TAG),))
+# Version command args (allow: make version 1.2.3)
+TAG ?= $(word 2, $(MAKECMDGOALS))
 ifeq ($(firstword $(MAKECMDGOALS)),version)
     $(foreach word,$(wordlist 2, 999, $(MAKECMDGOALS)),$(eval $(word):;@:))
 endif
@@ -693,9 +688,7 @@ bump-patch:
 		printf "$(CLR_RED)✗ Current VERSION must be semver: MAJOR.MINOR.PATCH$(CLR_RESET)\n" >&2; \
 		exit 1; \
 	fi
-	@desc="$(DESCRIPTION)"; \
-	if [ -z "$$desc" ]; then desc="Bump patch version to $(NEXT_PATCH)"; fi; \
-	$(MAKE) version TAG=$(NEXT_PATCH) DESCRIPTION="$$desc"
+	@$(MAKE) version TAG=$(NEXT_PATCH)
 
 .PHONY: bump-minor
 # bump-minor: Placeholder for minor bump
@@ -704,9 +697,7 @@ bump-minor:
 		printf "$(CLR_RED)✗ Current VERSION must be semver: MAJOR.MINOR.PATCH$(CLR_RESET)\n" >&2; \
 		exit 1; \
 	fi
-	@desc="$(DESCRIPTION)"; \
-	if [ -z "$$desc" ]; then desc="Bump minor version to $(NEXT_MINOR)"; fi; \
-	$(MAKE) version TAG=$(NEXT_MINOR) DESCRIPTION="$$desc"
+	@$(MAKE) version TAG=$(NEXT_MINOR)
 
 .PHONY: bump-major
 # bump-major: Placeholder for major bump
@@ -715,9 +706,7 @@ bump-major:
 		printf "$(CLR_RED)✗ Current VERSION must be semver: MAJOR.MINOR.PATCH$(CLR_RESET)\n" >&2; \
 		exit 1; \
 	fi
-	@desc="$(DESCRIPTION)"; \
-	if [ -z "$$desc" ]; then desc="Bump major version to $(NEXT_MAJOR)"; fi; \
-	$(MAKE) version TAG=$(NEXT_MAJOR) DESCRIPTION="$$desc"
+	@$(MAKE) version TAG=$(NEXT_MAJOR)
 
 # ------------------------------------------------------------------------------
 # Special Targets
