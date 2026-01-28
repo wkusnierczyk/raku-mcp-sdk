@@ -442,7 +442,7 @@ make test        # Run test suite
     <tr><td><code>ci</code></td><td>CI pipeline</td><td><code>dependencies → lint → test</code></td></tr>
     <tr><td><code>ci-full</code></td><td>Full CI pipeline</td><td><code>dependencies-dev → lint → test → coverage</code></td></tr>
     <tr><th colspan="3" align="left">Version management</th></tr>
-    <tr><td><code>version</code></td><td>Show or update project version</td><td><code>make TAG=1.2.3 DESCRIPTION="Release description" version</code> updates Makefile + META6.json + README (no tag)</td></tr>
+    <tr><td><code>version</code></td><td>Show or update project version</td><td><code>make TAG=1.2.3 version</code> updates Makefile + META6.json + README (no tag)</td></tr>
     <tr><td><code>bump-patch</code></td><td>Patch bump</td><td><code>make bump-patch</code> bumps to the next patch version (no tag)</td></tr>
     <tr><td><code>bump-minor</code></td><td>Minor bump</td><td><code>make bump-minor</code> bumps to the next minor version (no tag)</td></tr>
     <tr><td><code>bump-major</code></td><td>Major bump</td><td><code>make bump-major</code> bumps to the next major version (no tag)</td></tr>
@@ -469,13 +469,13 @@ make test        # Run test suite
 Use `make version` to set an explicit version (no tag):
 
 ```bash
-make TAG=0.10.0 DESCRIPTION="Release description" version
+make TAG=0.10.0 version
 ```
 
-Or use positional arguments:
+Or use a positional argument:
 
 ```bash
-make version 0.10.0 "Release description"
+make version 0.10.0
 ```
 
 For quick bumps, use:
@@ -486,7 +486,6 @@ make bump-minor    # x.(y+1).0
 make bump-major    # (x+1).0.0
 ```
 
-If `DESCRIPTION` is omitted, it defaults to `Update version to v<TAG>`.
 
 ### Coverage Prerequisites
 
