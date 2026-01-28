@@ -279,6 +279,7 @@ Available examples:
   • http-server          # Streamable HTTP server transport
   • oauth-server         # HTTP server with OAuth 2.1 token validation
   • sampling-client      # Client-side sampling handler
+  • extensions            # Extension registration, negotiation, and method dispatch
   • simple-server        # Stdio server with tools, resources, and prompts
 ```
 
