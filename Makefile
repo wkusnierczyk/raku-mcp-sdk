@@ -405,7 +405,7 @@ format-fix:
 
 .PHONY: check
 # check: Run lint and tests
-check: lint test
+check: format lint test
 	$(call log-success,All checks passed)
 
 # ------------------------------------------------------------------------------
