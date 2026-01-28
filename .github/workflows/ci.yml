@@ -112,6 +112,10 @@ jobs:
       - name: Ensure JSON::Fast is installed
         run: zef install JSON::Fast
 
+      - name: Verify Cro::HTTP availability
+        run: |
+          raku -e 'use Cro::HTTP::Client; use Cro::HTTP::Server; say "Cro::HTTP ok"'
+
       - name: Run tests
         run: |
           zef install App::Prove6 || true

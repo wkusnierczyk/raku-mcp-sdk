@@ -192,7 +192,7 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
                 });
             }
 
-            &get(-> *@ {
+            &get(sub (*@) {
                 my $req = &request();
                 my $resp = &response();
                 unless validate-request($req, $resp, &content) {
@@ -222,7 +222,7 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
                 &content('text/event-stream', $stream.supplier.Supply);
             });
 
-            &post(-> *@ {
+            &post(sub (*@) {
                 my $req = &request();
                 my $resp = &response();
                 unless validate-request($req, $resp, &content) {
@@ -275,7 +275,7 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
                 }
             });
 
-            &delete(-> *@ {
+            &delete(sub (*@) {
                 my $req = &request();
                 my $resp = &response();
                 unless validate-request($req, $resp, &content) {
@@ -482,11 +482,13 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
 
     method !cro-sub(Str $module, Str $name) {
         my $pkg = self!cro-class($module);
-        my &sub = $pkg.WHO{$name};
+        my $exports = $pkg.WHO<EXPORT>.WHO<DEFAULT>.WHO;
+        # Try regular sub first, then term
+        my $sub = $exports{'&' ~ $name} // $exports{'&term:<' ~ $name ~ '>'};
         die X::MCP::Transport::StreamableHTTP::HTTP.new(
             message => "Missing $name in $module"
-        ) unless &sub.defined;
-        &sub
+        ) unless $sub.defined && $sub ~~ Callable;
+        $sub
     }
 }
 
@@ -594,7 +596,7 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
     #| Terminate the session by sending DELETE request
     method terminate-session(--> Promise) {
         start {
-            return unless $!session-id.defined;
+            return False unless $!session-id.defined;
             my @headers = (
                 'MCP-Protocol-Version' => $!protocol-version,
                 'MCP-Session-Id' => $!session-id,
@@ -603,17 +605,18 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
                 my $auth = await $!oauth-handler.authorization-header;
                 @headers.push('Authorization' => $auth);
             }
-            $!client //= self!cro-client;
+            # Use a fresh client to avoid conflicts with SSE connection
+            my $delete-client = self!cro-client;
+            my $result = False;
             try {
-                my $resp = await $!client.delete($!endpoint, headers => @headers);
+                my $resp = await $delete-client.delete($!endpoint, headers => @headers);
                 if $resp.status == 204 || $resp.status == 200 {
                     $!session-id = Nil;
-                    True
-                } else {
-                    False
+                    $result = True;
                 }
-                CATCH { default { False } }
+                CATCH { default { } }
             }
+            $result
         }
     }
 

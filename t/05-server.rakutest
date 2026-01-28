@@ -377,10 +377,10 @@ subtest 'Protocol version handling', {
         method => 'initialize',
         params => { protocolVersion => '2025-11-25' }
     ));
-    is $init-latest<protocolVersion>, MCP::Types::LATEST_PROTOCOL_VERSION,
-        'server responds with latest version for 2025-11-25 client';
+    is $init-latest<protocolVersion>, '2025-11-25',
+        'server echoes latest version for 2025-11-25 client';
 
-    # Test client with older supported version (2025-03-26)
+    # Test client with older supported version (2025-03-26) — server negotiates to client's version
     my $server2 = Server.new(
         info => MCP::Types::Implementation.new(name => 'srv2', version => '0.1'),
         transport => $transport
@@ -390,8 +390,8 @@ subtest 'Protocol version handling', {
         method => 'initialize',
         params => { protocolVersion => '2025-03-26' }
     ));
-    is $init-older<protocolVersion>, MCP::Types::LATEST_PROTOCOL_VERSION,
-        'server responds with latest version for 2025-03-26 client';
+    is $init-older<protocolVersion>, '2025-03-26',
+        'server negotiates to client version 2025-03-26';
     ok $init-older<capabilities>:exists, 'server includes capabilities for older client';
 
     # Test client with even older supported version (2024-11-05)
@@ -404,10 +404,24 @@ subtest 'Protocol version handling', {
         method => 'initialize',
         params => { protocolVersion => '2024-11-05' }
     ));
-    is $init-oldest<protocolVersion>, MCP::Types::LATEST_PROTOCOL_VERSION,
-        'server responds with latest version for 2024-11-05 client';
+    is $init-oldest<protocolVersion>, '2024-11-05',
+        'server negotiates to client version 2024-11-05';
     ok $init-oldest<serverInfo>:exists, 'server includes serverInfo for older client';
     is $init-oldest<serverInfo><name>, 'srv3', 'serverInfo has correct name';
+
+    # Test client with unsupported version — server falls back to latest
+    my $server4 = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv4', version => '0.1'),
+        transport => $transport
+    );
+    my $init-unknown = $server4.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 4,
+        method => 'initialize',
+        params => { protocolVersion => '2099-01-01' }
+    ));
+    is $init-unknown<protocolVersion>, MCP::Types::LATEST_PROTOCOL_VERSION,
+        'server falls back to latest version for unsupported client version';
+    ok $init-unknown<capabilities>:exists, 'server includes capabilities for unsupported client';
 };
 
 subtest 'Annotations in list responses', {
