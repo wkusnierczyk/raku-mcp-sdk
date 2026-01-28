@@ -1,0 +1,239 @@
+use v6.d;
+use Test;
+use lib 'lib';
+use lib 't/lib';
+
+use MCP::Server;
+use MCP::Types;
+need MCP::JSONRPC;
+use MCP::Server::Resource;
+use MCP::Client;
+need TestTransport;
+use JSON::Fast;
+use MIME::Base64;
+
+=begin pod
+=head1 NAME
+
+13-resource-templates.rakutest - Tests for resource templates
+
+=head1 DESCRIPTION
+
+Covers ResourceTemplate type, builder, server registration/dispatch,
+template URI matching, and client list-resource-templates.
+
+=end pod
+
+plan 7;
+
+subtest 'ResourceTemplate type — construct, Hash roundtrip, from-hash', {
+    my $rt = MCP::Types::ResourceTemplate.new(
+        uriTemplate => 'users://{userId}/profile',
+        name => 'User Profile',
+        description => 'A user profile',
+        mimeType => 'application/json',
+    );
+    is $rt.uriTemplate, 'users://{userId}/profile', 'uriTemplate';
+    is $rt.name, 'User Profile', 'name';
+    is $rt.description, 'A user profile', 'description';
+
+    my %h = $rt.Hash;
+    is %h<uriTemplate>, 'users://{userId}/profile', 'Hash uriTemplate';
+    is %h<name>, 'User Profile', 'Hash name';
+    ok %h<description>:exists, 'Hash has description';
+
+    my $rt2 = MCP::Types::ResourceTemplate.from-hash(%h);
+    is $rt2.uriTemplate, $rt.uriTemplate, 'from-hash roundtrip uriTemplate';
+    is $rt2.name, $rt.name, 'from-hash roundtrip name';
+    is $rt2.description, $rt.description, 'from-hash roundtrip description';
+};
+
+subtest 'ResourceTemplateBuilder — fluent build', {
+    my $tmpl = resource-template()
+        .uri-template('files://{path}')
+        .name('File')
+        .description('Read a file')
+        .mimeType('text/plain')
+        .reader(-> %params { "content of %params<path>" })
+        .build;
+
+    is $tmpl.name, 'File', 'built name';
+    is $tmpl.uri-template, 'files://{path}', 'built uri-template';
+    my $def = $tmpl.to-resource-template;
+    is $def.uriTemplate, 'files://{path}', 'to-resource-template uriTemplate';
+
+    dies-ok { resource-template().name('x').reader(-> %p { '' }).build }, 'missing uri-template dies';
+    dies-ok { resource-template().uri-template('x').reader(-> %p { '' }).build }, 'missing name dies';
+    dies-ok { resource-template().uri-template('x').name('x').build }, 'missing reader dies';
+};
+
+subtest 'Server add-resource-template — lists via resources/templates/list', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport,
+    );
+
+    my $tmpl = resource-template()
+        .uri-template('users://{userId}/profile')
+        .name('User Profile')
+        .description('Get user profile')
+        .mimeType('application/json')
+        .reader(-> %params { '{"id":"' ~ %params<userId> ~ '"}' })
+        .build;
+
+    $server.add-resource-template($tmpl);
+
+    my $result = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'resources/templates/list',
+    ));
+    is $result<resourceTemplates>.elems, 1, 'one template listed';
+    is $result<resourceTemplates>[0]<uriTemplate>, 'users://{userId}/profile', 'template uriTemplate';
+    is $result<resourceTemplates>[0]<name>, 'User Profile', 'template name';
+};
+
+subtest 'Server template read — extracts variables, calls reader', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport,
+    );
+
+    $server.add-resource-template(
+        uri-template => 'users://{userId}/posts/{postId}',
+        name => 'User Post',
+        reader => -> %params { "user=%params<userId> post=%params<postId>" },
+    );
+
+    my $result = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'resources/read',
+        params => { uri => 'users://alice/posts/42' },
+    ));
+    is $result<contents>.elems, 1, 'one content returned';
+    is $result<contents>[0]<text>, 'user=alice post=42', 'variables extracted correctly';
+    is $result<contents>[0]<uri>, 'users://alice/posts/42', 'resolved URI used';
+
+    # Unknown URI still errors
+    dies-ok {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 2,
+            method => 'resources/read',
+            params => { uri => 'no-match://foo' },
+        ));
+    }, 'non-matching URI throws';
+};
+
+subtest 'Server remove-resource-template', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport,
+    );
+
+    $server.add-resource-template(
+        uri-template => 'items://{id}',
+        name => 'Item',
+        reader => -> %params { "item %params<id>" },
+    );
+
+    my $list = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'resources/templates/list',
+    ));
+    is $list<resourceTemplates>.elems, 1, 'template present';
+
+    $server.remove-resource-template('Item');
+
+    my $list2 = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'resources/templates/list',
+    ));
+    is $list2<resourceTemplates>.elems, 0, 'template removed';
+};
+
+subtest 'Client list-resource-templates', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+    );
+
+    # Start the client (connect returns a Promise that performs init handshake)
+    my $connect-promise = $client.connect;
+    sleep 0.1;  # Let the connect start
+
+    # Respond to the initialize request
+    my $init-req = $transport.sent[*-1];
+    $transport.emit(MCP::JSONRPC::Response.success($init-req.id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        serverInfo => { name => 'test', version => '0.1' },
+        instructions => '',
+    }));
+    await $connect-promise;
+
+    $transport.clear-sent;
+
+    # Now call list-resource-templates
+    my $promise = $client.list-resource-templates;
+    sleep 0.1;
+
+    my $sent = $transport.sent[*-1];
+    ok $sent ~~ MCP::JSONRPC::Request, 'request sent';
+    is $sent.method, 'resources/templates/list', 'correct method';
+
+    # Simulate server response
+    $transport.emit(MCP::JSONRPC::Response.success($sent.id, {
+        resourceTemplates => [
+            { uriTemplate => 'test://{tid}', name => 'Test' },
+        ]
+    }));
+
+    my $result = await $promise;
+    is $result<resourceTemplates>.elems, 1, 'got one template';
+    is $result<resourceTemplates>[0].uriTemplate, 'test://{tid}', 'parsed template';
+};
+
+subtest 'Pagination of templates list', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport,
+        page-size => 2,
+    );
+
+    for 1..5 -> $i {
+        $server.add-resource-template(
+            uri-template => 'items://{itemId}/' ~ $i,
+            name => "Template$i",
+            reader => -> %params { "t$i" },
+        );
+    }
+
+    my $page1 = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'resources/templates/list',
+    ));
+    is $page1<resourceTemplates>.elems, 2, 'first page has 2';
+    ok $page1<nextCursor>:exists, 'has next cursor';
+
+    my $page2 = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'resources/templates/list',
+        params => { cursor => $page1<nextCursor> },
+    ));
+    is $page2<resourceTemplates>.elems, 2, 'second page has 2';
+    ok $page2<nextCursor>:exists, 'has next cursor';
+
+    my $page3 = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 3,
+        method => 'resources/templates/list',
+        params => { cursor => $page2<nextCursor> },
+    ));
+    is $page3<resourceTemplates>.elems, 1, 'last page has 1';
+    nok $page3<nextCursor>:exists, 'no next cursor';
+};
+
+done-testing;

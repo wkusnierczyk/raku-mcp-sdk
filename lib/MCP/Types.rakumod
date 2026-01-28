@@ -352,6 +352,30 @@ class Resource is export {
     }
 }
 
+#| Resource template definition (URI templates with placeholders)
+class ResourceTemplate is export {
+    has Str $.uriTemplate is required;
+    has Str $.name is required;
+    has Str $.description;
+    has Str $.mimeType;
+    has Annotations $.annotations;
+
+    method Hash(--> Hash) {
+        my %h = uriTemplate => $!uriTemplate, name => $!name;
+        %h<description> = $_ with $!description;
+        %h<mimeType> = $_ with $!mimeType;
+        %h<annotations> = $!annotations.Hash if $!annotations;
+        %h
+    }
+
+    method from-hash(%h --> ResourceTemplate) {
+        my %args = uriTemplate => %h<uriTemplate>, name => %h<name>;
+        %args<description> = %h<description> if %h<description>.defined;
+        %args<mimeType> = %h<mimeType> if %h<mimeType>.defined;
+        self.new(|%args)
+    }
+}
+
 #| Resource contents
 class ResourceContents is export {
     has Str $.uri is required;

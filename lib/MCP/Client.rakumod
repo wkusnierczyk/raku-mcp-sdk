@@ -281,6 +281,17 @@ class Client is export {
         })
     }
 
+    #| List available resource templates
+    method list-resource-templates(Str :$cursor --> Promise) {
+        my %params = $cursor ?? (cursor => $cursor) !! ();
+        self.request('resources/templates/list', %params || Nil).then(-> $promise {
+            {
+                resourceTemplates => $promise.result<resourceTemplates>.map({ MCP::Types::ResourceTemplate.from-hash($_) }).Array,
+                ($promise.result<nextCursor> ?? (nextCursor => $promise.result<nextCursor>) !! Empty),
+            }
+        })
+    }
+
     #| Read a resource
     method read-resource(Str $uri --> Promise) {
         self.request('resources/read', { uri => $uri }).then(-> $promise {

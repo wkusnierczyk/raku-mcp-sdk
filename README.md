@@ -72,7 +72,6 @@ Raku MCP SDK is **work in progress** (WIP).
   - [Makefile targets](#makefile-targets)
   - [Environment variables](#environment-variables)
   - [Coverage prerequisites](#coverage-prerequisites)
-- [Architecture](#architecture)
 - [Project structure](#project-structure)
 - [Contributing](#contributing)
 - [License](#license)
@@ -505,17 +504,6 @@ make coverage
 # report: coverage-report/report.html
 ```
 
-## Architecture
-
-The diagram below shows how the core components interact.
-
-- The Mermaid source is in `architecture/architecture.mmd`.
-- The rendered image is in `architecture/architecture.png`.
-
-Regenerate the PNG with `make architecture-diagram`.
-
-![Architecture diagram](architecture/architecture.png)
-
 ## Project structure
 
 ```
@@ -585,7 +573,7 @@ Building this repository was supported by:
 $ make about
 
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
-├─ version:    0.16.0
+├─ version:    0.17.0
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT
