@@ -243,6 +243,20 @@ class Client is export {
         $!notifications.Supply
     }
 
+    #| Supply of progress notifications (emits MCP::Types::Progress objects)
+    method progress(--> Supply) {
+        self.notifications.grep({
+            $_.method eq 'notifications/progress'
+        }).map({
+            MCP::Types::Progress.new(
+                progressToken => $_.params<progressToken>,
+                progress      => $_.params<progress>.Num,
+                total         => ($_.params<total>.defined ?? $_.params<total>.Num !! Num),
+                message       => $_.params<message>,
+            )
+        })
+    }
+
     #| List available tools
     method list-tools(Str :$cursor --> Promise) {
         my %params = $cursor ?? (cursor => $cursor) !! ();

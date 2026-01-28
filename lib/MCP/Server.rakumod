@@ -357,6 +357,12 @@ class Server is export {
     }
 
     #| Dispatch request to appropriate handler using multi-dispatch
+    proto method dispatch-request($req) {
+        # Set progress token from _meta for all dispatched requests
+        my $*MCP-PROGRESS-TOKEN = ($req.params<_meta><progressToken> if $req.params ~~ Associative) // Nil;
+        {*}
+    }
+
     multi method dispatch-request($req where *.method eq 'initialize') {
         self!handle-initialize($req.params);
     }
@@ -870,7 +876,10 @@ class Server is export {
     }
 
     #| Send a progress notification
-    method progress($token, Num $progress, Num :$total, Str :$message) {
+    #| If no token is provided, uses the progress token from the current request's _meta
+    method progress(Num $progress, Num :$total, Str :$message, :$token is copy) {
+        $token //= $*MCP-PROGRESS-TOKEN // Nil;
+        return unless $token.defined;
         self.notify('notifications/progress', {
             progressToken => $token,
             progress => $progress,
