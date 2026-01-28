@@ -16,11 +16,12 @@
 
 ## Status
 
-**Work in progress**
+Raku MCP SDK is **work in progress** (WIP).
 
-See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing features, in the context of the most recent [MCP specification](https://modelcontextprotocol.io/specification/2025-11-25).
+- See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing features.
+- See [MCP specification](https://modelcontextprotocol.io/specification/2025-11-25) for a full list of requirements.
 
-### Implementation Progress
+### Implementation progress
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -51,11 +52,11 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
 - [Introduction](#introduction)
   - [MCP](#mcp)
     - [What is it for?](#what-is-it-for)
-    - [Design Principles](#design-principles)
-    - [Current Status](#current-status)
+    - [Design principles](#design-principles)
+    - [Current status](#current-status)
   - [Raku](#raku)
-    - [Design Principles](#design-principles-1)
-    - [What is Outstanding? (Unique Features)](#what-is-outstanding-unique-features)
+    - [Design principles](#design-principles-1)
+    - [What is outstanding? (unique features)](#what-is-outstanding-unique-features)
     - [Raku for AI and MCP](#raku-for-ai-and-mcp)
 - [Installation](#installation)
 - [Quick start](#quick-start)
@@ -68,9 +69,9 @@ See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing featu
   - [Prompts](#prompts)
 - [Examples](#examples)
 - [Development](#development)
-  - [Makefile Targets](#makefile-targets)
-  - [Environment Variables](#environment-variables)
-  - [Coverage Prerequisites](#coverage-prerequisites)
+  - [Makefile targets](#makefile-targets)
+  - [Environment variables](#environment-variables)
+  - [Coverage prerequisites](#coverage-prerequisites)
 - [Architecture](#architecture)
 - [Project structure](#project-structure)
 - [Contributing](#contributing)
@@ -93,14 +94,14 @@ It solves the "m-by-n" integration problem. Instead of every AI application (Cla
 * **Servers** expose resources (data), tools (functions), and prompts.
 * **Clients** (AI applications/Hosts) discover and use these capabilities securely.
 
-#### Design Principles
+#### Design principles
 
 * **JSON-RPC 2.0**: The wire protocol is standard JSON-RPC.
 * **Client-Host-Server Architecture**: Clearly separates the Host (the AI app, e.g., Claude Desktop), the Client (the connector inside the host), and the Server (the data provider).
 * **Capability Negotiation**: Connections start with an initialize handshake where both sides declare what they support (e.g., resources, logging, sampling).
 * **Transport Agnostic**: Designed to run over Stdio (local processes) or HTTP (remote).
 
-#### Current Status
+#### Current status
 
 * **Standard**: Released by Anthropic in late 2024; it is now an open standard (managed under the Linux Foundation) supported by major players like OpenAI, Block, and various dev tools (Replit, Sourcegraph).
 * **Stability**: The core specification is stable, but transport specifics (specifically the shift to "Streamable HTTP") have evolved recently (circa early 2025) to simplify deployment.
@@ -111,7 +112,7 @@ It solves the "m-by-n" integration problem. Instead of every AI application (Cla
 Raku (formerly Perl 6) is a high-level, multi-paradigm programming language optimized for expressiveness, modularity, and consistency. 
 It is a specification-driven language (with Rakudo being the primary implementation) that encourages "programming as a human language"—allowing code to be written in a way that feels natural and context-aware rather than rigid and machine-like.
 
-#### Design Principles
+#### Design principles
 
 Raku preserves the spirit of Perl ("There Is More Than One Way To Do It") but rebuilds the foundation entirely. Its core principles include:
 
@@ -120,7 +121,7 @@ Raku preserves the spirit of Perl ("There Is More Than One Way To Do It") but re
 * **Gradual Typing**: You can write quick "scripty" code with dynamic types, or large-scale robust applications with strict static types, all in the same file.
 * **Unicode at the Core**: Raku assumes Unicode by default, treating characters as graphemes (user-perceived characters) rather than simple bytes, preventing common text-processing bugs.
 
-#### What is Outstanding? (Unique Features)
+#### What is outstanding? (Unique features)
 
 Raku offers features that are often libraries or "hacks" in other languages as first-class citizens:
 
@@ -506,14 +507,16 @@ make coverage
 ## Architecture
 
 The diagram below shows how the core components interact.
-* The Mermaid source is in `architecture/architecture.mmd`.
-* The rendered image is in `architecture/architecture.png`.
+
+- The Mermaid source is in `architecture/architecture.mmd`.
+- The rendered image is in `architecture/architecture.png`.
 
 Regenerate the PNG with `make architecture-diagram`.
 
 ![Architecture diagram](architecture/architecture.png)
 
 ## Project structure
+
 ```
 MCP/
 ├── MCP.rakumod                     # Main module, re-exports
