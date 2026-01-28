@@ -168,3 +168,171 @@ our sub file-resource(IO::Path $path, Str :$uri, Str :$name --> RegisteredResour
     $builder.name($_) with $name;
     $builder.build
 }
+
+#| Wrapper class for a registered resource template with its reader
+class RegisteredResourceTemplate is export {
+    has Str $.uri-template is required;
+    has Str $.name is required;
+    has Str $.description;
+    has Str $.mimeType;
+    has MCP::Types::Annotations $.annotations;
+    has &.reader is required;
+
+    #| Get the ResourceTemplate definition for listing
+    method to-resource-template(--> MCP::Types::ResourceTemplate) {
+        MCP::Types::ResourceTemplate.new(
+            uriTemplate => $!uri-template,
+            name => $!name,
+            description => $!description,
+            mimeType => $!mimeType,
+            annotations => $!annotations,
+        )
+    }
+
+    #| Try to match a URI against this template; returns params hash or Nil
+    method match-uri(Str $uri --> Hash) {
+        # Parse template into literal parts and variable names
+        my @names;
+        my @literal-parts;
+        my $rest = $!uri-template;
+        while $rest ~~ / ^ (.*?) '{' (<-[}]>+) '}' (.*)/ {
+            @literal-parts.push: ~$0;
+            @names.push: ~$1;
+            $rest = ~$2;
+        }
+        @literal-parts.push: $rest;
+
+        # Build match attempt: split URI by literal parts
+        my $remaining = $uri;
+        my @values;
+
+        for @literal-parts.kv -> $i, $literal {
+            if $i == 0 {
+                # First literal must be a prefix
+                return Nil unless $remaining.starts-with($literal);
+                $remaining = $remaining.substr($literal.chars);
+            } else {
+                # Find the next literal to know where this variable ends
+                if $literal.chars {
+                    my $pos = $remaining.index($literal);
+                    return Nil unless $pos.defined;
+                    my $val = $remaining.substr(0, $pos);
+                    return Nil unless $val.chars;  # empty variable
+                    @values.push: $val;
+                    $remaining = $remaining.substr($pos + $literal.chars);
+                } else {
+                    # Last variable, consume rest
+                    return Nil unless $remaining.chars;
+                    @values.push: $remaining;
+                    $remaining = '';
+                }
+            }
+        }
+
+        return Nil if $remaining.chars;  # leftover means no match
+        return Nil unless @values.elems == @names.elems;
+
+        my %params;
+        for @names.kv -> $i, $name {
+            %params{$name} = @values[$i];
+        }
+        %params
+    }
+
+    #| Read the resource via template reader with extracted params
+    method read(%params, Str :$uri --> Array) {
+        my $result = &!reader(%params);
+
+        my $resolved-uri = $uri // $!uri-template;
+
+        given $result {
+            when MCP::Types::ResourceContents {
+                return [$result];
+            }
+            when Str {
+                return [MCP::Types::ResourceContents.new(
+                    uri => $resolved-uri,
+                    mimeType => $!mimeType // 'text/plain',
+                    text => $result
+                )];
+            }
+            when Blob | Buf {
+                return [MCP::Types::ResourceContents.new(
+                    uri => $resolved-uri,
+                    mimeType => $!mimeType // 'application/octet-stream',
+                    blob => $result
+                )];
+            }
+            when Positional {
+                return $result.Array;
+            }
+            default {
+                return [MCP::Types::ResourceContents.new(
+                    uri => $resolved-uri,
+                    mimeType => 'text/plain',
+                    text => $result.Str
+                )];
+            }
+        }
+    }
+}
+
+#| Builder for creating resource template definitions
+class ResourceTemplateBuilder is export {
+    has Str $!uri-template;
+    has Str $!name;
+    has Str $!description;
+    has Str $!mimeType;
+    has MCP::Types::Annotations $!annotations;
+    has &!reader;
+
+    method uri-template(Str $t --> ResourceTemplateBuilder) {
+        $!uri-template = $t;
+        self
+    }
+
+    method name(Str $name --> ResourceTemplateBuilder) {
+        $!name = $name;
+        self
+    }
+
+    method description(Str $desc --> ResourceTemplateBuilder) {
+        $!description = $desc;
+        self
+    }
+
+    method mimeType(Str $mime --> ResourceTemplateBuilder) {
+        $!mimeType = $mime;
+        self
+    }
+
+    method annotations(@audience, Real :$priority --> ResourceTemplateBuilder) {
+        $!annotations = MCP::Types::Annotations.new(:@audience, priority => $priority.Num);
+        self
+    }
+
+    method reader(&reader --> ResourceTemplateBuilder) {
+        &!reader = &reader;
+        self
+    }
+
+    method build(--> RegisteredResourceTemplate) {
+        die "Resource template URI template is required" unless $!uri-template;
+        die "Resource template name is required" unless $!name;
+        die "Resource template reader is required" unless &!reader;
+
+        RegisteredResourceTemplate.new(
+            uri-template => $!uri-template,
+            name => $!name,
+            description => $!description,
+            mimeType => $!mimeType,
+            annotations => $!annotations,
+            reader => &!reader,
+        )
+    }
+}
+
+#| Convenience function to create a resource template builder
+our sub resource-template(--> ResourceTemplateBuilder) is export {
+    ResourceTemplateBuilder.new
+}

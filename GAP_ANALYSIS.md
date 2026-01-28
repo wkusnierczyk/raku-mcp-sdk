@@ -96,7 +96,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 - Resource reading
 
 **Missing**:
-- ❌ Resource templates (URI templates with placeholders)
+- ✅ Resource templates (URI templates with placeholders)
 - ✅ Resource subscriptions (`resources/subscribe`, `resources/unsubscribe`) - **Implemented**
 - ✅ `notifications/resources/list_changed` - **Implemented** via `notify-resources-list-changed()`
 - ✅ `notifications/resources/updated` for subscribed resources - **Implemented** via `notify-resource-updated(uri)`

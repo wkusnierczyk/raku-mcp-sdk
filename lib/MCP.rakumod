@@ -56,6 +56,7 @@ constant CreateMessageResult is export = MCP::Types::CreateMessageResult;
 constant Task is export = MCP::Types::Task;
 constant TaskStatus is export = MCP::Types::TaskStatus;
 constant CreateTaskResult is export = MCP::Types::CreateTaskResult;
+constant ResourceTemplate is export = MCP::Types::ResourceTemplate;
 constant Extension is export = MCP::Types::Extension;
 
 #| Re-exported log level constants
@@ -88,6 +89,11 @@ sub resource is export {
 sub file-resource(|c) is export {
     require ::MCP::Server::Resource;
     ::('MCP::Server::Resource').WHO<&file-resource>(|c)
+}
+#| Builder for resource template definitions
+sub resource-template is export {
+    require ::MCP::Server::Resource;
+    ::('MCP::Server::Resource').WHO<&resource-template>()
 }
 #| Builder for prompt definitions
 sub prompt is export {

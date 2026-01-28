@@ -53,6 +53,7 @@ class Server is export {
     has %!tools;      # name => RegisteredTool
     has %!resources;  # uri => RegisteredResource
     has %!prompts;    # name => RegisteredPrompt
+    has %!resource-templates; # name => RegisteredResourceTemplate
     has %!completers; # "prompt:name" or "resource:uri" => &completer
 
     # State
@@ -164,6 +165,34 @@ class Server is export {
         self.add-resource($resource);
     }
 
+    #| Add a resource template to the server
+    multi method add-resource-template(MCP::Server::Resource::RegisteredResourceTemplate $template) {
+        %!resource-templates{$template.name} = $template;
+    }
+
+    #| Add a resource template using named parameters
+    multi method add-resource-template(
+        Str :$uri-template!,
+        Str :$name!,
+        Str :$description,
+        Str :$mimeType,
+        :&reader!
+    ) {
+        my $template = MCP::Server::Resource::resource-template()
+            .uri-template($uri-template)
+            .name($name)
+            .description($description // '')
+            .mimeType($mimeType // 'text/plain')
+            .reader(&reader)
+            .build;
+        self.add-resource-template($template);
+    }
+
+    #| Remove a resource template by name
+    method remove-resource-template(Str $name) {
+        %!resource-templates{$name}:delete;
+    }
+
     #| Add a prompt to the server
     multi method add-prompt(MCP::Server::Prompt::RegisteredPrompt $prompt) {
         %!prompts{$prompt.name} = $prompt;
@@ -232,7 +261,7 @@ class Server is export {
     method capabilities(--> MCP::Types::ServerCapabilities) {
         my %args;
         %args<tools> = %!tools ?? MCP::Types::ToolsCapability.new(listChanged => True) !! MCP::Types::ToolsCapability;
-        %args<resources> = %!resources ?? MCP::Types::ResourcesCapability.new(listChanged => True, subscribe => True) !! MCP::Types::ResourcesCapability;
+        %args<resources> = (%!resources || %!resource-templates) ?? MCP::Types::ResourcesCapability.new(listChanged => True, subscribe => True) !! MCP::Types::ResourcesCapability;
         %args<prompts> = %!prompts ?? MCP::Types::PromptsCapability.new(listChanged => True) !! MCP::Types::PromptsCapability;
         %args<logging> = MCP::Types::LoggingCapability.new;
         %args<completions> = %!completers ?? MCP::Types::CompletionsCapability.new !! MCP::Types::CompletionsCapability;
@@ -342,6 +371,10 @@ class Server is export {
 
     multi method dispatch-request($req where *.method eq 'resources/list') {
         self!list-resources($req.params);
+    }
+
+    multi method dispatch-request($req where *.method eq 'resources/templates/list') {
+        self!list-resource-templates($req.params);
     }
 
     multi method dispatch-request($req where *.method eq 'resources/read') {
@@ -664,6 +697,12 @@ class Server is export {
         self!paginate(@resources, $params, key => 'resources')
     }
 
+    #| List resource templates
+    method !list-resource-templates($params?) {
+        my @templates = %!resource-templates.values.map(*.to-resource-template.Hash).Array;
+        self!paginate(@templates, $params, key => 'resourceTemplates')
+    }
+
     #| Read a resource
     method !read-resource(%params) {
         my $uri = %params<uri> // die X::MCP::JSONRPC.new(
@@ -673,16 +712,29 @@ class Server is export {
             )
         );
 
-        my $resource = %!resources{$uri} // die X::MCP::JSONRPC.new(
+        # Try exact match first
+        if %!resources{$uri}:exists {
+            return {
+                contents => %!resources{$uri}.read.map(*.Hash).Array
+            };
+        }
+
+        # Try matching against resource templates
+        for %!resource-templates.values -> $template {
+            my $match = $template.match-uri($uri);
+            if $match.defined {
+                return {
+                    contents => $template.read($match, uri => $uri).map(*.Hash).Array
+                };
+            }
+        }
+
+        die X::MCP::JSONRPC.new(
             error => MCP::JSONRPC::Error.from-code(
                 MCP::JSONRPC::InvalidParams,
                 "Unknown resource: $uri"
             )
         );
-
-        {
-            contents => $resource.read.map(*.Hash).Array
-        }
     }
 
     #| Subscribe to a resource
