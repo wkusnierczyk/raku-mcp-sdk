@@ -5,7 +5,7 @@ use lib 'lib';
 use MCP::OAuth;
 use MCP::OAuth::Server;
 
-plan 11;
+plan 13;
 
 # === 1. PKCE ===
 subtest 'PKCE', {
@@ -244,6 +244,46 @@ subtest 'AuthServerMetadata registration endpoint', {
     is %h<registration_endpoint>, 'https://auth.example.com/register', 'Hash roundtrip';
     my $from = AuthServerMetadata.from-hash(%h);
     is $from.registration-endpoint, 'https://auth.example.com/register', 'from-hash roundtrip';
+};
+
+# === 12. OAuthM2MClient construction ===
+subtest 'OAuthM2MClient construction', {
+    plan 4;
+    use MCP::OAuth::Client;
+
+    my $m2m = OAuthM2MClient.new(
+        resource-url  => 'https://api.example.com',
+        client-id     => 'm2m-client',
+        client-secret => 'm2m-secret',
+        scopes        => ['read', 'write'],
+    );
+    is $m2m.resource-url, 'https://api.example.com', 'resource-url set';
+    is $m2m.client-id, 'm2m-client', 'client-id set';
+    is $m2m.client-secret, 'm2m-secret', 'client-secret set';
+    nok $m2m.token.defined, 'no token initially';
+};
+
+# === 13. OAuthM2MClient token management ===
+subtest 'OAuthM2MClient get-token with pre-set token', {
+    plan 2;
+    use MCP::OAuth::Client;
+
+    my $m2m = OAuthM2MClient.new(
+        resource-url  => 'https://api.example.com',
+        client-id     => 'm2m-client',
+        client-secret => 'm2m-secret',
+    );
+
+    # Pre-set a valid token to test get-token returns it without HTTP calls
+    $m2m.token = TokenResponse.new(
+        access-token => 'm2m-token-abc',
+        expires-in   => 3600,
+    );
+    my $token = await $m2m.get-token;
+    is $token.access-token, 'm2m-token-abc', 'get-token returns cached token';
+
+    my $header = await $m2m.authorization-header;
+    is $header, 'Bearer m2m-token-abc', 'authorization-header formats correctly';
 };
 
 done-testing;
