@@ -8,8 +8,8 @@ use JSON::Fast;
 
 class OAuthClientHandler is export {
     has Str $.resource-url is required;
-    has Str $.client-id is required;
-    has Str $.client-secret;
+    has Str $.client-id is rw;
+    has Str $.client-secret is rw;
     has @.scopes;
     has &.authorization-callback is required; # Str $url --> Str $code
     has Str $.redirect-uri = 'http://localhost:8080/callback';
@@ -17,6 +17,7 @@ class OAuthClientHandler is export {
     has TokenResponse $.token is rw;
     has AuthServerMetadata $.auth-metadata is rw;
     has ProtectedResourceMetadata $.resource-metadata is rw;
+    has ClientRegistrationResponse $.registration is rw;
     has Str $.pkce-verifier is rw;
 
     method discover(--> Promise) {
@@ -83,6 +84,10 @@ class OAuthClientHandler is export {
     method authenticate(--> Promise) {
         start {
             await self.discover unless $!auth-metadata.defined;
+            # Auto-register if no client-id and server supports dynamic registration
+            if !$!client-id.defined && $!auth-metadata.registration-endpoint.defined {
+                await self.register;
+            }
             my $url = self.authorization-url;
             my $code = &!authorization-callback($url);
             await self.exchange-code($code);
@@ -156,6 +161,37 @@ class OAuthClientHandler is export {
         start {
             my $token = await self.get-token;
             "Bearer {$token.access-token}"
+        }
+    }
+
+    method register(ClientRegistrationRequest :$request --> Promise) {
+        start {
+            die X::MCP::OAuth::Discovery.new(message => 'Must call discover() first')
+                unless $!auth-metadata.defined;
+            die X::MCP::OAuth::Registration.new(
+                message => 'Authorization server does not support dynamic registration'
+            ) unless $!auth-metadata.registration-endpoint.defined;
+
+            my $client = self!cro-client;
+            my $req = $request // ClientRegistrationRequest.new(
+                redirect-uris => [$!redirect-uri],
+                grant-types => ['authorization_code', 'refresh_token'],
+                response-types => ['code'],
+                token-endpoint-auth-method => 'none',
+                scope => @!scopes.join(' ') || Str,
+            );
+
+            my $resp = await $client.post(
+                $!auth-metadata.registration-endpoint,
+                content-type => 'application/json',
+                body => to-json($req.Hash),
+            );
+            my $body = await $resp.body;
+            my %reg-data = $body ~~ Hash ?? $body !! from-json($body);
+            $!registration = ClientRegistrationResponse.from-hash(%reg-data);
+            $!client-id = $!registration.client-id;
+            $!client-secret = $!registration.client-secret if $!registration.client-secret.defined;
+            $!registration
         }
     }
 

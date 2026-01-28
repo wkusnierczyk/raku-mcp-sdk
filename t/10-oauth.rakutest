@@ -5,7 +5,7 @@ use lib 'lib';
 use MCP::OAuth;
 use MCP::OAuth::Server;
 
-plan 9;
+plan 11;
 
 # === 1. PKCE ===
 subtest 'PKCE', {
@@ -195,6 +195,55 @@ subtest 'Transport backwards compatibility', {
         path => '/mcp',
     );
     nok $transport.oauth-handler.defined, 'oauth-handler is optional (not defined by default)';
+};
+
+# === 10. ClientRegistrationRequest/Response types ===
+subtest 'ClientRegistration types', {
+    plan 6;
+
+    my $req = ClientRegistrationRequest.new(
+        redirect-uris => ['http://localhost:8080/callback'],
+        client-name => 'Test App',
+        grant-types => ['authorization_code', 'refresh_token'],
+        response-types => ['code'],
+        token-endpoint-auth-method => 'none',
+        scope => 'read write',
+    );
+    my %h = $req.Hash;
+    is %h<redirect_uris>[0], 'http://localhost:8080/callback', 'Hash redirect_uris';
+    is %h<client_name>, 'Test App', 'Hash client_name';
+    is %h<token_endpoint_auth_method>, 'none', 'Hash auth method';
+
+    my $resp = ClientRegistrationResponse.from-hash({
+        client_id => 'dyn-client-001',
+        client_secret => 'secret-abc',
+        client_secret_expires_at => 0,
+        redirect_uris => ['http://localhost:8080/callback'],
+        client_name => 'Test App',
+        grant_types => ['authorization_code'],
+        response_types => ['code'],
+        token_endpoint_auth_method => 'none',
+        scope => 'read write',
+    });
+    is $resp.client-id, 'dyn-client-001', 'from-hash client-id';
+    is $resp.client-secret, 'secret-abc', 'from-hash client-secret';
+    is $resp.scope, 'read write', 'from-hash scope';
+};
+
+# === 11. AuthServerMetadata with registration endpoint ===
+subtest 'AuthServerMetadata registration endpoint', {
+    plan 3;
+    my $meta = AuthServerMetadata.new(
+        issuer => 'https://auth.example.com',
+        authorization-endpoint => 'https://auth.example.com/authorize',
+        token-endpoint => 'https://auth.example.com/token',
+        registration-endpoint => 'https://auth.example.com/register',
+    );
+    is $meta.registration-endpoint, 'https://auth.example.com/register', 'registration endpoint set';
+    my %h = $meta.Hash;
+    is %h<registration_endpoint>, 'https://auth.example.com/register', 'Hash roundtrip';
+    my $from = AuthServerMetadata.from-hash(%h);
+    is $from.registration-endpoint, 'https://auth.example.com/register', 'from-hash roundtrip';
 };
 
 done-testing;

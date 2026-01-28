@@ -198,7 +198,7 @@ OAuth 2.1 authorization framework:
 - ✅ Protected resource metadata (RFC 9728)
 - ✅ Server-side token validation with WWW-Authenticate headers
 - ✅ Client-side automatic token management and 401 retry
-- ❌ Dynamic client registration
+- ✅ Dynamic client registration (RFC 7591)
 
 ---
 
@@ -249,7 +249,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 | Sampling | ✅ Full + tools | ✅ Full + tools |
 | Roots | ✅ Full | ✅ Full |
 | Elicitation | ✅ Full + URL mode | ✅ Full |
-| OAuth 2.1 | ✅ Full | ✅ Core (no dynamic registration) |
+| OAuth 2.1 | ✅ Full | ✅ Full |
 | Streamable HTTP | ✅ Full client + server | ✅ Full |
 | SSE Transport | ✅ Full | ❌ No |
 | Tasks | ✅ Experimental | ✅ Done (experimental) |
@@ -317,7 +317,6 @@ Missing tests for:
 
 The Raku MCP SDK provides comprehensive MCP specification coverage. Remaining gaps are:
 
-- Dynamic client registration (OAuth)
 - Authorization extensions (SEP-1046, SEP-990)
 - SSE transport (legacy)
 

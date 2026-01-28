@@ -23,6 +23,15 @@ class X::MCP::OAuth::Discovery is Exception is export {
     method message(--> Str) { $!message }
 }
 
+class X::MCP::OAuth::Registration is Exception is export {
+    has Str $.message = 'Dynamic client registration failed';
+    has Str $.error;
+    has Str $.error-description;
+    method message(--> Str) {
+        $!error-description ?? "$!message: $!error ($!error-description)" !! $!message
+    }
+}
+
 # === Protected Resource Metadata (RFC 9728) ===
 
 class ProtectedResourceMetadata is export {
@@ -52,6 +61,7 @@ class AuthServerMetadata is export {
     has Str $.issuer is required;
     has Str $.authorization-endpoint;
     has Str $.token-endpoint;
+    has Str $.registration-endpoint;
     has @.grant-types-supported;
     has @.response-types-supported;
     has @.scopes-supported;
@@ -61,6 +71,7 @@ class AuthServerMetadata is export {
         my %h = issuer => $!issuer;
         %h<authorization_endpoint> = $!authorization-endpoint if $!authorization-endpoint;
         %h<token_endpoint> = $!token-endpoint if $!token-endpoint;
+        %h<registration_endpoint> = $!registration-endpoint if $!registration-endpoint;
         %h<grant_types_supported> = @!grant-types-supported if @!grant-types-supported;
         %h<response_types_supported> = @!response-types-supported if @!response-types-supported;
         %h<scopes_supported> = @!scopes-supported if @!scopes-supported;
@@ -69,15 +80,16 @@ class AuthServerMetadata is export {
     }
 
     method from-hash(%h --> AuthServerMetadata) {
-        self.new(
+        my %args =
             issuer => %h<issuer>,
-            authorization-endpoint => %h<authorization_endpoint>,
-            token-endpoint => %h<token_endpoint>,
             grant-types-supported => (%h<grant_types_supported> // []).list,
             response-types-supported => (%h<response_types_supported> // []).list,
             scopes-supported => (%h<scopes_supported> // []).list,
-            code-challenge-methods-supported => (%h<code_challenge_methods_supported> // []).list,
-        )
+            code-challenge-methods-supported => (%h<code_challenge_methods_supported> // []).list;
+        %args<authorization-endpoint> = $_ with %h<authorization_endpoint>;
+        %args<token-endpoint> = $_ with %h<token_endpoint>;
+        %args<registration-endpoint> = $_ with %h<registration_endpoint>;
+        self.new(|%args)
     }
 }
 
@@ -105,6 +117,88 @@ class TokenResponse is export {
             refresh-token => %h<refresh_token>,
             scope => %h<scope>,
         )
+    }
+}
+
+# === Dynamic Client Registration (RFC 7591) ===
+
+class ClientRegistrationRequest is export {
+    has @.redirect-uris is required;
+    has Str $.client-name;
+    has Str $.client-uri;
+    has Str $.logo-uri;
+    has @.contacts;
+    has Str $.tos-uri;
+    has Str $.policy-uri;
+    has @.grant-types;           # e.g., authorization_code, refresh_token
+    has @.response-types;        # e.g., code
+    has Str $.token-endpoint-auth-method;  # e.g., none, client_secret_post
+    has Str $.scope;
+    has Str $.software-id;
+    has Str $.software-version;
+
+    method Hash(--> Hash) {
+        my %h = redirect_uris => @!redirect-uris;
+        %h<client_name>                  = $_ with $!client-name;
+        %h<client_uri>                   = $_ with $!client-uri;
+        %h<logo_uri>                     = $_ with $!logo-uri;
+        %h<contacts>                     = @!contacts if @!contacts;
+        %h<tos_uri>                      = $_ with $!tos-uri;
+        %h<policy_uri>                   = $_ with $!policy-uri;
+        %h<grant_types>                  = @!grant-types if @!grant-types;
+        %h<response_types>               = @!response-types if @!response-types;
+        %h<token_endpoint_auth_method>   = $_ with $!token-endpoint-auth-method;
+        %h<scope>                        = $_ with $!scope;
+        %h<software_id>                  = $_ with $!software-id;
+        %h<software_version>             = $_ with $!software-version;
+        %h
+    }
+}
+
+class ClientRegistrationResponse is export {
+    has Str $.client-id is required;
+    has Str $.client-secret;
+    has Int $.client-secret-expires-at;
+    has Str $.registration-access-token;
+    has Str $.registration-client-uri;
+
+    # Echo of request metadata
+    has @.redirect-uris;
+    has Str $.client-name;
+    has @.grant-types;
+    has @.response-types;
+    has Str $.token-endpoint-auth-method;
+    has Str $.scope;
+
+    method Hash(--> Hash) {
+        my %h = client_id => $!client-id;
+        %h<client_secret>             = $_ with $!client-secret;
+        %h<client_secret_expires_at>  = $_ with $!client-secret-expires-at;
+        %h<registration_access_token> = $_ with $!registration-access-token;
+        %h<registration_client_uri>   = $_ with $!registration-client-uri;
+        %h<redirect_uris>             = @!redirect-uris if @!redirect-uris;
+        %h<client_name>               = $_ with $!client-name;
+        %h<grant_types>               = @!grant-types if @!grant-types;
+        %h<response_types>            = @!response-types if @!response-types;
+        %h<token_endpoint_auth_method> = $_ with $!token-endpoint-auth-method;
+        %h<scope>                      = $_ with $!scope;
+        %h
+    }
+
+    method from-hash(%h --> ClientRegistrationResponse) {
+        my %args =
+            client-id      => %h<client_id>,
+            redirect-uris  => (%h<redirect_uris> // []).list,
+            grant-types    => (%h<grant_types> // []).list,
+            response-types => (%h<response_types> // []).list;
+        %args<client-secret>              = $_ with %h<client_secret>;
+        %args<client-secret-expires-at>   = .Int with %h<client_secret_expires_at>;
+        %args<registration-access-token>  = $_ with %h<registration_access_token>;
+        %args<registration-client-uri>    = $_ with %h<registration_client_uri>;
+        %args<client-name>                = $_ with %h<client_name>;
+        %args<token-endpoint-auth-method> = $_ with %h<token_endpoint_auth_method>;
+        %args<scope>                      = $_ with %h<scope>;
+        self.new(|%args)
     }
 }
 
