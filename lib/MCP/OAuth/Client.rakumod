@@ -344,3 +344,176 @@ class OAuthM2MClient is export {
         $s.subst(/<-[A..Za..z0..9\-._~]>/, { .Str.encode('utf-8').list.map({ '%' ~ .fmt('%02X') }).join }, :g)
     }
 }
+
+#| Enterprise-managed authorization client (SEP-990)
+#| Implements the Identity Assertion Authorization Grant flow for
+#| enterprise IdP policy controls during MCP OAuth flows.
+class OAuthEnterpriseClient is export {
+    has Str $.resource-url is required;
+    has Str $.client-id is required;
+    has Str $.client-secret;
+    has @.scopes;
+
+    # IdP configuration
+    has Str $.idp-token-endpoint is required;
+    has Str $.idp-client-id is required;
+    has Str $.idp-client-secret;
+    has Str $.subject-token is rw;          # ID token or SAML assertion
+    has Str $.subject-token-type = 'urn:ietf:params:oauth:token-type:id_token';
+
+    has TokenResponse $.token is rw;
+    has AuthServerMetadata $.auth-metadata is rw;
+    has ProtectedResourceMetadata $.resource-metadata is rw;
+    has TokenExchangeResponse $.id-jag is rw;
+
+    method discover(--> Promise) {
+        start {
+            my $client = self!cro-client;
+
+            my $resource-url = $!resource-url.subst(/ '/' $ /, '');
+            my $rm-url = "$resource-url/.well-known/oauth-protected-resource";
+            my $rm-resp = await $client.get($rm-url);
+            my $rm-body = await $rm-resp.body;
+            $!resource-metadata = ProtectedResourceMetadata.from-hash(
+                $rm-body ~~ Hash ?? $rm-body !! from-json($rm-body)
+            );
+
+            my $issuer = $!resource-metadata.authorization-servers[0]
+                // die X::MCP::OAuth::Discovery.new(message => 'No authorization server found');
+
+            my $issuer-base = $issuer.subst(/ '/' $ /, '');
+            my $as-body;
+            try {
+                my $as-resp = await $client.get("$issuer-base/.well-known/oauth-authorization-server");
+                $as-body = await $as-resp.body;
+                CATCH {
+                    default {
+                        my $oidc-resp = await $client.get("$issuer-base/.well-known/openid-configuration");
+                        $as-body = await $oidc-resp.body;
+                    }
+                }
+            }
+            $!auth-metadata = AuthServerMetadata.from-hash(
+                $as-body ~~ Hash ?? $as-body !! from-json($as-body)
+            );
+            True
+        }
+    }
+
+    #| Step 1: Exchange identity assertion for ID-JAG at the IdP (RFC 8693)
+    method exchange-token(--> Promise) {
+        start {
+            die X::MCP::OAuth::TokenExchange.new(
+                message => 'No subject token available'
+            ) unless $!subject-token.defined;
+            die X::MCP::OAuth::Discovery.new(message => 'Must call discover() first')
+                unless $!auth-metadata.defined;
+
+            my $client = self!cro-client;
+            my %body =
+                grant_type           => 'urn:ietf:params:oauth:grant-type:token-exchange',
+                requested_token_type => 'urn:ietf:params:oauth:token-type:id-jag',
+                audience             => $!auth-metadata.issuer,
+                resource             => $!resource-url,
+                subject_token        => $!subject-token,
+                subject_token_type   => $!subject-token-type,
+                client_id            => $!idp-client-id;
+            %body<client_secret> = $!idp-client-secret if $!idp-client-secret.defined;
+            %body<scope> = @!scopes.join(' ') if @!scopes;
+
+            my $resp = await $client.post(
+                $!idp-token-endpoint,
+                content-type => 'application/x-www-form-urlencoded',
+                body => self!form-encode(%body),
+            );
+            my $body = await $resp.body;
+            my %data = $body ~~ Hash ?? $body !! from-json($body);
+
+            if %data<error>:exists {
+                die X::MCP::OAuth::TokenExchange.new(
+                    error             => %data<error>,
+                    error-description => %data<error_description>,
+                );
+            }
+
+            $!id-jag = TokenExchangeResponse.from-hash(%data);
+            $!id-jag
+        }
+    }
+
+    #| Step 2: Use ID-JAG to obtain access token from MCP auth server (RFC 7523)
+    method request-token(--> Promise) {
+        start {
+            die X::MCP::OAuth::TokenExchange.new(
+                message => 'No ID-JAG available; call exchange-token() first'
+            ) unless $!id-jag.defined;
+
+            my $client = self!cro-client;
+            my %body =
+                grant_type => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                assertion  => $!id-jag.access-token,
+                client_id  => $!client-id;
+            %body<client_secret> = $!client-secret if $!client-secret.defined;
+
+            my $resp = await $client.post(
+                $!auth-metadata.token-endpoint,
+                content-type => 'application/x-www-form-urlencoded',
+                body => self!form-encode(%body),
+            );
+            my $body = await $resp.body;
+            my %token-data = $body ~~ Hash ?? $body !! from-json($body);
+            $!token = TokenResponse.from-hash(%token-data);
+            $!token
+        }
+    }
+
+    #| Full enterprise auth flow: discover, exchange, request token
+    method authenticate(--> Promise) {
+        start {
+            await self.discover unless $!auth-metadata.defined;
+            await self.exchange-token;
+            await self.request-token;
+            True
+        }
+    }
+
+    method get-token(--> Promise) {
+        start {
+            if $!token.defined && !$!token.is-expired {
+                $!token
+            } else {
+                await self.authenticate;
+                $!token
+            }
+        }
+    }
+
+    method authorization-header(--> Promise) {
+        start {
+            my $token = await self.get-token;
+            "Bearer {$token.access-token}"
+        }
+    }
+
+    method !form-encode(%data --> Str) {
+        %data.kv.map(-> $k, $v { "{uri-encode($k)}={uri-encode($v)}" }).join('&')
+    }
+
+    method !cro-client() {
+        try {
+            require ::('Cro::HTTP::Client');
+            return ::('Cro::HTTP::Client').new;
+        }
+        CATCH {
+            default {
+                die X::MCP::OAuth::Discovery.new(
+                    message => 'Cro::HTTP is required for OAuth enterprise client'
+                );
+            }
+        }
+    }
+
+    sub uri-encode(Str $s --> Str) {
+        $s.subst(/<-[A..Za..z0..9\-._~]>/, { .Str.encode('utf-8').list.map({ '%' ~ .fmt('%02X') }).join }, :g)
+    }
+}

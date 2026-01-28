@@ -5,7 +5,7 @@ use lib 'lib';
 use MCP::OAuth;
 use MCP::OAuth::Server;
 
-plan 13;
+plan 16;
 
 # === 1. PKCE ===
 subtest 'PKCE', {
@@ -284,6 +284,60 @@ subtest 'OAuthM2MClient get-token with pre-set token', {
 
     my $header = await $m2m.authorization-header;
     is $header, 'Bearer m2m-token-abc', 'authorization-header formats correctly';
+};
+
+# === 14. TokenExchangeResponse type ===
+subtest 'TokenExchangeResponse', {
+    plan 4;
+    my $resp = TokenExchangeResponse.from-hash({
+        issued_token_type => 'urn:ietf:params:oauth:token-type:id-jag',
+        access_token      => 'eyJhbGciOiJSUzI1NiJ9.test',
+        token_type        => 'N_A',
+        scope             => 'chat.read chat.history',
+        expires_in        => 300,
+    });
+    is $resp.issued-token-type, 'urn:ietf:params:oauth:token-type:id-jag', 'issued-token-type';
+    is $resp.access-token, 'eyJhbGciOiJSUzI1NiJ9.test', 'access-token (ID-JAG)';
+    is $resp.token-type, 'N_A', 'token-type is N_A';
+    is $resp.expires-in, 300, 'expires-in';
+};
+
+# === 15. X::MCP::OAuth::TokenExchange ===
+subtest 'X::MCP::OAuth::TokenExchange', {
+    plan 2;
+    my $ex = X::MCP::OAuth::TokenExchange.new(
+        error             => 'invalid_grant',
+        error-description => 'Audience validation failed',
+    );
+    ok $ex.message.contains('invalid_grant'), 'message contains error';
+    ok $ex.message.contains('Audience validation failed'), 'message contains description';
+};
+
+# === 16. OAuthEnterpriseClient construction and token caching ===
+subtest 'OAuthEnterpriseClient construction and token caching', {
+    plan 5;
+    use MCP::OAuth::Client;
+
+    my $ent = OAuthEnterpriseClient.new(
+        resource-url       => 'https://mcp.example.com',
+        client-id          => 'mcp-client-1',
+        idp-token-endpoint => 'https://idp.example.com/oauth2/token',
+        idp-client-id      => 'idp-client-1',
+        subject-token      => 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.test-id-token',
+        scopes             => ['chat.read'],
+    );
+    is $ent.resource-url, 'https://mcp.example.com', 'resource-url set';
+    is $ent.idp-token-endpoint, 'https://idp.example.com/oauth2/token', 'idp-token-endpoint set';
+    is $ent.subject-token-type, 'urn:ietf:params:oauth:token-type:id_token', 'default subject-token-type';
+    nok $ent.token.defined, 'no token initially';
+
+    # Pre-set token to test caching
+    $ent.token = TokenResponse.new(
+        access-token => 'enterprise-token-xyz',
+        expires-in   => 3600,
+    );
+    my $token = await $ent.get-token;
+    is $token.access-token, 'enterprise-token-xyz', 'get-token returns cached token';
 };
 
 done-testing;
