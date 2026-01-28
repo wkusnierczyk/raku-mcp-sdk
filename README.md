@@ -72,7 +72,6 @@ Raku MCP SDK is **work in progress** (WIP).
   - [Makefile targets](#makefile-targets)
   - [Environment variables](#environment-variables)
   - [Coverage prerequisites](#coverage-prerequisites)
-- [Architecture](#architecture)
 - [Project structure](#project-structure)
 - [Contributing](#contributing)
 - [License](#license)
@@ -504,17 +503,6 @@ Then run:
 make coverage
 # report: coverage-report/report.html
 ```
-
-## Architecture
-
-The diagram below shows how the core components interact.
-
-- The Mermaid source is in `architecture/architecture.mmd`.
-- The rendered image is in `architecture/architecture.png`.
-
-Regenerate the PNG with `make architecture-diagram`.
-
-![Architecture diagram](architecture/architecture.png)
 
 ## Project structure
 
