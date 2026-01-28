@@ -133,6 +133,7 @@ class Server is export {
         Hash :$output-schema,
         :&handler!
     ) {
+        MCP::Server::Tool::validate-tool-name($name);
         my $builder = MCP::Server::Tool::tool()
             .name($name)
             .description($description // '')

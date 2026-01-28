@@ -16,6 +16,13 @@ Provides a builder-style DSL and wrapper class for registering MCP tools.
 
 use MCP::Types;
 
+#| Validate tool name matches MCP spec pattern: ^[a-zA-Z0-9_-]{1,64}$
+our sub validate-tool-name(Str $name) is export {
+    unless $name ~~ /^ <[a..zA..Z0..9_\-]> ** 1..64 $/ {
+        die "Invalid tool name '$name': must match ^[a-zA-Z0-9_-]\{1,64\}\$ (letters, digits, underscores, hyphens; 1-64 characters)";
+    }
+}
+
 #| Wrapper class for a registered tool with its handler
 class RegisteredTool is export {
     has Str $.name is required;
@@ -238,6 +245,7 @@ class ToolBuilder is export {
 
     method build(--> RegisteredTool) {
         die "Tool name is required" unless $!name;
+        validate-tool-name($!name);
         die "Tool handler is required" unless &!handler;
 
         RegisteredTool.new(
