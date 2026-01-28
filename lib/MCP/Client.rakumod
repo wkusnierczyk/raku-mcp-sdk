@@ -475,6 +475,11 @@ class Client is export {
         $!transport.send($notification);
     }
 
+    #| Set the server's log level
+    method set-log-level(MCP::Types::LogLevel $level --> Promise) {
+        self.request('logging/setLevel', { level => $level.value });
+    }
+
     #| Get current roots
     method get-roots(--> Array) {
         @!roots.map({

@@ -773,6 +773,21 @@ enum LogLevel is export (
     Emergency => 'emergency',
 );
 
+#| Log level severity ordering (lowest to highest)
+my constant @LOG-LEVEL-ORDER = <debug info notice warning error critical alert emergency>;
+
+#| Compare log level severity: returns True if $level is at or above $threshold
+sub log-level-at-or-above(LogLevel $level, LogLevel $threshold --> Bool) is export {
+    @LOG-LEVEL-ORDER.first($level.value, :k) >= @LOG-LEVEL-ORDER.first($threshold.value, :k)
+}
+
+#| Parse a log level string into a LogLevel enum value
+sub parse-log-level(Str $level --> LogLevel) is export {
+    my $pair = LogLevel.enums.first(*.value eq $level);
+    die "Unknown log level: $level" unless $pair.defined;
+    LogLevel::{$pair.key}
+}
+
 #| Log entry
 class LogEntry is export {
     has LogLevel $.level is required;

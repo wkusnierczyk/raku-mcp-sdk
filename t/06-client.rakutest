@@ -610,4 +610,35 @@ subtest 'Completion support', {
     is @requests[1].params<ref><type>, 'ref/resource', 'second request is resource ref';
 };
 
+subtest 'Client set-log-level', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport
+    );
+
+    my $connect = $client.connect;
+    for ^10 {
+        last if $transport.sent.elems > 0;
+        sleep 0.1;
+    }
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => { logging => {} },
+        instructions => '',
+    }));
+    await $connect;
+
+    # Send set-log-level request
+    my $p = $client.set-log-level(MCP::Types::Warning);
+    respond-to-last($transport, {}) or return;
+    my $result = await $p;
+    ok $result ~~ Hash, 'set-log-level returns result';
+
+    # Verify the request sent by the client
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request).grep(*.method eq 'logging/setLevel');
+    is @reqs.elems, 1, 'logging/setLevel request sent';
+    is @reqs[0].params<level>, 'warning', 'level parameter is correct';
+};
+
 done-testing;

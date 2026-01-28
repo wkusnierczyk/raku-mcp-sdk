@@ -31,7 +31,7 @@ Raku MCP SDK is **work in progress** (WIP).
 | Resources | ✅ Done | List, read, builder API, annotations |
 | Prompts | ✅ Done | List, get, builder API |
 | Pagination | ✅ Done | Cursor-based for all list endpoints |
-| Logging | ✅ Done | Server-side notifications |
+| Logging | ✅ Done | Server-side notifications, `logging/setLevel`, level filtering |
 | Progress | ✅ Done | Server-side notifications |
 | Cancellation | ✅ Done | Request cancellation with notifications |
 | Resource subscriptions | ✅ Done | Subscribe, unsubscribe, update notifications |
