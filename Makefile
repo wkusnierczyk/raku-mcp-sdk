@@ -18,7 +18,7 @@
 PROJECT_NAME    := MCP
 PROJECT_TITLE   := Raku MCP SDK
 PROJECT_DESC    := Raku Implementation of the Model Context Protocol
-VERSION         := 0.17.0
+VERSION         := 0.18.0
 DEVELOPER_NAME  := Waclaw Kusnierczyk
 DEVELOPER_EMAIL := waclaw.kusnierczyk@gmail.com
 SOURCE_URL      := https://github.com/wkusnierczyk/raku-mcp-sdk
@@ -681,7 +681,7 @@ ifneq ($(TAG),)
 		printf "$(CLR_RED)✗ Failed to update version in README.md$(CLR_RESET)\n" >&2; \
 		exit 1; \
 	fi
-	$(call log-success,Version updated in Makefile, $(META_FILE), and README.md (no tag))
+	$(call log-success,Version updated in Makefile / $(META_FILE) / README.md (no tag))
 else
 	$(call log,$(PROJECT_NAME) v$(VERSION))
 endif

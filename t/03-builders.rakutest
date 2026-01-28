@@ -283,4 +283,19 @@ subtest 'Prompt builder and normalization', {
     dies-ok { prompt().name('p').build }, 'prompt requires generator';
 };
 
+subtest 'Tool name validation', {
+    # Valid names
+    lives-ok { tool().name('my-tool').handler(-> { 'ok' }).build }, 'valid: my-tool';
+    lives-ok { tool().name('tool_1').handler(-> { 'ok' }).build }, 'valid: tool_1';
+    lives-ok { tool().name('a').handler(-> { 'ok' }).build }, 'valid: single char';
+    lives-ok { tool().name('a' x 64).handler(-> { 'ok' }).build }, 'valid: 64 chars';
+
+    # Invalid names
+    dies-ok { tool().name('').handler(-> { 'ok' }).build }, 'invalid: empty string';
+    dies-ok { tool().name('a' x 65).handler(-> { 'ok' }).build }, 'invalid: 65 chars';
+    dies-ok { tool().name('my tool').handler(-> { 'ok' }).build }, 'invalid: space';
+    dies-ok { tool().name('tool!').handler(-> { 'ok' }).build }, 'invalid: exclamation';
+    dies-ok { tool().name('tool.name').handler(-> { 'ok' }).build }, 'invalid: dot';
+};
+
 done-testing;
