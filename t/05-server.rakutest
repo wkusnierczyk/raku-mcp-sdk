@@ -903,4 +903,84 @@ subtest 'Completion support', {
     ok $caps.completions.defined, 'capabilities include completions';
 };
 
+subtest 'Logging level setting and filtering', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'log-srv', version => '0.1'),
+        transport => $transport
+    );
+
+    # Initialize the server
+    $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'initialize',
+        params => { protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION }
+    ));
+    $transport.clear-sent;
+
+    # Default level is Debug — all messages should be emitted
+    $server.log(MCP::Types::Debug, 'debug msg');
+    $server.log(MCP::Types::Info, 'info msg');
+    $server.log(MCP::Types::Warning, 'warn msg');
+    is $transport.sent.elems, 3, 'default level emits all log messages';
+    $transport.clear-sent;
+
+    # Set log level to Warning
+    my $result = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'logging/setLevel',
+        params => { level => 'warning' }
+    ));
+    ok $result ~~ Hash, 'logging/setLevel returns empty result';
+    $transport.clear-sent;
+
+    # Debug and Info should be suppressed, Warning and above emitted
+    $server.log(MCP::Types::Debug, 'should be suppressed');
+    $server.log(MCP::Types::Info, 'should be suppressed');
+    $server.log(MCP::Types::Warning, 'should be emitted');
+    $server.log(MCP::Types::Error, 'should be emitted');
+    is $transport.sent.elems, 2, 'messages below Warning are suppressed';
+
+    my @notifications = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifications[0].params<level>, 'warning', 'first emitted is warning';
+    is @notifications[1].params<level>, 'error', 'second emitted is error';
+    $transport.clear-sent;
+
+    # Set level to Emergency — only Emergency should be emitted
+    $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 3,
+        method => 'logging/setLevel',
+        params => { level => 'emergency' }
+    ));
+    $transport.clear-sent;
+
+    $server.log(MCP::Types::Critical, 'should be suppressed');
+    $server.log(MCP::Types::Alert, 'should be suppressed');
+    $server.log(MCP::Types::Emergency, 'should be emitted');
+    is $transport.sent.elems, 1, 'only Emergency emitted at Emergency level';
+    $transport.clear-sent;
+
+    # Reset to Debug — all messages should be emitted again
+    $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 4,
+        method => 'logging/setLevel',
+        params => { level => 'debug' }
+    ));
+    $transport.clear-sent;
+
+    $server.log(MCP::Types::Debug, 'debug after reset');
+    is $transport.sent.elems, 1, 'all messages emitted after resetting to Debug';
+    $transport.clear-sent;
+
+    # Invalid log level returns error
+    my $bad-result = try {
+        $server.dispatch-request(MCP::JSONRPC::Request.new(
+            id => 5,
+            method => 'logging/setLevel',
+            params => { level => 'nonexistent' }
+        ));
+    };
+    ok $! ~~ X::MCP::JSONRPC, 'invalid log level raises error';
+};
+
 done-testing;

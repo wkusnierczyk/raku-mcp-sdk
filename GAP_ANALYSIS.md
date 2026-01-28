@@ -159,13 +159,12 @@ This document compares the current implementation of the Raku MCP SDK against th
 - ❌ `_meta.progressToken` in request params
 - ❌ Client-side progress handling
 
-#### ⚠️ Logging
-- `log()` method exists on Server
-- `LogLevel` enum and `LogEntry` type defined
-
-**Missing**:
-- ❌ `logging/setLevel` request
-- ❌ Client-side log level configuration
+#### ✅ Logging - **Implemented**
+- `log()` method on Server with level filtering
+- `LogLevel` enum, `LogEntry` type, `parse-log-level`, `log-level-at-or-above` helpers
+- `logging/setLevel` request handler on Server stores and applies log level
+- Log notifications below configured level are suppressed
+- Client `set-log-level()` method sends `logging/setLevel` request
 
 #### ✅ Cancellation - **Implemented**
 - Server tracks in-flight requests and handles `notifications/cancelled`
@@ -318,7 +317,6 @@ Missing tests for:
 
 The Raku MCP SDK provides comprehensive MCP specification coverage. Remaining gaps are:
 
-- `logging/setLevel` request handling
 - Dynamic client registration (OAuth)
 - Authorization extensions (SEP-1046, SEP-990)
 - SSE transport (legacy)

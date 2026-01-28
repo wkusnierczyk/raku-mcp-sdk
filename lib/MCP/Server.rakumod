@@ -78,6 +78,9 @@ class Server is export {
     # Extension registry
     has %!extensions;  # name => { version => Str, settings => Hash, methods => Hash of &handler, notifications => Hash of &handler }
 
+    # Logging level (default: Debug - emit all log messages)
+    has MCP::Types::LogLevel $!log-level = MCP::Types::Debug;
+
     #| Encode an offset into a cursor string
     method !encode-cursor(Int $offset --> Str) {
         MIME::Base64.encode(to-json({ offset => $offset }).encode, :str)
@@ -418,6 +421,10 @@ class Server is export {
         self!list-tasks($req.params);
     }
 
+    multi method dispatch-request($req where *.method eq 'logging/setLevel') {
+        self!handle-set-log-level($req.params);
+    }
+
     multi method dispatch-request($req) {
         # Check if this is an extension method
         for %!extensions.kv -> $ext-name, %ext {
@@ -473,6 +480,28 @@ class Server is export {
             serverInfo => $!info.Hash,
             ($!instructions ?? (instructions => $!instructions) !! Empty),
         }
+    }
+
+    #| Handle logging/setLevel request
+    method !handle-set-log-level(%params) {
+        my $level-str = %params<level> // die X::MCP::JSONRPC.new(
+            error => MCP::JSONRPC::Error.from-code(
+                MCP::JSONRPC::InvalidParams,
+                "Missing required parameter: level"
+            )
+        );
+        $!log-level = parse-log-level($level-str);
+        CATCH {
+            when X::AdHoc {
+                die X::MCP::JSONRPC.new(
+                    error => MCP::JSONRPC::Error.from-code(
+                        MCP::JSONRPC::InvalidParams,
+                        "Invalid log level: $level-str"
+                    )
+                );
+            }
+        }
+        {}
     }
 
     #| Handle notifications
@@ -830,8 +859,9 @@ class Server is export {
         $!transport.send($notification);
     }
 
-    #| Send a log message
+    #| Send a log message (suppressed if below current log level)
     method log(MCP::Types::LogLevel $level, $data, Str :$logger) {
+        return unless log-level-at-or-above($level, $!log-level);
         self.notify('notifications/message', {
             level => $level.value,
             data => $data,

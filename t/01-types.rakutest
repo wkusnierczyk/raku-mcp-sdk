@@ -236,6 +236,19 @@ subtest 'LogLevel', {
     is Info.value, 'info', 'Info value';
     is Warning.value, 'warning', 'Warning value';
     is Error.value, 'error', 'Error value';
+
+    # parse-log-level
+    is parse-log-level('debug'), Debug, 'parse debug';
+    is parse-log-level('warning'), Warning, 'parse warning';
+    is parse-log-level('emergency'), Emergency, 'parse emergency';
+    dies-ok { parse-log-level('nonexistent') }, 'parse invalid level dies';
+
+    # log-level-at-or-above
+    ok log-level-at-or-above(Warning, Debug), 'Warning >= Debug';
+    ok log-level-at-or-above(Warning, Warning), 'Warning >= Warning';
+    nok log-level-at-or-above(Debug, Warning), 'Debug < Warning';
+    ok log-level-at-or-above(Emergency, Emergency), 'Emergency >= Emergency';
+    nok log-level-at-or-above(Alert, Emergency), 'Alert < Emergency';
 };
 
 # Test LogEntry
