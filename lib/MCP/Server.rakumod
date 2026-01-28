@@ -447,7 +447,15 @@ class Server is export {
 
     #| Handle initialize request
     method !handle-initialize(%params) {
-        $!protocol-version = %params<protocolVersion>;
+        my $client-version = %params<protocolVersion>;
+
+        # Negotiate protocol version: use client's version if supported,
+        # otherwise fall back to the server's latest supported version
+        my $negotiated = $client-version ~~ any(MCP::Types::SUPPORTED_PROTOCOL_VERSIONS.list)
+            ?? $client-version
+            !! MCP::Types::LATEST_PROTOCOL_VERSION;
+
+        $!protocol-version = $negotiated;
         my %cap-args;
         if %params<capabilities> && %params<capabilities> ~~ Hash {
             my %caps = %params<capabilities>;
@@ -460,7 +468,7 @@ class Server is export {
         $!initialized = True;
 
         {
-            protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+            protocolVersion => $negotiated,
             capabilities => self.capabilities.Hash,
             serverInfo => $!info.Hash,
             ($!instructions ?? (instructions => $!instructions) !! Empty),

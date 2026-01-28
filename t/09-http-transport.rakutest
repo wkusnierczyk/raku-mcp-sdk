@@ -18,28 +18,47 @@ Validates basic Streamable HTTP request/response handling.
 
 =end pod
 
+my $cro-load-error;
+my $cro-client-class;
+my $cro-error-class;
+
 sub cro-available(--> Bool) {
-    try {
-        require ::('Cro::HTTP::Client');
+    $cro-load-error = Nil;
+    my $result = try {
+        $cro-client-class = (require ::('Cro::HTTP::Client'));
         require ::('Cro::HTTP::Server');
+        $cro-error-class = ::('X::Cro::HTTP::Error');
         True
+    };
+    if $! {
+        $cro-load-error = $!;
+        return False;
     }
-    CATCH { default { False } }
+    return $result // False;
 }
 
 unless cro-available() {
     plan 1;
-    skip 'Cro::HTTP not installed', 1;
+    flunk 'Cro::HTTP available';
+    if $cro-load-error.defined {
+        diag "Cro load error: {$cro-load-error.^name}: {$cro-load-error.message}";
+        diag "Raku executable: {$*EXECUTABLE}";
+        diag "Repo chain:";
+        for $*REPO.repo-chain -> $repo {
+            diag "  {$repo}";
+        }
+        diag "Install Cro for this Raku: zef install Cro::HTTP";
+    }
     done-testing;
     exit;
 }
 
-my $client-class = ::('Cro::HTTP::Client');
-my $client = $client-class.new;
+my $client = $cro-client-class.new;
 
 sub start-server(--> Hash) {
     my $transport;
     my $port;
+    my $last-error;
     for ^20 -> $i {
         $port = 32000 + ($*PID % 1000) + $i;
         $transport = MCP::Transport::StreamableHTTP::StreamableHTTPServerTransport.new(
@@ -50,13 +69,15 @@ sub start-server(--> Hash) {
         my $ok = try {
             $transport.start;
             True
-        } // False;
+        };
+        $last-error = $! if $!;
         return { transport => $transport, port => $port } if $ok;
     }
+    diag "Server start failed: {$last-error.^name}: {$last-error.message}" if $last-error;
     {}
 }
 
-subtest 'Server: POST initialize returns response and session id', {
+subtest 'Server: POST initialize returns response and session id', sub {
     my %server = start-server();
     unless %server<transport> {
         skip 'No free port for HTTP transport', 1;
@@ -108,7 +129,7 @@ subtest 'Server: POST initialize returns response and session id', {
     await $transport.close;
 };
 
-subtest 'Server: POST notification returns 202 Accepted', {
+subtest 'Server: POST notification returns 202 Accepted', sub {
     my %server = start-server();
     unless %server<transport> {
         skip 'No free port for HTTP transport', 1;
@@ -136,14 +157,14 @@ subtest 'Server: POST notification returns 202 Accepted', {
         }
     );
 
-    my $msg = await Promise.anyof($got, Promise.in(2).then({ Nil }));
-    ok $msg.status ~~ Kept, 'notification received';
+    await Promise.anyof($got, Promise.in(2));
+    ok $got.status ~~ Kept, 'notification received';
     is $resp.status, 202, 'notification returns 202 Accepted';
 
     await $transport.close;
 };
 
-subtest 'Server: Invalid protocol version returns 400', {
+subtest 'Server: Invalid protocol version returns 400', sub {
     my %server = start-server();
     unless %server<transport> {
         skip 'No free port for HTTP transport', 1;
@@ -155,7 +176,6 @@ subtest 'Server: Invalid protocol version returns 400', {
     $transport.start;
 
     my $resp;
-    my $error-class = ::('X::Cro::HTTP::Error');
     try {
         $resp = await $client.post(
             "http://127.0.0.1:$port/mcp",
@@ -167,7 +187,7 @@ subtest 'Server: Invalid protocol version returns 400', {
             body => { jsonrpc => '2.0', id => 1, method => 'ping' }
         );
         CATCH {
-            when $error-class {
+            when $cro-error-class {
                 $resp = .response;
             }
         }
@@ -178,7 +198,7 @@ subtest 'Server: Invalid protocol version returns 400', {
     await $transport.close;
 };
 
-subtest 'Server: DELETE session termination', {
+subtest 'Server: DELETE session termination', sub {
     my %server = start-server();
     unless %server<transport> {
         skip 'No free port for HTTP transport', 1;
@@ -238,7 +258,7 @@ subtest 'Server: DELETE session termination', {
     await $transport.close;
 };
 
-subtest 'Client: sends POST and receives response', {
+subtest 'Client: sends POST and receives response', sub {
     my %server = start-server();
     unless %server<transport> {
         skip 'No free port for HTTP transport', 1;
@@ -282,11 +302,11 @@ subtest 'Client: sends POST and receives response', {
     );
     await $client-transport.send($req);
 
-    my $response = await Promise.anyof($got-response, Promise.in(5).then({ Nil }));
-    ok $response.status ~~ Kept, 'client received response';
+    await Promise.anyof($got-response, Promise.in(5));
+    ok $got-response.status ~~ Kept, 'client received response';
 
-    if $response.status ~~ Kept {
-        my $msg = $response.result;
+    if $got-response.status ~~ Kept {
+        my $msg = $got-response.result;
         isa-ok $msg, MCP::JSONRPC::Response, 'response is correct type';
         is $msg.id, 1, 'response has matching id';
         ok $msg.result<protocolVersion>.defined, 'response has protocol version';
@@ -296,7 +316,7 @@ subtest 'Client: sends POST and receives response', {
     await $server.close;
 };
 
-subtest 'Client: terminate-session sends DELETE', {
+subtest 'Client: terminate-session sends DELETE', sub {
     my %server = start-server();
     unless %server<transport> {
         skip 'No free port for HTTP transport', 1;
@@ -348,7 +368,7 @@ subtest 'Client: terminate-session sends DELETE', {
     await $server.close;
 };
 
-subtest 'Client: is-connected reflects state', {
+subtest 'Client: is-connected reflects state', sub {
     my %server = start-server();
     unless %server<transport> {
         skip 'No free port for HTTP transport', 1;
