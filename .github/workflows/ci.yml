@@ -212,7 +212,3 @@ jobs:
           name: architecture-diagram
           path: architecture/architecture.png
 
-
-      - name: Upload to Zef ecosystem
-        run: fez upload
-        continue-on-error: true

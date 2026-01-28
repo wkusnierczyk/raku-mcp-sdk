@@ -401,10 +401,28 @@ class Server is export {
         );
     }
 
+    #| Get extensions negotiated with the client (supported by both sides)
+    method negotiated-extensions(--> Hash) {
+        return {} unless $!client-capabilities.defined && $!client-capabilities.experimental.defined;
+        my %negotiated;
+        for $!client-capabilities.experimental.kv -> $name, $config {
+            %negotiated{$name} = $config if %!extensions{$name}:exists;
+        }
+        %negotiated
+    }
+
     #| Handle initialize request
     method !handle-initialize(%params) {
         $!protocol-version = %params<protocolVersion>;
-        $!client-capabilities = MCP::Types::ClientCapabilities.new; # Parse from params
+        my %cap-args;
+        if %params<capabilities> && %params<capabilities> ~~ Hash {
+            my %caps = %params<capabilities>;
+            %cap-args<experimental> = %caps<experimental> if %caps<experimental>.defined && %caps<experimental> ~~ Hash;
+            %cap-args<roots> = MCP::Types::RootsCapability.new(|%caps<roots>) if %caps<roots>.defined && %caps<roots> ~~ Hash;
+            %cap-args<sampling> = MCP::Types::SamplingCapability.new(|%caps<sampling>) if %caps<sampling>.defined && %caps<sampling> ~~ Hash;
+            %cap-args<tasks> = %caps<tasks> if %caps<tasks>.defined;
+        }
+        $!client-capabilities = MCP::Types::ClientCapabilities.new(|%cap-args);
         $!initialized = True;
 
         {

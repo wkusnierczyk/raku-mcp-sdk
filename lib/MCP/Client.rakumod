@@ -114,6 +114,16 @@ class Client is export {
         self.server-extensions{$name}:exists
     }
 
+    #| Get extensions negotiated with the server (supported by both sides)
+    method negotiated-extensions(--> Hash) {
+        my %server = self.server-extensions;
+        my %negotiated;
+        for %!extensions.kv -> $name, $config {
+            %negotiated{$name} = %server{$name} if %server{$name}:exists;
+        }
+        %negotiated
+    }
+
     #| Initialize the connection
     method !initialize(--> Promise) {
         # Build capabilities, adding roots if configured

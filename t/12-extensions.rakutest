@@ -8,7 +8,7 @@ use MCP::Client;
 need MCP::JSONRPC;
 need TestTransport;
 
-plan 9;
+plan 11;
 
 use MONKEY-TYPING;
 augment class MCP::Server::Server {
@@ -151,6 +151,49 @@ subtest 'Extension name must contain /', {
         transport => TestTransport::TestTransport.new,
     );
     dies-ok { $client.register-extension(name => 'badname') }, 'client rejects name without /';
+};
+
+# === 10. Server negotiated-extensions via initialize ===
+subtest 'Server negotiated-extensions after initialize', {
+    plan 3;
+    my $transport = TestTransport::TestTransport.new;
+    my $server = MCP::Server::Server.new(
+        info => MCP::Types::Implementation.new(name => 'test', version => '0.1'),
+        transport => $transport,
+    );
+    $server.register-extension(name => 'acme/shared', version => '1.0');
+    $server.register-extension(name => 'acme/server-only', version => '1.0');
+
+    # Simulate initialize with client advertising acme/shared and acme/client-only
+    my $req = MCP::JSONRPC::Request.new(id => 1, method => 'initialize', params => {
+        protocolVersion => '2025-11-25',
+        capabilities => {
+            experimental => {
+                'acme/shared' => { version => '1.0', settings => {} },
+                'acme/client-only' => { version => '1.0', settings => {} },
+            },
+        },
+        clientInfo => { name => 'test-client', version => '0.1' },
+    });
+    $server.dispatch-request($req);
+
+    my %negotiated = $server.negotiated-extensions;
+    ok %negotiated<acme/shared>:exists, 'shared extension is negotiated';
+    ok !(%negotiated<acme/client-only>:exists), 'client-only extension not negotiated';
+    ok !(%negotiated<acme/server-only>:exists), 'server-only extension not negotiated';
+};
+
+# === 11. Client negotiated-extensions ===
+subtest 'Client negotiated-extensions', {
+    plan 2;
+    my $client = MCP::Client::Client.new(
+        info => MCP::Types::Implementation.new(name => 'test-client', version => '0.1'),
+        transport => TestTransport::TestTransport.new,
+    );
+    $client.register-extension(name => 'acme/feature', version => '1.0');
+    # Before connect, no server caps so negotiated is empty
+    is $client.negotiated-extensions.elems, 0, 'no negotiated extensions before connect';
+    ok !$client.supports-extension('acme/feature'), 'not negotiated without server';
 };
 
 done-testing;
