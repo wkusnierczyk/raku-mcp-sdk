@@ -150,7 +150,7 @@ subtest 'Server dispatch and handlers', {
 
     $server.notify('notifications/message', { msg => 'hi' });
     $server.log(MCP::Types::Info, 'data', logger => 'test');
-    $server.progress('token', 0.5e0, total => 1e0, message => 'half');
+    $server.progress(0.5e0, total => 1e0, message => 'half', token => 'token');
     ok $transport.sent.grep(MCP::JSONRPC::Notification).elems >= 3, 'notifications sent';
 
     $server.handle-message-public(MCP::JSONRPC::Notification.new(method => 'initialized'));
@@ -981,6 +981,93 @@ subtest 'Logging level setting and filtering', {
         ));
     };
     ok $! ~~ X::MCP::JSONRPC, 'invalid log level raises error';
+};
+
+subtest 'Progress token from _meta', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'progress-srv', version => '0.1'),
+        transport => $transport
+    );
+
+    # Register a tool that sends progress using the implicit token
+    $server.add-tool(
+        tool()
+            .name('slow-task')
+            .description('A slow task')
+            .handler(-> {
+                $server.progress(0.5e0, total => 1e0, message => 'halfway');
+                'done'
+            })
+            .build
+    );
+
+    # Initialize
+    $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'initialize',
+        params => { protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION }
+    ));
+    $transport.clear-sent;
+
+    # Call tool with _meta.progressToken
+    $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'tools/call',
+        params => {
+            name => 'slow-task',
+            _meta => { progressToken => 'tok-42' }
+        }
+    ));
+
+    my @progress-notifs = $transport.sent.grep({
+        $_ ~~ MCP::JSONRPC::Notification && $_.method eq 'notifications/progress'
+    });
+    is @progress-notifs.elems, 1, 'one progress notification sent';
+    is @progress-notifs[0].params<progressToken>, 'tok-42', 'uses token from _meta';
+    is @progress-notifs[0].params<progress>, 0.5e0, 'progress value correct';
+    is @progress-notifs[0].params<total>, 1e0, 'total value correct';
+    is @progress-notifs[0].params<message>, 'halfway', 'message correct';
+    $transport.clear-sent;
+
+    # Call tool without _meta — no progress notification emitted
+    $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 3,
+        method => 'tools/call',
+        params => { name => 'slow-task' }
+    ));
+
+    my @no-progress = $transport.sent.grep({
+        $_ ~~ MCP::JSONRPC::Notification && $_.method eq 'notifications/progress'
+    });
+    is @no-progress.elems, 0, 'no progress notification when no _meta token';
+    $transport.clear-sent;
+
+    # Explicit token overrides _meta
+    $server.add-tool(
+        tool()
+            .name('explicit-progress')
+            .description('Uses explicit token')
+            .handler(-> {
+                $server.progress(0.75e0, token => 'explicit-tok');
+                'done'
+            })
+            .build
+    );
+    $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 4,
+        method => 'tools/call',
+        params => {
+            name => 'explicit-progress',
+            _meta => { progressToken => 'meta-tok' }
+        }
+    ));
+
+    my @explicit = $transport.sent.grep({
+        $_ ~~ MCP::JSONRPC::Notification && $_.method eq 'notifications/progress'
+    });
+    is @explicit.elems, 1, 'explicit token progress sent';
+    is @explicit[0].params<progressToken>, 'explicit-tok', 'explicit token used over _meta';
 };
 
 done-testing;

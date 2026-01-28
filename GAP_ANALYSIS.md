@@ -151,13 +151,13 @@ This document compares the current implementation of the Raku MCP SDK against th
 
 ### Utilities
 
-#### ⚠️ Progress Tracking
-- `progress()` method exists on Server
+#### ✅ Progress Tracking - **Implemented**
+- `progress()` method on Server with automatic `_meta.progressToken` extraction
+- `proto dispatch-request` sets `$*MCP-PROGRESS-TOKEN` dynamic variable for all handlers
+- Explicit token parameter overrides implicit `_meta` token
+- No notification emitted when no token is available
+- Client `progress()` Supply emits typed `Progress` objects from `notifications/progress`
 - Types defined (`Progress`)
-
-**Missing**:
-- ❌ `_meta.progressToken` in request params
-- ❌ Client-side progress handling
 
 #### ✅ Logging - **Implemented**
 - `log()` method on Server with level filtering

@@ -32,7 +32,7 @@ Raku MCP SDK is **work in progress** (WIP).
 | Prompts | ✅ Done | List, get, builder API |
 | Pagination | ✅ Done | Cursor-based for all list endpoints |
 | Logging | ✅ Done | Server-side notifications, `logging/setLevel`, level filtering |
-| Progress | ✅ Done | Server-side notifications |
+| Progress | ✅ Done | `_meta.progressToken` extraction, server notifications, client Supply |
 | Cancellation | ✅ Done | Request cancellation with notifications |
 | Resource subscriptions | ✅ Done | Subscribe, unsubscribe, update notifications |
 | Roots | ✅ Done | Client roots, server list-roots |
@@ -572,7 +572,7 @@ Building this repository was supported by:
 $ make about
 
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
-├─ version:    0.21.0
+├─ version:    0.22.0
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT

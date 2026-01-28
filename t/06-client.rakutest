@@ -641,4 +641,58 @@ subtest 'Client set-log-level', {
     is @reqs[0].params<level>, 'warning', 'level parameter is correct';
 };
 
+subtest 'Client progress supply', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport
+    );
+
+    my $connect = $client.connect;
+    for ^10 {
+        last if $transport.sent.elems > 0;
+        sleep 0.1;
+    }
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    # Tap the progress supply
+    my @received;
+    $client.progress.tap(-> $p { @received.push($p) });
+
+    # Emit a progress notification from the server
+    $transport.emit(MCP::JSONRPC::Notification.new(
+        method => 'notifications/progress',
+        params => {
+            progressToken => 'tok-1',
+            progress => 0.5e0,
+            total => 1e0,
+            message => 'halfway',
+        }
+    ));
+
+    # Give the supply time to process
+    sleep 0.1;
+
+    is @received.elems, 1, 'received one progress notification';
+    isa-ok @received[0], MCP::Types::Progress, 'is a Progress object';
+    is @received[0].progressToken, 'tok-1', 'token correct';
+    is @received[0].progress, 0.5e0, 'progress value correct';
+    is @received[0].total, 1e0, 'total correct';
+    is @received[0].message, 'halfway', 'message correct';
+
+    # Non-progress notifications should not appear
+    $transport.emit(MCP::JSONRPC::Notification.new(
+        method => 'notifications/message',
+        params => { level => 'info', data => 'test' }
+    ));
+    sleep 0.1;
+
+    is @received.elems, 1, 'non-progress notification not in progress supply';
+};
+
 done-testing;
