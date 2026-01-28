@@ -222,9 +222,9 @@ Long-running operation support:
 - Server: `register-extension()`, `unregister-extension()`
 - Client: `register-extension()`, `server-extensions()`, `supports-extension()`
 
-#### ❌ Authorization Extensions
-- SEP-1046: OAuth client credentials (M2M)
-- SEP-990: Enterprise IdP policy controls
+#### ⚠️ Authorization Extensions
+- ✅ SEP-1046: OAuth client credentials (M2M) — `OAuthM2MClient` with `client_credentials` grant
+- ❌ SEP-990: Enterprise IdP policy controls
 
 #### ✅ URL Mode Elicitation (SEP-1036)
 - `elicit-url()` method for URL mode requests
@@ -286,7 +286,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 Current implementation targets: **2025-11-25** ✅
 
 Key features still needed for full 2025-11-25 compliance:
-- Implement authorization extensions (SEP-1046, SEP-990)
+- Implement authorization extensions (SEP-990)
 
 ---
 
@@ -317,7 +317,7 @@ Missing tests for:
 
 The Raku MCP SDK provides comprehensive MCP specification coverage. Remaining gaps are:
 
-- Authorization extensions (SEP-1046, SEP-990)
+- Authorization extensions (SEP-990)
 - SSE transport (legacy)
 
 The SDK's architecture is well-designed and should accommodate these additions without major refactoring.

@@ -226,3 +226,121 @@ class OAuthClientHandler is export {
         $s.subst(/<-[A..Za..z0..9\-._~]>/, { .Str.encode('utf-8').list.map({ '%' ~ .fmt('%02X') }).join }, :g)
     }
 }
+
+#| OAuth 2.1 client credentials handler for machine-to-machine authentication (SEP-1046)
+class OAuthM2MClient is export {
+    has Str $.resource-url is required;
+    has Str $.client-id is required;
+    has Str $.client-secret is required;
+    has @.scopes;
+
+    has TokenResponse $.token is rw;
+    has AuthServerMetadata $.auth-metadata is rw;
+    has ProtectedResourceMetadata $.resource-metadata is rw;
+
+    method discover(--> Promise) {
+        start {
+            my $client = self!cro-client;
+
+            my $resource-url = $!resource-url.subst(/ '/' $ /, '');
+            my $rm-url = "$resource-url/.well-known/oauth-protected-resource";
+            my $rm-resp = await $client.get($rm-url);
+            my $rm-body = await $rm-resp.body;
+            $!resource-metadata = ProtectedResourceMetadata.from-hash(
+                $rm-body ~~ Hash ?? $rm-body !! from-json($rm-body)
+            );
+
+            my $issuer = $!resource-metadata.authorization-servers[0]
+                // die X::MCP::OAuth::Discovery.new(message => 'No authorization server found');
+
+            my $issuer-base = $issuer.subst(/ '/' $ /, '');
+            my $as-body;
+            try {
+                my $as-resp = await $client.get("$issuer-base/.well-known/oauth-authorization-server");
+                $as-body = await $as-resp.body;
+                CATCH {
+                    default {
+                        my $oidc-resp = await $client.get("$issuer-base/.well-known/openid-configuration");
+                        $as-body = await $oidc-resp.body;
+                    }
+                }
+            }
+            $!auth-metadata = AuthServerMetadata.from-hash(
+                $as-body ~~ Hash ?? $as-body !! from-json($as-body)
+            );
+            True
+        }
+    }
+
+    method authenticate(--> Promise) {
+        start {
+            await self.discover unless $!auth-metadata.defined;
+            await self.request-token;
+            True
+        }
+    }
+
+    method request-token(--> Promise) {
+        start {
+            die X::MCP::OAuth::Discovery.new(message => 'Must call discover() first')
+                unless $!auth-metadata.defined;
+
+            my $client = self!cro-client;
+            my %body =
+                grant_type    => 'client_credentials',
+                client_id     => $!client-id,
+                client_secret => $!client-secret,
+                resource      => $!resource-url;
+            %body<scope> = @!scopes.join(' ') if @!scopes;
+
+            my $resp = await $client.post(
+                $!auth-metadata.token-endpoint,
+                content-type => 'application/x-www-form-urlencoded',
+                body => self!form-encode(%body),
+            );
+            my $body = await $resp.body;
+            my %token-data = $body ~~ Hash ?? $body !! from-json($body);
+            $!token = TokenResponse.from-hash(%token-data);
+            $!token
+        }
+    }
+
+    method get-token(--> Promise) {
+        start {
+            if $!token.defined && !$!token.is-expired {
+                $!token
+            } else {
+                await self.request-token
+            }
+        }
+    }
+
+    method authorization-header(--> Promise) {
+        start {
+            my $token = await self.get-token;
+            "Bearer {$token.access-token}"
+        }
+    }
+
+    method !form-encode(%data --> Str) {
+        %data.kv.map(-> $k, $v { "{uri-encode($k)}={uri-encode($v)}" }).join('&')
+    }
+
+    method !cro-client() {
+        try {
+            require ::('Cro::HTTP::Client');
+            return ::('Cro::HTTP::Client').new;
+        }
+        CATCH {
+            default {
+                die X::MCP::OAuth::Discovery.new(
+                    message => 'Cro::HTTP is required for OAuth M2M client'
+                );
+            }
+        }
+    }
+
+    sub uri-encode(Str $s --> Str) {
+        $s.subst(/<-[A..Za..z0..9\-._~]>/, { .Str.encode('utf-8').list.map({ '%' ~ .fmt('%02X') }).join }, :g)
+    }
+}
