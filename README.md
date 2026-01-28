@@ -43,7 +43,7 @@ Raku MCP SDK is **work in progress** (WIP).
 | Extensions framework | ✅ Done (experimental) | Negotiation via `experimental` capabilities + extension method routing |
 | Completion | ✅ Done | Prompt and resource autocomplete with handler registration |
 | Tool output schemas | ✅ Done | `outputSchema` and `structuredContent` for structured results |
-| Tool metadata | ❌ Planned | icon metadata + tool name validation guidance |
+| Tool metadata | ⚠️ Partial | Tool name validation (SEP-986); icon metadata planned |
 | OAuth 2.1 | ✅ Done | PKCE, token management, server validation, metadata discovery |
 
 ## Table of contents

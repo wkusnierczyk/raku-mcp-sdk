@@ -12,7 +12,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 |----------|--------|-------|
 | **Base Protocol** | ✅ Mostly Complete | JSON-RPC 2.0, lifecycle, basic message handling |
 | **Transports** | ✅ Mostly Complete | Stdio complete, Streamable HTTP complete |
-| **Server Features** | ✅ Mostly Complete | Tools/Resources/Prompts + pagination; missing resource templates and prompts list_changed |
+| **Server Features** | ✅ Mostly Complete | Tools/Resources/Prompts + pagination, tool name validation, prompts list_changed |
 | **Client Features** | ✅ Done | Sampling with tools, includeContext, stopReason, completion |
 | **Utilities** | ⚠️ Partial | Logging, progress, cancellation implemented |
 | **Authorization** | ✅ Done | OAuth 2.1 with PKCE |
@@ -88,7 +88,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 **Missing**:
 - ✅ Tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) - **Implemented** via builder API
 - ✅ `outputSchema` for structured tool outputs (2025-06-18 feature)
-- ❌ Tool name validation (SEP-986: must match `^[a-zA-Z0-9_-]{1,64}$`)
+- ✅ Tool name validation (SEP-986: must match `^[a-zA-Z0-9_-]{1,64}$`) - **Implemented** in builder and server registration
 - ✅ `tools/list` pagination support - **Implemented**
 
 #### ✅ Resources (`MCP::Server::Resource`)
@@ -109,7 +109,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 
 **Missing**:
 - ✅ `prompts/list` pagination support - **Implemented**
-- ❌ `notifications/prompts/list_changed`
+- ✅ `notifications/prompts/list_changed` - **Implemented** via `notify-prompts-list-changed()`
 
 ---
 
@@ -246,7 +246,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 |---------|-----------|----------|
 | Tools | ✅ Full | ✅ Full + annotations |
 | Resources | ✅ Full + templates + subscriptions | ✅ Full + subscriptions (no templates) |
-| Prompts | ✅ Full | ✅ Full (no list_changed notification) |
+| Prompts | ✅ Full | ✅ Full |
 | Sampling | ✅ Full + tools | ✅ Full + tools |
 | Roots | ✅ Full | ✅ Full |
 | Elicitation | ✅ Full + URL mode | ✅ Full |
@@ -318,8 +318,6 @@ Missing tests for:
 
 The Raku MCP SDK provides comprehensive MCP specification coverage. Remaining gaps are:
 
-- Resource templates (URI templates with placeholders)
-- `notifications/prompts/list_changed`
 - `logging/setLevel` request handling
 - Dynamic client registration (OAuth)
 - Authorization extensions (SEP-1046, SEP-990)
