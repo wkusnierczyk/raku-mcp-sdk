@@ -681,7 +681,7 @@ ifneq ($(TAG),)
 		printf "$(CLR_RED)✗ Failed to update version in README.md$(CLR_RESET)\n" >&2; \
 		exit 1; \
 	fi
-	$(call log-success,Version updated in Makefile, $(META_FILE), and README.md)
+	$(call log-success,Version updated in Makefile, $(META_FILE), and README.md (no tag))
 else
 	$(call log,$(PROJECT_NAME) v$(VERSION))
 endif
