@@ -335,7 +335,7 @@ class Server is export {
                 default {
                     $error = MCP::JSONRPC::Error.from-code(
                         MCP::JSONRPC::InternalError,
-                        $_.message
+                        "Internal error"
                     );
                 }
             }
