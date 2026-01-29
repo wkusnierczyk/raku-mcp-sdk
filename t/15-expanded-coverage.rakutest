@@ -250,7 +250,7 @@ subtest 'Handler exception becomes InternalError', {
     is @responses.elems, 1, 'response sent for failing handler';
     ok @responses[0].error.defined, 'response has error';
     is @responses[0].error.code, MCP::JSONRPC::InternalError.value, 'error code is InternalError';
-    ok @responses[0].error.message.contains('Boom'), 'error message includes exception text';
+    is @responses[0].error.message, 'Internal error', 'error message is sanitized';
 };
 
 subtest 'Error.from-code with data field', {
