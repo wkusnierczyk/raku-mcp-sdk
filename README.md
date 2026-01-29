@@ -1,7 +1,7 @@
 <table>
   <tr>
     <td>
-      <img src="graphics/raku-mcp-sdk.png" alt="logo" width="300" />
+      <img src="https://raw.githubusercontent.com/wkusnierczyk/raku-mcp-sdk/main/graphics/raku-mcp-sdk.png" alt="logo" width="300" />
     </td>
     <td>
       <p><strong>Raku MCP SDK</strong>: 
