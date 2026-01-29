@@ -56,7 +56,7 @@ subtest 'Sampling handler returns result', {
     );
 
     my $connect = $client.connect;
-    $transport.await-sent;
+    $transport.await-sent-and-settle;
     respond-to-init($transport);
     await $connect;
 
@@ -104,7 +104,7 @@ subtest 'Sampling rejects tools when capability missing', {
     );
 
     my $connect = $client.connect;
-    $transport.await-sent;
+    $transport.await-sent-and-settle;
     respond-to-init($transport);
     await $connect;
 
@@ -147,7 +147,7 @@ subtest 'Sampling enforces tool result placement', {
     );
 
     my $connect = $client.connect;
-    $transport.await-sent;
+    $transport.await-sent-and-settle;
     respond-to-init($transport);
     await $connect;
 
@@ -195,7 +195,7 @@ subtest 'Sampling with tools passes tools to handler', {
     );
 
     my $connect = $client.connect;
-    $transport.await-sent;
+    $transport.await-sent-and-settle;
     respond-to-init($transport);
     await $connect;
 
@@ -239,7 +239,7 @@ subtest 'Sampling validates tool definitions', {
     );
 
     my $connect = $client.connect;
-    $transport.await-sent;
+    $transport.await-sent-and-settle;
     respond-to-init($transport);
     await $connect;
 
@@ -293,7 +293,7 @@ subtest 'Sampling rejects includeContext without capability', {
     );
 
     my $connect = $client.connect;
-    $transport.await-sent;
+    $transport.await-sent-and-settle;
     respond-to-init($transport);
     await $connect;
 
@@ -332,7 +332,7 @@ subtest 'Sampling accepts includeContext with capability', {
     );
 
     my $connect = $client.connect;
-    $transport.await-sent;
+    $transport.await-sent-and-settle;
     respond-to-init($transport);
     await $connect;
 

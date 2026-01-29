@@ -45,6 +45,7 @@ class TestTransport does MCP::Transport::Base::Transport is export {
 
     #| Wait until at least $n messages have been sent (default 1).
     #| Returns True if condition met, False on timeout.
+    #| Includes a brief settle period to let async react blocks tap the supply.
     method await-sent(Int $n = 1, Num :$timeout = 5e0 --> Bool) {
         my $deadline = now + $timeout;
         while now < $deadline {
@@ -52,5 +53,13 @@ class TestTransport does MCP::Transport::Base::Transport is export {
             sleep 0.05;
         }
         @!sent.elems >= $n
+    }
+
+    #| Wait for sent messages and allow async react blocks to settle.
+    #| Use this before emitting responses in client tests.
+    method await-sent-and-settle(Int $n = 1, Num :$timeout = 5e0 --> Bool) {
+        my $ok = self.await-sent($n, :$timeout);
+        sleep 0.2;  # Let reactor threads schedule
+        $ok
     }
 }

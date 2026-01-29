@@ -129,7 +129,7 @@ subtest 'Client progress supply multiple events', {
     );
 
     my $connect = $client.connect;
-    $transport.await-sent;
+    $transport.await-sent-and-settle;
     $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
         protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
         capabilities => {},
