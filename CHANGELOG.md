@@ -2,6 +2,30 @@
 
 All notable changes to the Raku MCP SDK are documented in this file.
 
+## [0.29.0] - 2026-01-29
+
+### Added
+- Performance benchmarks: JSON-RPC parsing/serialization throughput, dispatch latency, concurrent scaling (`make benchmark`)
+- Stress tests: concurrent tool calls, resource reads, mixed operations, slow handler saturation, high concurrency bursts (`make stress`)
+- SECURITY.md with responsible disclosure policy
+- CODE_OF_CONDUCT.md (Contributor Covenant v2.1)
+- GitHub issue and PR templates
+- README badges (CI status, zef, license)
+- Configurable scheme on SSE transport (no longer hardcoded to HTTP)
+
+### Fixed
+- Race conditions in Client `%!pending-requests` (added `$!request-lock`)
+- Race conditions in Server `%!in-flight-requests` and `%!tasks` (added `$!flight-lock`, `$!task-lock`)
+- Flaky SSE endpoint test replaced `start { react { whenever } }` with synchronous `.tap()`
+- Handler exceptions sanitized before sending to clients (no longer leaks internal details)
+- PKCE verifier cleared from memory immediately after token exchange (single-use per RFC 7636)
+- Bumped Rakudo from 2024.01 to 2024.12 in CI and release workflows
+- Fixed release workflow fez publish (install Cro::HTTP before fez)
+
+### Changed
+- CI now includes coverage job with 70% threshold
+- README rewritten quality section as implemented features rather than task list
+
 ## [0.28.0] - 2026-01-29
 
 ### Added
