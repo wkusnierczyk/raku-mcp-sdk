@@ -41,6 +41,7 @@ graph TD
         Transport["Transport Role<br/>MCP::Transport::Base::Transport"]
         Stdio["MCP::Transport::Stdio::StdioTransport"]
         HTTP["MCP::Transport::StreamableHTTP"]
+        SSE["MCP::Transport::SSE"]
     end
 
     subgraph Auth ["Authorization"]
@@ -58,6 +59,7 @@ graph TD
     Server --> Transport
     Transport -.-> Stdio
     Transport -.-> HTTP
+    Transport -.-> SSE
 
     HTTP --> OAuthClient
     HTTP --> OAuthServer
@@ -73,5 +75,5 @@ graph TD
     class A,B user;
     class MCP,Client,Server,Tool,Resource,Prompt sdk;
     class JSONRPC,Types protocol;
-    class Transport,Stdio,HTTP transport;
+    class Transport,Stdio,HTTP,SSE transport;
     class OAuth,OAuthClient,OAuthServer auth;

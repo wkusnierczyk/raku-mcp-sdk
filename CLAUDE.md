@@ -32,11 +32,11 @@ MCP.rakumod (main entry point, re-exports all public API)
 ├── MCP::Server       # Server initialization, request dispatch, lifecycle
 ├── MCP::Client       # Client initialization, sampling support
 ├── MCP::Server::Tool/Resource/Prompt  # Fluent builders for primitives
-├── MCP::Transport::Base/Stdio/StreamableHTTP  # Transport layer
+├── MCP::Transport::Base/Stdio/StreamableHTTP/SSE  # Transport layer
 └── MCP::OAuth / OAuth::Client / OAuth::Server  # OAuth 2.1 authorization
 ```
 
-**Protocol**: JSON-RPC 2.0 over Stdio (complete) or HTTP/SSE (partial). Targets MCP spec 2025-03-26, preparing for 2025-11-25.
+**Protocol**: JSON-RPC 2.0 over Stdio, Streamable HTTP, or Legacy SSE. Targets MCP spec 2025-11-25.
 
 ## Key Patterns
 
@@ -81,13 +81,15 @@ Tests in `t/` numbered by layer:
 - `11-tasks.rakutest` - Tasks framework (async tools, polling, cancellation)
 - `12-extensions.rakutest` - Extensions framework (registration, dispatch, capabilities)
 - `13-resource-templates.rakutest` - Resource templates (URI templates, matching, builder)
+- `14-sse-transport.rakutest` - Legacy SSE transport
 
 ## Dependencies
 
-Runtime: `JSON::Fast`, `Cro::HTTP`, `MIME::Base64`, `Digest::SHA256::Native`
+Runtime: `JSON::Fast`, `Cro::HTTP`, `MIME::Base64`
+Optional (loaded at runtime): `Digest::SHA256::Native` (for OAuth PKCE)
 Dev: `Test`, `Test::META`, `App::Prove6`, `App::Racoco`
 
 ## Implementation Status
 
-See `GAP_ANALYSIS.md` for detailed feature comparison with MCP spec. Notable gaps:
-- Dynamic client registration (OAuth)
+See `GAP_ANALYSIS.md` for detailed feature comparison with MCP spec. Remaining gaps:
+- Tool icon metadata

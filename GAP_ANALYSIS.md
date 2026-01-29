@@ -10,13 +10,13 @@ This document compares the current implementation of the Raku MCP SDK against th
 
 | Category | Status | Notes |
 |----------|--------|-------|
-| **Base Protocol** | ✅ Mostly Complete | JSON-RPC 2.0, lifecycle, basic message handling |
+| **Base Protocol** | ✅ Complete | JSON-RPC 2.0, lifecycle, version negotiation |
 | **Transports** | ✅ Complete | Stdio, Streamable HTTP, Legacy SSE |
-| **Server Features** | ✅ Mostly Complete | Tools/Resources/Prompts + pagination, tool name validation, prompts list_changed |
-| **Client Features** | ✅ Done | Sampling with tools, includeContext, stopReason, completion |
-| **Utilities** | ⚠️ Partial | Logging, progress, cancellation implemented |
-| **Authorization** | ✅ Done | OAuth 2.1 with PKCE |
-| **New 2025-11-25 Features** | ✅ Mostly Complete | Elicitation, Tasks, Sampling-with-tools, Extensions done |
+| **Server Features** | ✅ Complete | Tools/Resources/Prompts + pagination, templates, subscriptions, annotations |
+| **Client Features** | ✅ Complete | Sampling with tools, completion, roots, elicitation |
+| **Utilities** | ✅ Complete | Logging, progress, cancellation, ping |
+| **Authorization** | ✅ Complete | OAuth 2.1 with PKCE, dynamic registration, M2M, enterprise IdP |
+| **New 2025-11-25 Features** | ✅ Complete | Elicitation, Tasks, Sampling-with-tools, Extensions |
 
 ---
 
@@ -49,12 +49,9 @@ This document compares the current implementation of the Raku MCP SDK against th
 - ID generation
 - Error codes (ParseError, InvalidRequest, MethodNotFound, InvalidParams, InternalError)
 
-#### ⚠️ Partial
-- **Lifecycle**: Initialize/initialized handshake works, but:
-  - Missing proper version negotiation (server should respond with supported version if client's isn't supported)
-  
-#### ❌ Missing
-- **JSON-RPC batching**: Not supported (though removed in 2025-06-18, re-evaluate if needed)
+#### Notes
+- **Lifecycle**: Initialize/initialized handshake with version negotiation (server falls back to latest supported version if client's isn't recognized)
+- **JSON-RPC batching**: Not supported (removed from spec in 2025-06-18)
 
 ---
 
@@ -87,32 +84,25 @@ This document compares the current implementation of the Raku MCP SDK against th
 - Tool registration with name, description, schema
 - Tool calling with arguments
 - Builder pattern API
-
-**Missing**:
-- ✅ Tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) - **Implemented** via builder API
-- ✅ `outputSchema` for structured tool outputs (2025-06-18 feature)
-- ✅ Tool name validation (SEP-986: must match `^[a-zA-Z0-9_-]{1,64}$`) - **Implemented** in builder and server registration
-- ✅ `tools/list` pagination support - **Implemented**
+- Tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`)
+- `outputSchema` for structured tool outputs (2025-06-18)
+- Tool name validation (SEP-986: `^[a-zA-Z0-9_-]{1,64}$`)
+- `tools/list` pagination support
 
 #### ✅ Resources (`MCP::Server::Resource`)
 - Resource registration with URI, name, description, mimeType
 - Resource reading
-
-**Missing**:
-- ✅ Resource templates (URI templates with placeholders)
-- ✅ Resource subscriptions (`resources/subscribe`, `resources/unsubscribe`) - **Implemented**
-- ✅ `notifications/resources/list_changed` - **Implemented** via `notify-resources-list-changed()`
-- ✅ `notifications/resources/updated` for subscribed resources - **Implemented** via `notify-resource-updated(uri)`
-- ✅ `resources/list` pagination support - **Implemented**
-- ✅ Resource annotations (`audience`, `priority`) - **Implemented** via builder API
+- Resource templates (URI templates with placeholders)
+- Resource subscriptions (`resources/subscribe`, `resources/unsubscribe`)
+- `notifications/resources/list_changed` and `notifications/resources/updated`
+- `resources/list` pagination support
+- Resource annotations (`audience`, `priority`)
 
 #### ✅ Prompts (`MCP::Server::Prompt`)
 - Prompt registration with arguments
 - Prompt retrieval with argument substitution
-
-**Missing**:
-- ✅ `prompts/list` pagination support - **Implemented**
-- ✅ `notifications/prompts/list_changed` - **Implemented** via `notify-prompts-list-changed()`
+- `prompts/list` pagination support
+- `notifications/prompts/list_changed`
 
 ---
 
@@ -247,7 +237,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 | Feature | Python SDK | Raku SDK |
 |---------|-----------|----------|
 | Tools | ✅ Full | ✅ Full + annotations |
-| Resources | ✅ Full + templates + subscriptions | ✅ Full + subscriptions (no templates) |
+| Resources | ✅ Full + templates + subscriptions | ✅ Full + templates + subscriptions |
 | Prompts | ✅ Full | ✅ Full |
 | Sampling | ✅ Full + tools | ✅ Full + tools |
 | Roots | ✅ Full | ✅ Full |
@@ -262,25 +252,12 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 
 ---
 
-## Priority Recommendations
+## Remaining Work
 
-### High Priority (Core Functionality)
-1. ~~**Complete Streamable HTTP transport**~~ ✅ **Done** - Full client/server with session management, SSE, and resumption
-2. ~~**Add resource subscriptions**~~ ✅ **Done** - Subscribe/unsubscribe and update notifications
-3. ~~**Add pagination**~~ ✅ **Done** - Cursor-based pagination for all list endpoints
-4. ~~**Implement roots**~~ ✅ **Done** - Client roots support and server list-roots
-5. ~~**Implement proper cancellation**~~ ✅ **Done** - Request cancellation with notifications
+All priority items from the original roadmap have been completed. Remaining items:
 
-### Medium Priority (Enhanced Functionality)
-6. ~~**Add tool output schemas**~~ ✅ **Done** - outputSchema and structuredContent support
-7. ~~**Implement elicitation**~~ ✅ **Done** - Form and URL mode with handler callbacks
-8. ~~**Add completion/autocomplete**~~ ✅ **Done** - Prompt and resource completion with handler registration
-9. ~~**Implement OAuth 2.1**~~ ✅ **Done** - PKCE, token management, server validation
-
-### Lower Priority (Advanced Features)
-10. ~~**Tasks framework**~~ ✅ **Done** - Long-running operations (experimental)
-11. ~~**Extensions framework**~~ ✅ **Done** - Extension registration, dispatch, capability negotiation
-12. ~~**Sampling with tools**~~ ✅ **Done** - Tools, toolChoice, includeContext, stopReason
+1. **Tool icon metadata** — Tool `icon` field not yet implemented
+2. **Test coverage** — Missing tests for progress tracking, error edge cases, concurrent operations
 
 ---
 
@@ -295,26 +272,28 @@ All key features for 2025-11-25 compliance are implemented.
 ## Test Coverage Gaps
 
 Current tests cover:
-- ✅ Types serialization
-- ✅ JSON-RPC encoding/decoding
-- ✅ Builder patterns
-- ✅ Transport interface
-- ✅ Server dispatch and lifecycle
-- ✅ Client initialization
-- ✅ Top-level MCP exports
-- ✅ Sampling validation
-- ✅ HTTP transport
-- ✅ OAuth 2.1 types, PKCE, server/client handlers
-- ✅ Tasks framework (async tools, polling, cancellation)
-- ✅ Extensions framework (registration, dispatch, capabilities)
+- ✅ Types serialization (`01-types`)
+- ✅ JSON-RPC encoding/decoding (`02-jsonrpc`)
+- ✅ Builder patterns (`03-builders`)
+- ✅ Transport interface (`04-transport`)
+- ✅ Server dispatch and lifecycle (`05-server`)
+- ✅ Client initialization (`06-client`)
+- ✅ Top-level MCP exports (`07-mcp`)
+- ✅ Sampling validation (`08-sampling`)
+- ✅ HTTP transport (`09-http-transport`)
+- ✅ OAuth 2.1 types, PKCE, server/client handlers (`10-oauth`)
+- ✅ Tasks framework (`11-tasks`)
+- ✅ Extensions framework (`12-extensions`)
+- ✅ Resource templates (`13-resource-templates`)
+- ✅ SSE transport (`14-sse-transport`)
 
-Missing tests for:
-- ❌ Progress tracking
-- ❌ Error edge cases
-- ❌ Concurrent operations
+Areas with limited test coverage:
+- Progress tracking (server notifications, client Supply)
+- Error edge cases (malformed messages, transport failures)
+- Concurrent operations (parallel requests, race conditions)
 
 ---
 
 ## Conclusion
 
-The Raku MCP SDK provides comprehensive MCP specification coverage with no remaining gaps. All transport types (Stdio, Streamable HTTP, Legacy SSE) are fully implemented.
+The Raku MCP SDK provides comprehensive MCP specification 2025-11-25 coverage. All transport types (Stdio, Streamable HTTP, Legacy SSE), all server features (Tools, Resources, Prompts), all client features (Sampling, Roots, Elicitation, Completion), and full OAuth 2.1 authorization are implemented. Remaining work is limited to tool icon metadata and expanded test coverage.
