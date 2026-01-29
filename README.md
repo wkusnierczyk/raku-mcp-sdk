@@ -17,7 +17,7 @@
 ## Status
 
 Raku MCP SDK provides comprehensive coverage of the [MCP specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25).  
-See the [Gap Analysis](GAP_ANALYSIS.md) for details.
+See the [Gap Analysis](https://github.com/wkusnierczyk/raku-mcp-sdk/blob/main/GAP_ANALYSIS.md) for details.
 
 ### Implementation progress
 
@@ -72,6 +72,7 @@ See the [Gap Analysis](GAP_ANALYSIS.md) for details.
   - [Makefile targets](#makefile-targets)
   - [Environment variables](#environment-variables)
   - [Coverage prerequisites](#coverage-prerequisites)
+  - [CI pipeline](#ci-pipeline)
 - [Project structure](#project-structure)
 - [Contributing](#contributing)
 - [License](#license)
@@ -503,6 +504,24 @@ make coverage
 # report: coverage-report/report.html
 ```
 
+### CI pipeline
+
+The project runs automated checks on every push and pull request via GitHub Actions.
+
+**CI workflow** (`ci.yml`):
+
+1. **Lint** — validates META6.json, checks syntax, and scans formatting.
+2. **Test** — runs the full test suite across a matrix of 3 OSes (Ubuntu, macOS, Windows) and 2 Raku versions (2024.12, latest). Windows is tested on `latest` only.
+3. **Coverage** — runs after tests pass on Ubuntu, generates a coverage report with [RaCoCo](https://github.com/atroxaper/raku-RaCoCo), and fails if coverage drops below 70%.
+
+**Release workflow** (`release.yml`), triggered on version tags (`v*.*.*`):
+
+1. **Validate** — checks the tag matches `META6.json` version.
+2. **Test** — runs the full matrix (same as CI).
+3. **Build** — creates a distribution archive.
+4. **Release** — creates a GitHub release (draft, upload assets, publish).
+5. **Publish** — uploads to the [Zef ecosystem](https://raku.land/) via `fez`.
+
 ## Project structure
 
 ```
@@ -547,7 +566,7 @@ Contributions are welcome. You can:
 
 ## License
 
-MIT License - see the [LICENSE](LICENSE) file and the [MIT License](https://opensource.org/licenses/MIT) site.
+MIT License - see the [LICENSE](https://github.com/wkusnierczyk/raku-mcp-sdk/blob/main/LICENSE) file and the [MIT License](https://opensource.org/licenses/MIT) site.
 
 ## References
 
@@ -573,7 +592,7 @@ Building this repository was supported by:
 $ make about
 
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
-├─ version:    0.28.5
+├─ version:    0.28.6
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT
