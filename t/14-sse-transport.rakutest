@@ -99,17 +99,12 @@ subtest 'Server sends endpoint event on SSE connection', sub {
 
     my $got-endpoint = Promise.new;
     my $buffer = '';
-    start {
-        react {
-            whenever $resp.body-byte-stream -> $chunk {
-                $buffer ~= $chunk.decode('utf-8');
-                if $buffer.contains("\n\n") {
-                    try $got-endpoint.keep($buffer);
-                    done;
-                }
-            }
+    $resp.body-byte-stream.tap(-> $chunk {
+        $buffer ~= $chunk.decode('utf-8');
+        if $buffer.contains("\n\n") {
+            try $got-endpoint.keep($buffer);
         }
-    }
+    });
 
     my $tries = 0;
     while $got-endpoint.status ~~ Planned && $tries < 100 {
