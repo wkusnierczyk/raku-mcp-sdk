@@ -65,6 +65,7 @@ class Client is export {
 
     # Pending requests
     has %!pending-requests;  # id => Promise vow
+    has Lock $!request-lock = Lock.new;
 
     # Incoming message supply
     has Supply $!incoming;
@@ -78,14 +79,8 @@ class Client is export {
             # Start transport and message handling
             $!incoming = $!transport.start;
 
-            # Start message handler in background
-            start {
-                react {
-                    whenever $!incoming -> $msg {
-                        self!handle-message($msg);
-                    }
-                }
-            }
+            # Tap incoming messages before sending any requests
+            $!incoming.tap(-> $msg { self!handle-message($msg) });
 
             # Perform initialization handshake
             await self!initialize;
@@ -183,12 +178,14 @@ class Client is export {
 
     #| Handle response to our requests
     method !handle-response(MCP::JSONRPC::Response $resp) {
-        if %!pending-requests{$resp.id}:exists {
-            my $vow = %!pending-requests{$resp.id}:delete;
-            if $resp.error {
-                $vow.break(X::MCP::Client::Error.new(error => $resp.error));
-            } else {
-                $vow.keep($resp.result);
+        $!request-lock.protect: {
+            if %!pending-requests{$resp.id}:exists {
+                my $vow = %!pending-requests{$resp.id}:delete;
+                if $resp.error {
+                    $vow.break(X::MCP::Client::Error.new(error => $resp.error));
+                } else {
+                    $vow.keep($resp.result);
+                }
             }
         }
     }
@@ -444,21 +441,23 @@ class Client is export {
     method request(Str $method, $params? --> Promise) {
         my $id = $!id-gen.next;
         my $p = Promise.new;
-        %!pending-requests{$id} = $p.vow;
+        $!request-lock.protect: { %!pending-requests{$id} = $p.vow };
 
         my $request = MCP::JSONRPC::Request.new(:$id, :$method, :$params);
         $!transport.send($request);
 
         # Add timeout with cancellation notification
         my $timeout = Promise.in(30).then({
-            if %!pending-requests{$id}:exists {
-                # Send cancellation notification before breaking the promise
-                self.notify('notifications/cancelled', {
-                    requestId => $id,
-                    reason => "Request timed out",
-                });
-                my $vow = %!pending-requests{$id}:delete;
-                $vow.break(X::MCP::Client::Timeout.new(method => $method));
+            $!request-lock.protect: {
+                if %!pending-requests{$id}:exists {
+                    # Send cancellation notification before breaking the promise
+                    self.notify('notifications/cancelled', {
+                        requestId => $id,
+                        reason => "Request timed out",
+                    });
+                    my $vow = %!pending-requests{$id}:delete;
+                    $vow.break(X::MCP::Client::Timeout.new(method => $method));
+                }
             }
         });
 
@@ -472,14 +471,16 @@ class Client is export {
             ($reason ?? (reason => $reason) !! Empty),
         });
         # Also break the local promise if it exists
-        if %!pending-requests{$request-id}:exists {
-            my $vow = %!pending-requests{$request-id}:delete;
-            $vow.break(X::MCP::Client::Error.new(
-                error => MCP::JSONRPC::Error.from-code(
-                    MCP::JSONRPC::InternalError,
-                    $reason // "Request cancelled"
-                )
-            ));
+        $!request-lock.protect: {
+            if %!pending-requests{$request-id}:exists {
+                my $vow = %!pending-requests{$request-id}:delete;
+                $vow.break(X::MCP::Client::Error.new(
+                    error => MCP::JSONRPC::Error.from-code(
+                        MCP::JSONRPC::InternalError,
+                        $reason // "Request cancelled"
+                    )
+                ));
+            }
         }
     }
 

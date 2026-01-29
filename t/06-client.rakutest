@@ -50,10 +50,7 @@ subtest 'Client connect and requests', {
 
     my $connect = $client.connect;
     # Wait for initialize request
-    for ^10 {
-        last if $transport.sent.elems > 0;
-        sleep 0.1;
-    }
+    $transport.await-sent-and-settle;
     my $init-req = $transport.sent[0];
     isa-ok $init-req, MCP::JSONRPC::Request, 'initialize request sent';
 
@@ -184,10 +181,7 @@ subtest 'Client pagination support', {
     );
 
     my $connect = $client.connect;
-    for ^10 {
-        last if $transport.sent.elems > 0;
-        sleep 0.1;
-    }
+    $transport.await-sent-and-settle;
     my $init-req = $transport.sent[0];
     $transport.emit(MCP::JSONRPC::Response.success($init-req.id, {
         protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
@@ -252,10 +246,7 @@ subtest 'Client cancellation support', {
     );
 
     my $connect = $client.connect;
-    for ^10 {
-        last if $transport.sent.elems > 0;
-        sleep 0.1;
-    }
+    $transport.await-sent-and-settle;
     my $init-req = $transport.sent[0];
     $transport.emit(MCP::JSONRPC::Response.success($init-req.id, {
         protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
@@ -297,10 +288,7 @@ subtest 'Client resource subscription support', {
     );
 
     my $connect = $client.connect;
-    for ^10 {
-        last if $transport.sent.elems > 0;
-        sleep 0.1;
-    }
+    $transport.await-sent-and-settle;
     my $init-req = $transport.sent[0];
     $transport.emit(MCP::JSONRPC::Response.success($init-req.id, {
         protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
@@ -373,10 +361,7 @@ subtest 'Client roots support', {
     );
 
     my $connect = $client.connect;
-    for ^10 {
-        last if $transport.sent.elems > 0;
-        sleep 0.1;
-    }
+    $transport.await-sent-and-settle;
     my $init-req = $transport.sent[0];
 
     # Verify roots capability is advertised
@@ -405,7 +390,7 @@ subtest 'Client roots support', {
     ));
 
     # Wait for response
-    for ^10 {
+    for ^100 {
         last if $transport.sent.grep(MCP::JSONRPC::Response).elems > 0;
         sleep 0.1;
     }
@@ -439,10 +424,7 @@ subtest 'Client roots support', {
         transport => TestTransport::TestTransport.new
     );
     my $connect2 = $client2.connect;
-    for ^10 {
-        last if $client2.transport.sent.elems > 0;
-        sleep 0.1;
-    }
+    $client2.transport.await-sent-and-settle;
     my $init-req2 = $client2.transport.sent[0];
     nok $init-req2.params<capabilities><roots>:exists, 'no roots capability without roots';
 };
@@ -466,10 +448,7 @@ subtest 'Client elicitation support', {
     );
 
     my $connect = $client.connect;
-    for ^10 {
-        last if $transport.sent.elems > 0;
-        sleep 0.1;
-    }
+    $transport.await-sent-and-settle;
     my $init-req = $transport.sent[0];
 
     # Verify elicitation capability is advertised
@@ -500,10 +479,7 @@ subtest 'Client elicitation support', {
     ));
 
     # Wait for response
-    for ^10 {
-        last if $transport.sent.elems > 0;
-        sleep 0.1;
-    }
+    $transport.await-sent-and-settle;
 
     ok $elicit-received, 'elicitation handler was called';
     is %elicit-params<message>, 'Enter your name', 'handler received message';
@@ -521,10 +497,7 @@ subtest 'Client elicitation support', {
         transport => TestTransport::TestTransport.new
     );
     my $connect2 = $client2.connect;
-    for ^10 {
-        last if $client2.transport.sent.elems > 0;
-        sleep 0.1;
-    }
+    $client2.transport.await-sent-and-settle;
     my $init2 = $client2.transport.sent[0];
     nok $init2.params<capabilities><elicitation>:exists, 'no elicitation without handler';
 
@@ -542,10 +515,7 @@ subtest 'Client elicitation support', {
         params => { mode => 'form', message => 'test' }
     ));
 
-    for ^10 {
-        last if $client2.transport.sent.elems > 0;
-        sleep 0.1;
-    }
+    $client2.transport.await-sent-and-settle;
 
     @responses = $client2.transport.sent.grep(MCP::JSONRPC::Response);
     is @responses.elems, 1, 'error response sent';
@@ -618,10 +588,7 @@ subtest 'Client set-log-level', {
     );
 
     my $connect = $client.connect;
-    for ^10 {
-        last if $transport.sent.elems > 0;
-        sleep 0.1;
-    }
+    $transport.await-sent-and-settle;
     $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
         protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
         capabilities => { logging => {} },
@@ -649,10 +616,7 @@ subtest 'Client progress supply', {
     );
 
     my $connect = $client.connect;
-    for ^10 {
-        last if $transport.sent.elems > 0;
-        sleep 0.1;
-    }
+    $transport.await-sent-and-settle;
     $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
         protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
         capabilities => {},
