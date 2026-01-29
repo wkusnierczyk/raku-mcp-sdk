@@ -254,9 +254,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 
 ## Remaining Work
 
-All priority items from the original roadmap have been completed. Remaining items:
-
-1. **Test coverage** — Missing tests for progress tracking, error edge cases, concurrent operations
+All priority items from the original roadmap have been completed, including expanded test coverage for progress tracking, error edge cases, and concurrent operations.
 
 ---
 
@@ -295,4 +293,4 @@ Areas with limited test coverage:
 
 ## Conclusion
 
-The Raku MCP SDK provides comprehensive MCP specification 2025-11-25 coverage. All transport types (Stdio, Streamable HTTP, Legacy SSE), all server features (Tools, Resources, Prompts), all client features (Sampling, Roots, Elicitation, Completion), and full OAuth 2.1 authorization are implemented. Remaining work is limited to expanded test coverage.
+The Raku MCP SDK provides comprehensive MCP specification 2025-11-25 coverage. All transport types (Stdio, Streamable HTTP, Legacy SSE), all server features (Tools, Resources, Prompts), all client features (Sampling, Roots, Elicitation, Completion), and full OAuth 2.1 authorization are implemented. No significant gaps remain.

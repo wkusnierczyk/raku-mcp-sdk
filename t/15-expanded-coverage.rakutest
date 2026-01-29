@@ -1,0 +1,445 @@
+use v6.d;
+use Test;
+use lib 'lib';
+use lib 't/lib';
+
+use MCP::Server;
+use MCP::Client;
+use MCP::Types;
+need MCP::JSONRPC;
+use MCP::Server::Tool;
+use MCP::Server::Resource;
+use MCP::Server::Prompt;
+need TestTransport;
+use MCP::Transport::Stdio;
+use MCP::Transport::Base;
+use JSON::Fast;
+
+my &parse-jsonrpc = MCP::JSONRPC::EXPORT::DEFAULT::<&parse-message>;
+
+=begin pod
+=head1 NAME
+
+15-expanded-coverage.rakutest - Expanded tests for progress, errors, and concurrency
+
+=head1 DESCRIPTION
+
+Covers edge cases in progress tracking, malformed message handling,
+error propagation, and concurrent operations.
+
+=end pod
+
+use MONKEY-TYPING;
+augment class MCP::Server::Server {
+    method handle-message-public($msg) { self!handle-message($msg) }
+    method handle-response-public($msg) { self!handle-response($msg) }
+}
+augment class MCP::Transport::Stdio::StdioTransport {
+    method parse-public(Str $buffer) { self!parse-message($buffer) }
+}
+
+# --- Progress tracking ---
+
+subtest 'Multiple progress notifications in one handler', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $server.add-tool(
+        tool()
+            .name('multi-progress')
+            .description('Sends multiple progress updates')
+            .handler(-> {
+                $server.progress(0.25e0, total => 1e0, message => 'step 1');
+                $server.progress(0.5e0, total => 1e0, message => 'step 2');
+                $server.progress(0.75e0, total => 1e0, message => 'step 3');
+                $server.progress(1e0, total => 1e0, message => 'done');
+                'finished'
+            })
+            .build
+    );
+
+    $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1, method => 'initialize',
+        params => { protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION }
+    ));
+    $transport.clear-sent;
+
+    $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'tools/call',
+        params => { name => 'multi-progress', _meta => { progressToken => 'mp-tok' } }
+    ));
+
+    my @progress = $transport.sent.grep({
+        $_ ~~ MCP::JSONRPC::Notification && $_.method eq 'notifications/progress'
+    });
+    is @progress.elems, 4, 'four progress notifications sent';
+    is @progress[0].params<message>, 'step 1', 'first progress message';
+    is @progress[3].params<message>, 'done', 'last progress message';
+    is @progress[3].params<progress>, 1e0, 'final progress value';
+    ok @progress.map(*.params<progressToken>).unique.elems == 1, 'all use same token';
+};
+
+subtest 'Progress without total or message', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $server.add-tool(
+        tool()
+            .name('minimal-progress')
+            .handler(-> {
+                $server.progress(0.5e0);
+                'ok'
+            })
+            .build
+    );
+
+    $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1, method => 'initialize',
+        params => { protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION }
+    ));
+    $transport.clear-sent;
+
+    $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2,
+        method => 'tools/call',
+        params => { name => 'minimal-progress', _meta => { progressToken => 'min-tok' } }
+    ));
+
+    my @progress = $transport.sent.grep({
+        $_ ~~ MCP::JSONRPC::Notification && $_.method eq 'notifications/progress'
+    });
+    is @progress.elems, 1, 'one progress notification sent';
+    is @progress[0].params<progress>, 0.5e0, 'progress value';
+    nok @progress[0].params<total>:exists, 'no total in notification';
+    nok @progress[0].params<message>:exists, 'no message in notification';
+};
+
+subtest 'Client progress supply multiple events', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport
+    );
+
+    my $connect = $client.connect;
+    for ^10 { last if $transport.sent.elems > 0; sleep 0.1 }
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    my @received;
+    $client.progress.tap(-> $p { @received.push($p) });
+
+    # Emit multiple progress notifications
+    for 1..3 -> $i {
+        $transport.emit(MCP::JSONRPC::Notification.new(
+            method => 'notifications/progress',
+            params => {
+                progressToken => "tok-$i",
+                progress => ($i * 0.25e0),
+                message => "step $i",
+            }
+        ));
+    }
+
+    sleep 0.2;
+
+    is @received.elems, 3, 'received three progress events';
+    is @received[0].progressToken, 'tok-1', 'first token';
+    is @received[2].progressToken, 'tok-3', 'third token';
+    is @received[1].progress, 0.5e0, 'second progress value';
+};
+
+# --- Error edge cases ---
+
+subtest 'parse-message malformed JSON', {
+    # Completely invalid JSON
+    dies-ok { parse-jsonrpc('{invalid}') }, 'invalid JSON dies';
+
+    # Valid JSON but not a JSON-RPC message (missing jsonrpc)
+    dies-ok { parse-jsonrpc('{"id":1,"method":"test"}') },
+        'missing jsonrpc field dies';
+
+    # Wrong jsonrpc version
+    dies-ok { parse-jsonrpc('{"jsonrpc":"1.0","id":1,"method":"test"}') },
+        'wrong jsonrpc version dies';
+};
+
+subtest 'parse-message edge cases', {
+    # Request without params
+    my $req = parse-jsonrpc('{"jsonrpc":"2.0","id":1,"method":"ping"}');
+    isa-ok $req, MCP::JSONRPC::Request, 'request without params parses';
+    is $req.method, 'ping', 'method correct';
+
+    # Error response
+    my $err-json = to-json({
+        jsonrpc => '2.0',
+        id => 5,
+        error => { code => -32600, message => 'Invalid' }
+    });
+    my $err-resp = parse-jsonrpc($err-json);
+    isa-ok $err-resp, MCP::JSONRPC::Response, 'error response parses';
+    ok $err-resp.error.defined, 'has error';
+    is $err-resp.error.code, -32600, 'error code correct';
+
+    # Notification without params
+    my $notif = parse-jsonrpc('{"jsonrpc":"2.0","method":"notify"}');
+    isa-ok $notif, MCP::JSONRPC::Notification, 'notification without params';
+};
+
+subtest 'StdioTransport incomplete message', {
+    my $transport = MCP::Transport::Stdio::StdioTransport.new(
+        input => $*IN, output => $*OUT
+    );
+
+    # Missing body
+    my $incomplete = Q:to/END/.chomp;
+Content-Length: 100
+
+{"short"
+END
+    my ($msg1, $rest1) = $transport.parse-public($incomplete);
+    ok !$msg1.defined, 'incomplete body returns Nil';
+
+    # Missing Content-Length
+    my $bad-header = Q:to/END/.chomp;
+Bad-Header: xyz
+
+{}
+END
+    my ($msg2, $rest2) = $transport.parse-public($bad-header);
+    ok !$msg2.defined, 'missing Content-Length returns Nil';
+
+    # No header/body separator
+    my ($msg3, $rest3) = $transport.parse-public("Content-Length: 10");
+    ok !$msg3.defined, 'no separator returns Nil';
+};
+
+subtest 'Handler exception becomes InternalError', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $server.add-tool(
+        name => 'explode',
+        description => 'Always fails',
+        handler => -> { die "Boom!" }
+    );
+
+    # Use handle-message-public to get the error response via transport
+    $transport.clear-sent;
+    $server.handle-message-public(MCP::JSONRPC::Request.new(
+        id => 'err-1',
+        method => 'tools/call',
+        params => { name => 'explode', arguments => {} }
+    ));
+
+    my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
+    is @responses.elems, 1, 'response sent for failing handler';
+    ok @responses[0].error.defined, 'response has error';
+    is @responses[0].error.code, MCP::JSONRPC::InternalError.value, 'error code is InternalError';
+    ok @responses[0].error.message.contains('Boom'), 'error message includes exception text';
+};
+
+subtest 'Error.from-code with data field', {
+    my $err = MCP::JSONRPC::Error.from-code(
+        MCP::JSONRPC::InvalidParams,
+        'Missing field',
+        data => { field => 'name' }
+    );
+    is $err.code, MCP::JSONRPC::InvalidParams.value, 'code correct';
+    is $err.message, 'Missing field', 'message correct';
+    is $err.data<field>, 'name', 'data field present';
+
+    my %h = $err.Hash;
+    is %h<data><field>, 'name', 'data in Hash';
+};
+
+subtest 'Unknown method error via handle-message', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $transport.clear-sent;
+    $server.handle-message-public(MCP::JSONRPC::Request.new(
+        id => 'unk-1',
+        method => 'nonexistent/method'
+    ));
+
+    my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
+    is @responses.elems, 1, 'response sent';
+    ok @responses[0].error.defined, 'response has error';
+    is @responses[0].error.code, MCP::JSONRPC::MethodNotFound.value, 'error is MethodNotFound';
+};
+
+subtest 'Missing required params errors', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+    $server.add-resource(uri => 'info://x', name => 'X', reader => { 'data' });
+    $server.add-prompt(name => 'p', generator => -> { 'hello' });
+
+    # resources/read without uri
+    $transport.clear-sent;
+    $server.handle-message-public(MCP::JSONRPC::Request.new(
+        id => 'miss-1', method => 'resources/read', params => {}
+    ));
+    my @r1 = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @r1[0].error.defined, 'resources/read without uri is error';
+    is @r1[0].error.code, MCP::JSONRPC::InvalidParams.value, 'InvalidParams for missing uri';
+
+    # prompts/get without name
+    $transport.clear-sent;
+    $server.handle-message-public(MCP::JSONRPC::Request.new(
+        id => 'miss-2', method => 'prompts/get', params => {}
+    ));
+    my @r2 = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @r2[0].error.defined, 'prompts/get without name is error';
+
+    # tools/call without name
+    $transport.clear-sent;
+    $server.handle-message-public(MCP::JSONRPC::Request.new(
+        id => 'miss-3', method => 'tools/call', params => {}
+    ));
+    my @r3 = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @r3[0].error.defined, 'tools/call without name is error';
+    is @r3[0].error.code, MCP::JSONRPC::InvalidParams.value, 'InvalidParams for missing tool name';
+};
+
+# --- Concurrency ---
+
+subtest 'IdGenerator thread safety', {
+    my $gen = MCP::JSONRPC::IdGenerator.new;
+    my @promises;
+    for ^100 {
+        @promises.push: start { $gen.next }
+    }
+    my @ids = await @promises;
+    is @ids.unique.elems, 100, 'all 100 concurrent IDs are unique';
+    is @ids.unique.sort, (1..100).Array, 'IDs cover 1..100';
+};
+
+subtest 'Concurrent tool calls', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    # Register a simple tool
+    $server.add-tool(
+        name => 'add',
+        description => 'Add two numbers',
+        handler => -> :%params { (%params<a> // 0) + (%params<b> // 0) }
+    );
+
+    # Dispatch multiple tool calls concurrently
+    my @promises;
+    for ^10 -> $i {
+        @promises.push: start {
+            $server.dispatch-request(MCP::JSONRPC::Request.new(
+                id => "concurrent-$i",
+                method => 'tools/call',
+                params => { name => 'add', arguments => { a => $i, b => 1 } }
+            ));
+        }
+    }
+
+    my @results = await @promises;
+    is @results.elems, 10, 'all 10 concurrent results returned';
+    for ^10 -> $i {
+        is @results[$i]<content>[0]<text>, (~($i + 1)), "result $i correct";
+    }
+};
+
+subtest 'Concurrent resource reads', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    for 1..5 -> $i {
+        $server.add-resource(
+            uri => "info://res$i",
+            name => "Resource $i",
+            reader => { "content-$i" }
+        );
+    }
+
+    my @promises;
+    for 1..5 -> $i {
+        @promises.push: start {
+            $server.dispatch-request(MCP::JSONRPC::Request.new(
+                id => "read-$i",
+                method => 'resources/read',
+                params => { uri => "info://res$i" }
+            ));
+        }
+    }
+
+    my @results = await @promises;
+    is @results.elems, 5, 'all 5 concurrent reads returned';
+    for ^5 -> $i {
+        is @results[$i]<contents>[0]<text>, "content-{$i + 1}", "resource {$i + 1} content correct";
+    }
+};
+
+subtest 'Concurrent handle-message dispatches', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $server.add-tool(
+        name => 'echo',
+        handler => -> :%params { %params<msg> // 'empty' }
+    );
+
+    # Send multiple requests concurrently through handle-message
+    my @promises;
+    for ^5 -> $i {
+        @promises.push: start {
+            $server.handle-message-public(MCP::JSONRPC::Request.new(
+                id => "hm-$i",
+                method => 'tools/call',
+                params => { name => 'echo', arguments => { msg => "msg-$i" } }
+            ));
+        }
+    }
+
+    await @promises;
+
+    # Wait for responses to arrive
+    for ^20 {
+        last if $transport.sent.grep(MCP::JSONRPC::Response).elems >= 5;
+        sleep 0.1;
+    }
+
+    # All should have produced responses
+    my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
+    is @responses.elems, 5, 'all 5 concurrent responses sent';
+
+    # Verify all succeeded (no errors)
+    my @errors = @responses.grep(*.error.defined);
+    is @errors.elems, 0, 'no errors in concurrent responses';
+};
+
+done-testing;

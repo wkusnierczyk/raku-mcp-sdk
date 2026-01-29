@@ -91,5 +91,4 @@ Dev: `Test`, `Test::META`, `App::Prove6`, `App::Racoco`
 
 ## Implementation Status
 
-See `GAP_ANALYSIS.md` for detailed feature comparison with MCP spec. Remaining gaps:
-- Tool icon metadata
+See `GAP_ANALYSIS.md` for detailed feature comparison with MCP spec. No significant gaps remain.
