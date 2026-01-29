@@ -13,6 +13,31 @@ MCP::Transport::Base - Transport role and error types
 Defines the transport interface used by MCP client/server implementations
 and the associated exception hierarchy.
 
+=head1 TRANSPORT ROLE
+
+=head2 role Transport
+
+All transports must implement this role. Required methods:
+
+=item C<method start(--> Supply)> — Start the transport and return a Supply of incoming C<Message> objects.
+=item C<method send(Message $msg --> Promise)> — Send a message through the transport.
+=item C<method close(--> Promise)> — Close the transport and release resources.
+=item C<method is-connected(--> Bool)> — Check whether the transport is currently connected.
+
+=head1 EXCEPTIONS
+
+=head2 X::Transport
+
+Base exception for transport errors: C<.message>.
+
+=head2 X::Transport::Connection
+
+Connection failure: C<.message>.
+
+=head2 X::Transport::Send
+
+Send failure: C<.message>.
+
 =end pod
 
 use MCP::JSONRPC;

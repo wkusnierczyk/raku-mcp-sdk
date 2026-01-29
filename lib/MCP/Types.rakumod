@@ -14,6 +14,100 @@ Defines MCP protocol data structures (content types, tools, resources, prompts,
 capabilities, and logging). These types are used by both clients and servers
 for serialization and validation.
 
+=head1 CONTENT TYPES
+
+All content classes do the C<Content> role and implement C<to-hash()> for
+JSON serialization.
+
+=item C<TextContent> — Plain text (C<.text>).
+=item C<ImageContent> — Base64-encoded image (C<.data>, C<.mimeType>).
+=item C<AudioContent> — Base64-encoded audio (C<.data>, C<.mimeType>).
+=item C<EmbeddedResource> — Inline resource content (C<.resource>).
+=item C<ResourceLink> — Reference to a resource by URI (C<.uri>, C<.name>).
+=item C<ToolUseContent> — Tool invocation record (C<.toolName>, C<.input>).
+=item C<ToolResultContent> — Tool result record (C<.toolName>, C<.output>).
+
+=head1 PROTOCOL TYPES
+
+=head2 Implementation
+
+Server or client identity: C<.name>, C<.version>, optional C<.title> and C<.icon>.
+
+=head2 Tool
+
+Tool definition: C<.name>, C<.description>, C<.inputSchema>, optional C<.outputSchema>,
+C<.annotations>, C<.title>, C<.icon>.
+
+=head2 CallToolResult
+
+Result of a tool call: C<.content> (array of Content), C<.structuredContent>,
+C<.isError>.
+
+=head2 Resource
+
+Resource definition: C<.uri>, C<.name>, C<.description>, C<.mimeType>,
+C<.annotations>, C<.title>, C<.icon>.
+
+=head2 ResourceTemplate
+
+URI template for dynamic resources: C<.name>, C<.uriTemplate>, C<.description>,
+C<.mimeType>.
+
+=head2 ResourceContents
+
+Content returned from a resource read: C<.uri>, C<.mimeType>, C<.text> or C<.blob>.
+
+=head2 Prompt
+
+Prompt definition: C<.name>, C<.description>, C<.arguments>.
+
+=head2 PromptArgument
+
+Argument metadata for a prompt: C<.name>, C<.description>, C<.required>.
+
+=head2 PromptMessage
+
+A message in a prompt: C<.role> (C<user> or C<assistant>), C<.content>.
+
+=head2 Task
+
+Async task status: C<.id>, C<.status> (TaskStatus enum), C<.createdAt>,
+C<.updatedAt>, C<.message>.
+
+=head1 CAPABILITIES
+
+=head2 ServerCapabilities
+
+Declares server features: C<.tools>, C<.resources>, C<.prompts>,
+C<.logging>, C<.completions>, C<.experimental>.
+
+=head2 ClientCapabilities
+
+Declares client features: C<.roots>, C<.sampling>, C<.elicitation>,
+C<.experimental>.
+
+=head1 SAMPLING
+
+=head2 SamplingMessage
+
+A message for LLM sampling: C<.role>, C<.content>.
+
+=head2 ModelPreferences
+
+Preferred model characteristics: C<.hints>, C<.costPriority>,
+C<.speedPriority>, C<.intelligencePriority>.
+
+=head2 CreateMessageResult
+
+Result of a sampling request: C<.role>, C<.content>, C<.model>, C<.stopReason>.
+
+=head1 ENUMS
+
+=item C<TaskStatus> — C<pending>, C<running>, C<completed>, C<failed>, C<cancelled>.
+=item C<TaskSupport> — C<enabled>, C<disabled>.
+=item C<ElicitationAction> — C<accept>, C<decline>, C<dismiss>.
+=item C<LogLevel> — C<debug>, C<info>, C<notice>, C<warning>, C<error>, C<critical>, C<alert>, C<emergency>.
+
 =end pod
 
 #| Protocol versions

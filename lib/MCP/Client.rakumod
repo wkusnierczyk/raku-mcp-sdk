@@ -25,6 +25,176 @@ MCP::Client - MCP client implementation
 Provides a high-level MCP client that performs initialization, sends requests,
 and parses typed responses for tools, resources, and prompts.
 
+=head1 CONSTRUCTOR
+
+=head2 Client.new(:$info!, :$transport!, :$timeout, :&sampling-handler, :&elicitation-handler, :@roots)
+
+Creates a new MCP client.
+
+=item C<info> — C<MCP::Types::Implementation> with client name and version.
+=item C<transport> — A transport object.
+=item C<timeout> — Request timeout in seconds (default: 30).
+=item C<sampling-handler> — Optional callback for server-initiated sampling requests.
+=item C<elicitation-handler> — Optional callback for server-initiated elicitation requests.
+=item C<roots> — Optional list of C<Root> objects representing client root URIs.
+
+=head1 CONNECTION
+
+=head2 method connect(--> Promise)
+
+Connect to the server, perform the initialize handshake, and start
+processing messages. Must be called before any other requests.
+
+    await $client.connect;
+
+=head2 method close(--> Promise)
+
+Close the transport and clean up resources.
+
+=head2 method server-capabilities(--> ServerCapabilities)
+
+Returns the server's capabilities as reported during initialization.
+
+=head2 method server-instructions(--> Str)
+
+Returns the server's instructions string (if provided during initialization).
+
+=head1 TOOLS
+
+=head2 method list-tools(:$cursor --> Promise)
+
+List available tools. Returns a hash with C<tools> (array of Tool objects)
+and optional C<nextCursor> for pagination.
+
+    my $result = await $client.list-tools;
+    for $result<tools> -> $tool { say $tool.name }
+
+=head2 method call-tool(Str $name, :%arguments --> Promise)
+
+Call a tool by name with arguments. Returns a C<CallToolResult>.
+
+    my $result = await $client.call-tool('add', arguments => { a => 1, b => 2 });
+    say $result.content[0].text;
+
+=head1 RESOURCES
+
+=head2 method list-resources(:$cursor --> Promise)
+
+List available resources with optional pagination.
+
+=head2 method list-resource-templates(:$cursor --> Promise)
+
+List available resource templates with optional pagination.
+
+=head2 method read-resource(Str $uri --> Promise)
+
+Read a resource by URI. Returns an array of C<ResourceContents>.
+
+    my @contents = await $client.read-resource('config://app');
+
+=head2 method subscribe-resource(Str $uri --> Promise)
+
+Subscribe to update notifications for a resource.
+
+=head2 method unsubscribe-resource(Str $uri --> Promise)
+
+Unsubscribe from resource update notifications.
+
+=head1 PROMPTS
+
+=head2 method list-prompts(:$cursor --> Promise)
+
+List available prompts with optional pagination.
+
+=head2 method get-prompt(Str $name, :%arguments --> Promise)
+
+Get a prompt by name with arguments. Returns prompt messages.
+
+=head2 method complete-prompt(Str $prompt-name, :$argument-name!, :$value! --> Promise)
+
+Request autocomplete suggestions for a prompt argument.
+
+=head2 method complete-resource(Str $uri, :$argument-name!, :$value! --> Promise)
+
+Request autocomplete suggestions for a resource URI.
+
+=head1 TASKS
+
+=head2 method call-tool-as-task(Str $name, :%arguments, :$ttl --> Promise)
+
+Call a tool as an asynchronous task. Returns a C<CreateTaskResult> with
+the task ID for polling.
+
+=head2 method get-task(Str $task-id --> Promise)
+
+Get the current status of a task.
+
+=head2 method get-task-result(Str $task-id --> Promise)
+
+Get the result of a completed task (blocks on the server side until terminal).
+
+=head2 method cancel-task(Str $task-id --> Promise)
+
+Cancel a running task.
+
+=head2 method list-tasks(:$cursor --> Promise)
+
+List tasks with optional pagination.
+
+=head2 method await-task(Str $task-id, :$poll-ms --> Promise)
+
+Poll until a task reaches a terminal state, then fetch and return its result.
+
+=head1 NOTIFICATIONS AND PROGRESS
+
+=head2 method notifications(--> Supply)
+
+Returns a Supply of incoming server notifications.
+
+=head2 method progress(--> Supply)
+
+Returns a Supply of C<Progress> objects from server progress notifications.
+
+=head1 EXTENSIONS
+
+=head2 method register-extension(:$name!, :$version, :%settings)
+
+Register a client-side extension to advertise during initialization.
+
+=head2 method server-extensions(--> Hash)
+
+Get extensions reported by the server.
+
+=head2 method supports-extension(Str $name --> Bool)
+
+Check whether the server supports a specific extension.
+
+=head1 UTILITY
+
+=head2 method ping(--> Promise)
+
+Ping the server. Returns the response.
+
+=head2 method set-log-level(LogLevel $level --> Promise)
+
+Set the server's log level.
+
+=head2 method get-roots(--> Array)
+
+Get the client's configured roots.
+
+=head2 method set-roots(@new-roots)
+
+Update the client's roots and notify the server.
+
+=head2 method request(Str $method, $params? --> Promise)
+
+Send a raw JSON-RPC request. Lower-level than the typed methods above.
+
+=head2 method cancel-request($request-id, :$reason)
+
+Cancel a pending outbound request.
+
 =end pod
 
 use MCP::Types;

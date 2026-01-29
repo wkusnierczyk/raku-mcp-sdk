@@ -3,6 +3,38 @@ use v6.d;
 #| OAuth 2.1 core types, PKCE utilities, and exceptions for MCP authorization
 unit module MCP::OAuth;
 
+=begin pod
+=head1 NAME
+
+MCP::OAuth - OAuth 2.1 core types, PKCE utilities, and exceptions
+
+=head1 DESCRIPTION
+
+Provides OAuth 2.1 building blocks for MCP authorization: PKCE code
+verifier/challenge generation (RFC 7636), token types, metadata discovery
+types, and exception classes.
+
+=head1 PKCE
+
+=head2 sub generate-code-verifier(--> Str)
+
+Generate a cryptographically random code verifier (43-128 chars, unreserved
+character set per RFC 7636).
+
+=head2 sub generate-code-challenge(Str $verifier --> Str)
+
+Compute the S256 code challenge for a verifier using SHA-256 and base64url
+encoding.
+
+=head1 EXCEPTIONS
+
+=item C<X::MCP::OAuth::Unauthorized> — Authentication required.
+=item C<X::MCP::OAuth::Forbidden> — Insufficient permissions.
+=item C<X::MCP::OAuth::TokenExpired> — Access token has expired.
+=item C<X::MCP::OAuth::InvalidToken> — Token is malformed or invalid.
+
+=end pod
+
 use MIME::Base64;
 
 # === Exceptions ===

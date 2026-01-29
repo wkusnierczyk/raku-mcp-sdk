@@ -3,6 +3,38 @@ use v6.d;
 #| OAuth 2.1 client-side handler for MCP transport
 unit module MCP::OAuth::Client;
 
+=begin pod
+=head1 NAME
+
+MCP::OAuth::Client - OAuth 2.1 client-side authorization handler
+
+=head1 DESCRIPTION
+
+Manages the client side of OAuth 2.1 authorization for MCP transports:
+metadata discovery, authorization code flow with PKCE, token exchange,
+refresh, and dynamic client registration.
+
+=head1 CLASS
+
+=head2 OAuthClientHandler
+
+    my $oauth = OAuthClientHandler.new(
+        resource-url => 'https://mcp.example.com',
+        client-id => 'my-app',
+        redirect-uri => 'http://localhost:9999/callback',
+    );
+
+Key methods:
+
+=item C<.discover-metadata(--> Promise)> — Fetch OAuth server metadata from well-known endpoint.
+=item C<.authorization-url(--> Str)> — Build the authorization URL with PKCE challenge.
+=item C<.exchange-code(Str $code --> Promise)> — Exchange authorization code for tokens.
+=item C<.refresh-token(--> Promise)> — Refresh an expired access token.
+=item C<.register-client(--> Promise)> — Perform dynamic client registration.
+=item C<.access-token(--> Str)> — Get the current access token.
+
+=end pod
+
 use MCP::OAuth;
 use JSON::Fast;
 

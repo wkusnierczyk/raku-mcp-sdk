@@ -13,6 +13,58 @@ MCP::Server::Resource - Resource registration helpers
 Provides a builder-style DSL and wrapper class for registering MCP resources,
 including file-backed helpers.
 
+=head1 FUNCTIONS
+
+=head2 sub resource(--> ResourceBuilder)
+
+Create a new resource builder.
+
+    my $r = resource()
+        .uri('config://app')
+        .name('App Config')
+        .mime-type('application/json')
+        .reader({ to-json(%config) })
+        .build;
+
+=head2 sub file-resource(IO::Path $path, :$uri, :$name, :$mime-type --> RegisteredResource)
+
+Convenience constructor for a file-backed resource.
+
+    $server.add-resource(file-resource('data.txt'.IO));
+
+=head2 sub resource-template(--> ResourceTemplateBuilder)
+
+Create a new resource template builder.
+
+    my $rt = resource-template()
+        .name('files')
+        .uri-template('file:///{path}')
+        .reader(-> :$path { $path.IO.slurp })
+        .build;
+
+=head1 CLASSES
+
+=head2 ResourceBuilder
+
+Fluent builder with chain methods: C<.uri>, C<.name>, C<.description>,
+C<.mime-type>, C<.annotations>, C<.reader>, C<.build>.
+
+=head2 RegisteredResource
+
+=item C<.to-resource(--> Resource)> — Get the resource definition.
+=item C<.read(--> Array)> — Read the resource contents.
+
+=head2 ResourceTemplateBuilder
+
+Fluent builder with chain methods: C<.name>, C<.uri-template>,
+C<.description>, C<.mime-type>, C<.reader>, C<.build>.
+
+=head2 RegisteredResourceTemplate
+
+=item C<.to-template(--> ResourceTemplate)> — Get the template definition.
+=item C<.matches(Str $uri --> Bool)> — Test if a URI matches this template.
+=item C<.read(Str $uri --> Array)> — Read by extracting template variables from the URI.
+
 =end pod
 
 use MCP::Types;
