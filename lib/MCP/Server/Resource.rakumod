@@ -22,6 +22,8 @@ class RegisteredResource is export {
     has Str $.uri is required;
     has Str $.name is required;
     has Str $.description;
+    has Str $.title;
+    has @.icons;
     has Str $.mimeType;
     has MCP::Types::Annotations $.annotations;
     has &.reader is required;
@@ -32,6 +34,8 @@ class RegisteredResource is export {
             uri => $!uri,
             name => $!name,
             description => $!description,
+            title => $!title,
+            icons => @!icons,
             mimeType => $!mimeType,
             annotations => $!annotations,
         )
@@ -79,6 +83,8 @@ class ResourceBuilder is export {
     has Str $!uri;
     has Str $!name;
     has Str $!description;
+    has Str $!title;
+    has @!icons;
     has Str $!mimeType;
     has MCP::Types::Annotations $!annotations;
     has &!reader;
@@ -95,6 +101,16 @@ class ResourceBuilder is export {
 
     method description(Str $desc --> ResourceBuilder) {
         $!description = $desc;
+        self
+    }
+
+    method title(Str $t --> ResourceBuilder) {
+        $!title = $t;
+        self
+    }
+
+    method icon(Str $src, Str :$mimeType, :@sizes --> ResourceBuilder) {
+        @!icons.push(MCP::Types::IconDefinition.new(:$src, :$mimeType, :@sizes));
         self
     }
 
@@ -149,6 +165,8 @@ class ResourceBuilder is export {
             uri => $!uri,
             name => $!name,
             description => $!description,
+            title => $!title,
+            icons => @!icons,
             mimeType => $!mimeType,
             annotations => $!annotations,
             reader => &!reader,
@@ -174,6 +192,8 @@ class RegisteredResourceTemplate is export {
     has Str $.uri-template is required;
     has Str $.name is required;
     has Str $.description;
+    has Str $.title;
+    has @.icons;
     has Str $.mimeType;
     has MCP::Types::Annotations $.annotations;
     has &.reader is required;
@@ -184,6 +204,8 @@ class RegisteredResourceTemplate is export {
             uriTemplate => $!uri-template,
             name => $!name,
             description => $!description,
+            title => $!title,
+            icons => @!icons,
             mimeType => $!mimeType,
             annotations => $!annotations,
         )
@@ -282,6 +304,8 @@ class ResourceTemplateBuilder is export {
     has Str $!uri-template;
     has Str $!name;
     has Str $!description;
+    has Str $!title;
+    has @!icons;
     has Str $!mimeType;
     has MCP::Types::Annotations $!annotations;
     has &!reader;
@@ -298,6 +322,16 @@ class ResourceTemplateBuilder is export {
 
     method description(Str $desc --> ResourceTemplateBuilder) {
         $!description = $desc;
+        self
+    }
+
+    method title(Str $t --> ResourceTemplateBuilder) {
+        $!title = $t;
+        self
+    }
+
+    method icon(Str $src, Str :$mimeType, :@sizes --> ResourceTemplateBuilder) {
+        @!icons.push(MCP::Types::IconDefinition.new(:$src, :$mimeType, :@sizes));
         self
     }
 
@@ -325,6 +359,8 @@ class ResourceTemplateBuilder is export {
             uri-template => $!uri-template,
             name => $!name,
             description => $!description,
+            title => $!title,
+            icons => @!icons,
             mimeType => $!mimeType,
             annotations => $!annotations,
             reader => &!reader,

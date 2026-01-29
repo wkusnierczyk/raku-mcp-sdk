@@ -283,6 +283,67 @@ subtest 'Prompt builder and normalization', {
     dies-ok { prompt().name('p').build }, 'prompt requires generator';
 };
 
+subtest 'Builder title and icon methods', {
+    # Tool builder
+    my $t = tool()
+        .name('icon-tool')
+        .title('Icon Tool')
+        .icon('https://example.com/icon.png', mimeType => 'image/png', sizes => ['48x48'])
+        .icon('https://example.com/icon2.svg')
+        .handler(-> { 'ok' })
+        .build;
+
+    my $tool-def = $t.to-tool;
+    is $tool-def.title, 'Icon Tool', 'tool title set';
+    is $tool-def.icons.elems, 2, 'tool has 2 icons';
+    is $tool-def.icons[0].src, 'https://example.com/icon.png', 'tool icon src';
+    is $tool-def.icons[0].mimeType, 'image/png', 'tool icon mimeType';
+    is $tool-def.icons[1].src, 'https://example.com/icon2.svg', 'tool second icon';
+
+    my %th = $tool-def.Hash;
+    is %th<title>, 'Icon Tool', 'tool Hash title';
+    is %th<icons>.elems, 2, 'tool Hash icons';
+
+    # Resource builder
+    my $r = resource()
+        .uri('info://x')
+        .name('X')
+        .title('X Resource')
+        .icon('https://example.com/res.png')
+        .reader({ 'data' })
+        .build;
+
+    my $res-def = $r.to-resource;
+    is $res-def.title, 'X Resource', 'resource title set';
+    is $res-def.icons.elems, 1, 'resource has 1 icon';
+
+    # Resource template builder
+    my $rt = resource-template()
+        .uri-template('file:///{path}')
+        .name('Files')
+        .title('File Browser')
+        .icon('https://example.com/file.png')
+        .reader(-> %p { 'content' })
+        .build;
+
+    my $rt-def = $rt.to-resource-template;
+    is $rt-def.title, 'File Browser', 'resource template title set';
+    is $rt-def.icons.elems, 1, 'resource template has 1 icon';
+
+    # Prompt builder
+    my $p = prompt()
+        .name('icon-prompt')
+        .title('Icon Prompt')
+        .icon('https://example.com/prompt.png', mimeType => 'image/png')
+        .generator(-> { 'hello' })
+        .build;
+
+    my $prompt-def = $p.to-prompt;
+    is $prompt-def.title, 'Icon Prompt', 'prompt title set';
+    is $prompt-def.icons.elems, 1, 'prompt has 1 icon';
+    is $prompt-def.icons[0].mimeType, 'image/png', 'prompt icon mimeType';
+};
+
 subtest 'Tool name validation', {
     # Valid names
     lives-ok { tool().name('my-tool').handler(-> { 'ok' }).build }, 'valid: my-tool';

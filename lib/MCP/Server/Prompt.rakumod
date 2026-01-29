@@ -20,6 +20,8 @@ use MCP::Types;
 class RegisteredPrompt is export {
     has Str $.name is required;
     has Str $.description;
+    has Str $.title;
+    has @.icons;
     has @.arguments;  # Array of PromptArgument
     has &.generator is required;
 
@@ -28,6 +30,8 @@ class RegisteredPrompt is export {
         MCP::Types::Prompt.new(
             name => $!name,
             description => $!description,
+            title => $!title,
+            icons => @!icons,
             arguments => @!arguments,
         )
     }
@@ -96,6 +100,8 @@ class RegisteredPrompt is export {
 class PromptBuilder is export {
     has Str $!name;
     has Str $!description;
+    has Str $!title;
+    has @!icons;
     has @!arguments;
     has &!generator;
 
@@ -106,6 +112,16 @@ class PromptBuilder is export {
 
     method description(Str $desc --> PromptBuilder) {
         $!description = $desc;
+        self
+    }
+
+    method title(Str $t --> PromptBuilder) {
+        $!title = $t;
+        self
+    }
+
+    method icon(Str $src, Str :$mimeType, :@sizes --> PromptBuilder) {
+        @!icons.push(MCP::Types::IconDefinition.new(:$src, :$mimeType, :@sizes));
         self
     }
 
@@ -139,6 +155,8 @@ class PromptBuilder is export {
         RegisteredPrompt.new(
             name => $!name,
             description => $!description,
+            title => $!title,
+            icons => @!icons,
             arguments => @!arguments,
             generator => &!generator,
         )

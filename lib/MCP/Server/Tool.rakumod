@@ -27,6 +27,8 @@ our sub validate-tool-name(Str $name) is export {
 class RegisteredTool is export {
     has Str $.name is required;
     has Str $.description;
+    has Str $.title;
+    has @.icons;
     has Hash $.inputSchema;
     has Hash $.outputSchema;
     has MCP::Types::ToolAnnotations $.annotations;
@@ -38,6 +40,8 @@ class RegisteredTool is export {
         MCP::Types::Tool.new(
             name => $!name,
             description => $!description,
+            title => $!title,
+            icons => @!icons,
             inputSchema => $!inputSchema,
             outputSchema => $!outputSchema,
             annotations => $!annotations,
@@ -122,6 +126,8 @@ class RegisteredTool is export {
 class ToolBuilder is export {
     has Str $!name;
     has Str $!description;
+    has Str $!title;
+    has @!icons;
     has Hash $!inputSchema = { type => 'object', properties => {}, required => [] };
     has Hash $!outputSchema;
     has MCP::Types::ToolAnnotations $!annotations;
@@ -135,6 +141,16 @@ class ToolBuilder is export {
 
     method description(Str $desc --> ToolBuilder) {
         $!description = $desc;
+        self
+    }
+
+    method title(Str $t --> ToolBuilder) {
+        $!title = $t;
+        self
+    }
+
+    method icon(Str $src, Str :$mimeType, :@sizes --> ToolBuilder) {
+        @!icons.push(MCP::Types::IconDefinition.new(:$src, :$mimeType, :@sizes));
         self
     }
 
@@ -251,6 +267,8 @@ class ToolBuilder is export {
         RegisteredTool.new(
             name => $!name,
             description => $!description,
+            title => $!title,
+            icons => @!icons,
             inputSchema => $!inputSchema,
             outputSchema => $!outputSchema,
             annotations => $!annotations,
