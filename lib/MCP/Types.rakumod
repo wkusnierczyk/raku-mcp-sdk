@@ -20,17 +20,47 @@ for serialization and validation.
 our constant LATEST_PROTOCOL_VERSION is export = "2025-11-25";
 our constant SUPPORTED_PROTOCOL_VERSIONS is export = <2025-11-25 2025-03-26 2024-11-05>;
 
+#| Icon definition for tools, resources, prompts, and implementations
+class IconDefinition is export {
+    has Str $.src is required;
+    has Str $.mimeType;
+    has @.sizes;
+
+    method Hash(--> Hash) {
+        my %h = src => $!src;
+        %h<mimeType> = $_ with $!mimeType;
+        %h<sizes> = @!sizes.Array if @!sizes;
+        %h
+    }
+
+    method from-hash(%h --> IconDefinition) {
+        self.new(
+            src => %h<src>,
+            mimeType => %h<mimeType> // Str,
+            sizes => |(%h<sizes> // []),
+        )
+    }
+}
+
 #| Implementation information for client/server identification
 class Implementation is export {
     has Str $.name is required;
     has Str $.version is required;
+    has Str $.title;
+    has @.icons;
 
     method Hash(--> Hash) {
-        { name => $!name, version => $!version }
+        my %h = name => $!name, version => $!version;
+        %h<title> = $_ with $!title;
+        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
+        %h
     }
 
     method from-hash(%h --> Implementation) {
-        self.new(name => %h<name>, version => %h<version>)
+        my %args = name => %h<name>, version => %h<version>;
+        %args<title> = %h<title> if %h<title>.defined;
+        my @icons = (%h<icons> // []).map({ IconDefinition.from-hash($_) });
+        self.new(|%args, :@icons)
     }
 }
 
@@ -289,6 +319,8 @@ class CreateTaskResult is export {
 class Tool is export {
     has Str $.name is required;
     has Str $.description;
+    has Str $.title;
+    has @.icons;
     has Hash $.inputSchema;
     has Hash $.outputSchema;
     has ToolAnnotations $.annotations;
@@ -297,6 +329,8 @@ class Tool is export {
     method Hash(--> Hash) {
         my %h = name => $!name;
         %h<description> = $_ with $!description;
+        %h<title> = $_ with $!title;
+        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
         %h<inputSchema> = $_ with $!inputSchema;
         %h<outputSchema> = $_ with $!outputSchema;
         %h<annotations> = $!annotations.Hash if $!annotations;
@@ -307,11 +341,13 @@ class Tool is export {
     method from-hash(%h --> Tool) {
         my %args = name => %h<name>;
         %args<description> = %h<description> if %h<description>.defined;
+        %args<title> = %h<title> if %h<title>.defined;
         %args<inputSchema> = %h<inputSchema> if %h<inputSchema>.defined;
         %args<outputSchema> = %h<outputSchema> if %h<outputSchema>.defined;
         %args<annotations> = %h<annotations> ?? ToolAnnotations.new(|%h<annotations>) !! ToolAnnotations;
         %args<execution> = TaskExecution.from-hash(%h<execution>) if %h<execution>.defined;
-        self.new(|%args)
+        my @icons = (%h<icons> // []).map({ IconDefinition.from-hash($_) });
+        self.new(|%args, :@icons)
     }
 }
 
@@ -333,12 +369,16 @@ class Resource is export {
     has Str $.uri is required;
     has Str $.name is required;
     has Str $.description;
+    has Str $.title;
+    has @.icons;
     has Str $.mimeType;
     has Annotations $.annotations;
 
     method Hash(--> Hash) {
         my %h = uri => $!uri, name => $!name;
         %h<description> = $_ with $!description;
+        %h<title> = $_ with $!title;
+        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
         %h<mimeType> = $_ with $!mimeType;
         %h<annotations> = $!annotations.Hash if $!annotations;
         %h
@@ -347,8 +387,10 @@ class Resource is export {
     method from-hash(%h --> Resource) {
         my %args = uri => %h<uri>, name => %h<name>;
         %args<description> = %h<description> if %h<description>.defined;
+        %args<title> = %h<title> if %h<title>.defined;
         %args<mimeType> = %h<mimeType> if %h<mimeType>.defined;
-        self.new(|%args)
+        my @icons = (%h<icons> // []).map({ IconDefinition.from-hash($_) });
+        self.new(|%args, :@icons)
     }
 }
 
@@ -357,12 +399,16 @@ class ResourceTemplate is export {
     has Str $.uriTemplate is required;
     has Str $.name is required;
     has Str $.description;
+    has Str $.title;
+    has @.icons;
     has Str $.mimeType;
     has Annotations $.annotations;
 
     method Hash(--> Hash) {
         my %h = uriTemplate => $!uriTemplate, name => $!name;
         %h<description> = $_ with $!description;
+        %h<title> = $_ with $!title;
+        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
         %h<mimeType> = $_ with $!mimeType;
         %h<annotations> = $!annotations.Hash if $!annotations;
         %h
@@ -371,8 +417,10 @@ class ResourceTemplate is export {
     method from-hash(%h --> ResourceTemplate) {
         my %args = uriTemplate => %h<uriTemplate>, name => %h<name>;
         %args<description> = %h<description> if %h<description>.defined;
+        %args<title> = %h<title> if %h<title>.defined;
         %args<mimeType> = %h<mimeType> if %h<mimeType>.defined;
-        self.new(|%args)
+        my @icons = (%h<icons> // []).map({ IconDefinition.from-hash($_) });
+        self.new(|%args, :@icons)
     }
 }
 
@@ -410,11 +458,15 @@ class PromptArgument is export {
 class Prompt is export {
     has Str $.name is required;
     has Str $.description;
+    has Str $.title;
+    has @.icons;
     has @.arguments;  # Array of PromptArgument
 
     method Hash(--> Hash) {
         my %h = name => $!name;
         %h<description> = $_ with $!description;
+        %h<title> = $_ with $!title;
+        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
         %h<arguments> = @!arguments.map(*.Hash).Array if @!arguments;
         %h
     }
@@ -422,8 +474,10 @@ class Prompt is export {
     method from-hash(%h --> Prompt) {
         my %args = name => %h<name>;
         %args<description> = %h<description> if %h<description>.defined;
-        %args<arguments> = (%h<arguments> // []).map({ PromptArgument.new(|$_) }).Array;
-        self.new(|%args)
+        %args<title> = %h<title> if %h<title>.defined;
+        my @icons = (%h<icons> // []).map({ IconDefinition.from-hash($_) });
+        my @arguments = (%h<arguments> // []).map({ PromptArgument.new(|$_) });
+        self.new(|%args, :@icons, :@arguments)
     }
 }
 

@@ -16,7 +16,7 @@ use lib 'lib';
 
 use MCP::Types;
 
-plan 41;
+plan 45;
 
 # Test Implementation
 subtest 'Implementation', {
@@ -626,6 +626,107 @@ subtest 'ServerCapabilities from-hash', {
     my $restored = ServerCapabilities.from-hash(%h);
     ok $restored.tools.defined, 'from-hash restores tools';
     ok $restored.tasks.defined, 'from-hash restores tasks';
+};
+
+# Test IconDefinition
+subtest 'IconDefinition', {
+    my $icon = IconDefinition.new(
+        src => 'https://example.com/icon.png',
+        mimeType => 'image/png',
+        sizes => ['48x48', '96x96'],
+    );
+    is $icon.src, 'https://example.com/icon.png', 'src correct';
+    is $icon.mimeType, 'image/png', 'mimeType correct';
+    is $icon.sizes.elems, 2, 'sizes count';
+
+    my %h = $icon.Hash;
+    is %h<src>, 'https://example.com/icon.png', 'Hash src';
+    is %h<mimeType>, 'image/png', 'Hash mimeType';
+    is %h<sizes>.elems, 2, 'Hash sizes';
+
+    # from-hash round-trip
+    my $restored = IconDefinition.from-hash(%h);
+    is $restored.src, $icon.src, 'from-hash src';
+    is $restored.mimeType, $icon.mimeType, 'from-hash mimeType';
+    is $restored.sizes.elems, 2, 'from-hash sizes';
+
+    # Minimal (src only)
+    my $min = IconDefinition.new(src => 'data:image/svg+xml,...');
+    my %h2 = $min.Hash;
+    is %h2<src>, 'data:image/svg+xml,...', 'minimal src';
+    nok %h2<mimeType>:exists, 'no mimeType when not set';
+    nok %h2<sizes>:exists, 'no sizes when empty';
+};
+
+# Test icons and title on Tool
+subtest 'Tool with icons and title', {
+    my $icon = IconDefinition.new(src => 'https://example.com/tool.png', mimeType => 'image/png');
+    my $tool = Tool.new(
+        name => 'icon_tool',
+        title => 'Icon Tool',
+        icons => [$icon],
+    );
+    is $tool.title, 'Icon Tool', 'title correct';
+    is $tool.icons.elems, 1, 'icons count';
+
+    my %h = $tool.Hash;
+    is %h<title>, 'Icon Tool', 'Hash title';
+    is %h<icons>[0]<src>, 'https://example.com/tool.png', 'Hash icon src';
+
+    my $restored = Tool.from-hash(%h);
+    is $restored.title, 'Icon Tool', 'from-hash title';
+    is $restored.icons.elems, 1, 'from-hash icons';
+    is $restored.icons[0].src, 'https://example.com/tool.png', 'from-hash icon src';
+
+    # Without title/icons
+    my $plain = Tool.new(name => 'plain');
+    my %h2 = $plain.Hash;
+    nok %h2<title>:exists, 'no title when not set';
+    nok %h2<icons>:exists, 'no icons when empty';
+};
+
+# Test icons and title on Resource and Prompt
+subtest 'Resource and Prompt with icons and title', {
+    my $icon = IconDefinition.new(src => 'https://example.com/res.png');
+    my $res = Resource.new(uri => 'file:///x', name => 'X', title => 'X Resource', icons => [$icon]);
+    is $res.title, 'X Resource', 'resource title';
+    my %rh = $res.Hash;
+    is %rh<title>, 'X Resource', 'resource Hash title';
+    is %rh<icons>[0]<src>, 'https://example.com/res.png', 'resource Hash icon';
+
+    my $res2 = Resource.from-hash(%rh);
+    is $res2.title, 'X Resource', 'resource from-hash title';
+    is $res2.icons[0].src, 'https://example.com/res.png', 'resource from-hash icon';
+
+    my $prompt = Prompt.new(name => 'p', title => 'Prompt Title', icons => [$icon]);
+    is $prompt.title, 'Prompt Title', 'prompt title';
+    my %ph = $prompt.Hash;
+    is %ph<title>, 'Prompt Title', 'prompt Hash title';
+
+    my $prompt2 = Prompt.from-hash(%ph);
+    is $prompt2.title, 'Prompt Title', 'prompt from-hash title';
+};
+
+# Test icons and title on Implementation
+subtest 'Implementation with icons and title', {
+    my $icon = IconDefinition.new(src => 'https://example.com/server.png', mimeType => 'image/png');
+    my $impl = Implementation.new(name => 'srv', version => '1.0', title => 'My Server', icons => [$icon]);
+    is $impl.title, 'My Server', 'title correct';
+    is $impl.icons[0].src, 'https://example.com/server.png', 'icon src';
+
+    my %h = $impl.Hash;
+    is %h<title>, 'My Server', 'Hash title';
+    is %h<icons>[0]<src>, 'https://example.com/server.png', 'Hash icon';
+
+    my $restored = Implementation.from-hash(%h);
+    is $restored.title, 'My Server', 'from-hash title';
+    is $restored.icons[0].src, 'https://example.com/server.png', 'from-hash icon';
+
+    # Without title/icons
+    my $plain = Implementation.new(name => 'x', version => '0.1');
+    my %h2 = $plain.Hash;
+    nok %h2<title>:exists, 'no title';
+    nok %h2<icons>:exists, 'no icons';
 };
 
 done-testing;
