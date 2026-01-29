@@ -1,9 +1,10 @@
 {
     "name": "MCP",
     "description": "Model Context Protocol SDK for Raku - Build MCP servers and clients",
-    "version": "0.28.0",
+    "version": "0.28.1",
+    "api": "1",
     "perl": "6.d",
-    "auth": "github:wkusnierczyk",
+    "auth": "zef:wkusnierczyk",
     "license": "MIT",
     "authors": [
         "Waclaw Kusnierczyk <waclaw.kusnierczyk@gmail.com>"

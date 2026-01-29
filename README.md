@@ -148,7 +148,7 @@ Raku is a "sleeper" choice for specific AI domains, particularly those involving
 ## Installation
 
 ```bash
-# From zef (once published)
+# From zef
 zef install MCP
 
 # From source
@@ -572,7 +572,7 @@ Building this repository was supported by:
 $ make about
 
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
-├─ version:    0.28.0
+├─ version:    0.28.1
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT
