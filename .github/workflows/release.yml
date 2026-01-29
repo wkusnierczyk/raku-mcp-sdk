@@ -362,15 +362,11 @@ jobs:
 
           # Ensure fez has a working HTTP requestor (curl is pre-installed on ubuntu)
           # Fez discovers requestors at install time; the config may lack them
-          raku -MJSON::Fast -e '
-            my $path = $*HOME.add(".fez-config.json");
-            my %cfg = from-json($path.slurp);
-            unless %cfg<requestors> && %cfg<requestors>.elems > 0 {
-              %cfg<requestors> = ["Fez::Util::Curl"];
-              $path.spurt(to-json(%cfg, :sorted-keys));
-              note "✓ Added Fez::Util::Curl requestor to fez config";
-            }
-          '
+          if ! jq -e '.requestors | length > 0' ~/.fez-config.json >/dev/null 2>&1; then
+            jq '. + {"requestors": ["Fez::Util::Curl"]}' ~/.fez-config.json > ~/.fez-config.json.tmp
+            mv ~/.fez-config.json.tmp ~/.fez-config.json
+            echo "✓ Added Fez::Util::Curl requestor to fez config" >&2
+          fi
 
       - name: Publish to Zef ecosystem
         env:
