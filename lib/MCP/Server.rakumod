@@ -25,6 +25,136 @@ MCP::Server - MCP server implementation
 Implements the MCP server-side protocol: initialization, request dispatch,
 tool/resource/prompt registration, and JSON-RPC message handling.
 
+=head1 CONSTRUCTOR
+
+=head2 Server.new(:$info!, :$transport!, :$instructions, :$page-size)
+
+Creates a new MCP server.
+
+=item C<info> — C<MCP::Types::Implementation> with server name and version.
+=item C<transport> — A transport object (e.g., C<StdioTransport>, C<StreamableHTTPServerTransport>).
+=item C<instructions> — Optional instructions string sent to clients during initialization.
+=item C<page-size> — Page size for paginated list responses (default: 50).
+
+=head1 REGISTRATION METHODS
+
+=head2 method add-tool
+
+    $server.add-tool($registered-tool);
+    $server.add-tool(name => 'add', description => 'Add numbers',
+        schema => %schema, handler => -> :%params { ... });
+
+Register a tool by passing a C<RegisteredTool> object or named parameters.
+The handler receives C<:%params> and returns a string, content object, or
+C<CallToolResult>.
+
+=head2 method add-resource
+
+    $server.add-resource($registered-resource);
+    $server.add-resource(uri => 'data://x', name => 'X',
+        mimeType => 'text/plain', reader => { 'content' });
+
+Register a resource by object or named parameters. The reader block returns
+the resource content.
+
+=head2 method add-resource-template
+
+    $server.add-resource-template($registered-template);
+    $server.add-resource-template(name => 'files', uriTemplate => 'file:///{path}',
+        reader => -> :$path { $path.IO.slurp });
+
+Register a URI template that matches resource reads dynamically.
+
+=head2 method add-prompt
+
+    $server.add-prompt($registered-prompt);
+    $server.add-prompt(name => 'summarize', description => 'Summarize text',
+        arguments => [{ name => 'text', required => True }],
+        generator => -> :%params { user-message(%params<text>) });
+
+Register a prompt template. The generator returns prompt messages.
+
+=head2 method add-prompt-completer(Str $prompt-name, &completer)
+
+Register an autocomplete handler for a prompt argument. The completer
+receives the argument name and partial value, returns a list of suggestions.
+
+=head2 method add-resource-completer(Str $uri, &completer)
+
+Register an autocomplete handler for a resource URI.
+
+=head2 method register-extension(:$name!, :$version, :%settings, :%methods, :%notifications)
+
+Register a server-side extension with custom method and notification handlers.
+
+=head1 LIFECYCLE
+
+=head2 method serve(--> Promise)
+
+Start the server event loop. Listens on the transport, dispatches incoming
+messages, and returns a Promise that resolves when the transport closes.
+
+    await $server.serve;
+
+=head2 method capabilities(--> ServerCapabilities)
+
+Returns the server's capability object based on registered handlers.
+
+=head1 OUTBOUND COMMUNICATION
+
+=head2 method request(Str $method, $params? --> Promise)
+
+Send a JSON-RPC request to the client (e.g., for sampling or roots).
+
+=head2 method notify(Str $method, $params?)
+
+Send a JSON-RPC notification to the client.
+
+=head2 method log(LogLevel $level, $data, :$logger)
+
+Send a log notification to the client if the level meets the configured threshold.
+
+=head2 method progress(Num $progress, :$total, :$message, :$token)
+
+Send a progress notification for the current request.
+
+=head2 method create-message(...)
+
+Request the client to sample an LLM response (createMessage). Accepts
+messages, model preferences, system prompt, and other sampling parameters.
+
+=head2 method elicit(:$message!, :%schema! --> Promise)
+
+Request structured input from the user via form elicitation.
+
+=head2 method list-roots(--> Promise)
+
+Request the client's root URIs.
+
+=head1 RESOURCE NOTIFICATIONS
+
+=head2 method notify-resource-updated(Str $uri)
+
+Notify subscribed clients that a resource has changed.
+
+=head2 method notify-resources-list-changed()
+
+Notify clients that the list of available resources has changed.
+
+=head2 method notify-prompts-list-changed()
+
+Notify clients that the list of available prompts has changed.
+
+=head1 CANCELLATION
+
+=head2 method is-cancelled($request-id --> Bool)
+
+Check whether a request has been cancelled by the client.
+
+=head2 method cancel-request($request-id, :$reason)
+
+Cancel an outbound pending request.
+
 =end pod
 
 use MCP::Types;

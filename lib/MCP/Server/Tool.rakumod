@@ -12,6 +12,53 @@ MCP::Server::Tool - Tool registration helpers
 
 Provides a builder-style DSL and wrapper class for registering MCP tools.
 
+=head1 FUNCTIONS
+
+=head2 sub tool(--> ToolBuilder)
+
+Create a new tool builder. Chain methods to define the tool, then call
+C<.build> to produce a C<RegisteredTool>.
+
+    my $t = tool()
+        .name('add')
+        .description('Add two numbers')
+        .number-param('a', description => 'First', :required)
+        .number-param('b', description => 'Second', :required)
+        .handler(-> :%params { %params<a> + %params<b> })
+        .build;
+
+=head2 sub validate-tool-name(Str $name)
+
+Validate that a tool name matches the MCP spec pattern:
+C<^[a-zA-Z0-9_-]{1,64}$>. Dies on invalid names.
+
+=head1 CLASSES
+
+=head2 ToolBuilder
+
+Fluent builder for tool definitions. Available chain methods:
+
+=item C<.name(Str)> — Tool name (required).
+=item C<.description(Str)> — Human-readable description.
+=item C<.input-schema(%schema)> — Raw JSON Schema for input.
+=item C<.output-schema(%schema)> — JSON Schema for structured output.
+=item C<.string-param(Str, :$description, :$required, :$enum)> — Add a string parameter.
+=item C<.number-param(Str, :$description, :$required)> — Add a number parameter.
+=item C<.integer-param(Str, :$description, :$required)> — Add an integer parameter.
+=item C<.boolean-param(Str, :$description, :$required)> — Add a boolean parameter.
+=item C<.array-param(Str, :$description, :$required, :%items)> — Add an array parameter.
+=item C<.object-param(Str, :$description, :$required, :%properties)> — Add an object parameter.
+=item C<.annotations(...)> — Set tool annotations (C<title>, C<readOnly>, C<destructive>, etc.).
+=item C<.handler(&callable)> — The handler block (required).
+=item C<.build(--> RegisteredTool)> — Finalize the tool.
+
+=head2 RegisteredTool
+
+Wrapper holding a C<Tool> definition and its handler.
+
+=item C<.to-tool(--> Tool)> — Get the tool definition for listing.
+=item C<.call(%arguments --> CallToolResult)> — Call the handler with arguments.
+
 =end pod
 
 use MCP::Types;

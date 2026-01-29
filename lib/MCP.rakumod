@@ -20,6 +20,39 @@ MCP - Top-level convenience exports for the MCP SDK
 Re-exports core MCP types, builders, and transport classes to reduce the number
 of explicit module imports required in typical usage.
 
+=head1 RE-EXPORTS
+
+Using C<use MCP;> imports the following into scope:
+
+=head2 Classes
+
+=item C<Server> — C<MCP::Server::Server>
+=item C<Client> — C<MCP::Client::Client>
+=item C<StdioTransport> — C<MCP::Transport::Stdio::StdioTransport>
+=item C<StreamableHTTPServerTransport> — C<MCP::Transport::StreamableHTTP::StreamableHTTPServerTransport>
+=item C<StreamableHTTPClientTransport> — C<MCP::Transport::StreamableHTTP::StreamableHTTPClientTransport>
+
+=head2 Builder functions
+
+=item C<tool()> — Create a C<ToolBuilder>
+=item C<resource()> — Create a C<ResourceBuilder>
+=item C<file-resource($path)> — Create a file-backed resource
+=item C<resource-template()> — Create a C<ResourceTemplateBuilder>
+=item C<prompt()> — Create a C<PromptBuilder>
+
+=head2 Types and constants
+
+All types from C<MCP::Types> (Content classes, Tool, Resource, Prompt,
+capabilities, enums, etc.) and the current protocol version constant.
+
+=head1 SEE ALSO
+
+For detailed API documentation, see the individual modules:
+C<MCP::Server>, C<MCP::Client>, C<MCP::Types>, C<MCP::JSONRPC>,
+C<MCP::Transport::Base>, C<MCP::Transport::Stdio>,
+C<MCP::Transport::StreamableHTTP>, C<MCP::Transport::SSE>,
+C<MCP::OAuth>, C<MCP::OAuth::Client>, C<MCP::OAuth::Server>.
+
 =end pod
 
 # Re-export all MCP modules

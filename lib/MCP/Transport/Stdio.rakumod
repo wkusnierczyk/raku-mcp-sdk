@@ -10,8 +10,30 @@ MCP::Transport::Stdio - Stdio transport implementation
 
 =head1 DESCRIPTION
 
-Implements MCP transport over stdin/stdout using Content-Length framing.
-Useful for CLI tools and embedding in subprocess pipelines.
+Implements MCP transport over stdin/stdout using Content-Length framing
+(LSP-style). Useful for CLI tools and embedding in subprocess pipelines.
+
+=head1 CLASS
+
+=head2 StdioTransport
+
+    my $transport = StdioTransport.new;
+    my $transport = StdioTransport.new(input => $proc.stdout, output => $proc.stdin);
+
+Attributes:
+
+=item C<input> — Input stream (default: C<$*IN>).
+=item C<output> — Output stream (default: C<$*OUT>).
+
+=head1 FUNCTIONS
+
+=head2 sub stdio-server-transport(--> StdioTransport)
+
+Create a transport using standard I/O (for servers).
+
+=head2 sub subprocess-transport(Proc::Async $proc --> StdioTransport)
+
+Create a transport connected to a subprocess (for clients).
 
 =end pod
 
