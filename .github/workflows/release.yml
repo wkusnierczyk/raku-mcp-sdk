@@ -344,8 +344,10 @@ jobs:
             raku-${{ runner.os }}-${{ env.RAKU_VERSION }}-
             raku-${{ runner.os }}-
 
-      - name: Install fez
-        run: zef install fez
+      - name: Install fez and HTTP dependency
+        run: |
+          zef install Cro::HTTP || zef install HTTP::Tiny
+          zef install fez
 
       - name: Configure fez
         env:
