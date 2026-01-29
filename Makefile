@@ -18,7 +18,7 @@
 PROJECT_NAME    := MCP
 PROJECT_TITLE   := Raku MCP SDK
 PROJECT_DESC    := Raku Implementation of the Model Context Protocol
-VERSION         := 0.29.0
+VERSION         := 0.30.0
 DEVELOPER_NAME  := Waclaw Kusnierczyk
 DEVELOPER_EMAIL := waclaw.kusnierczyk@gmail.com
 SOURCE_URL      := https://github.com/wkusnierczyk/raku-mcp-sdk
@@ -714,6 +714,24 @@ bump-major:
 		exit 1; \
 	fi
 	@$(MAKE) version TAG=$(NEXT_MAJOR)
+
+# ------------------------------------------------------------------------------
+# Benchmarks and Stress Tests
+# ------------------------------------------------------------------------------
+
+.PHONY: benchmark
+# benchmark: Run performance benchmarks
+benchmark: build
+	$(call log-info,Running benchmarks...)
+	$(Q)$(RAKU) -I. bench/benchmark.rakutest
+	$(call log-success,Benchmarks complete)
+
+.PHONY: stress
+# stress: Run stress tests
+stress: build
+	$(call log-info,Running stress tests...)
+	$(Q)$(RAKU) -I. bench/stress.rakutest
+	$(call log-success,Stress tests complete)
 
 # ------------------------------------------------------------------------------
 # Special Targets
