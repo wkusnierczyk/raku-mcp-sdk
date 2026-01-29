@@ -115,6 +115,7 @@ class OAuthClientHandler is export {
             my $body = await $resp.body;
             my %token-data = $body ~~ Hash ?? $body !! from-json($body);
             $!token = TokenResponse.from-hash(%token-data);
+            $!pkce-verifier = Nil;  # Single-use per RFC 7636
             $!token
         }
     }
