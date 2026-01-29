@@ -116,7 +116,7 @@ It solves the "m-by-n" integration problem. Instead of every AI application (Cla
 
 ### Raku
 
-[Raku](https://raku.org/) (formerly Perl 6) is a high-level, multi-paradigm programming language optimized for expressiveness, modularity, and consistency. 
+[**Raku**](https://raku.org/) (formerly Perl 6) is a high-level, multi-paradigm programming language optimized for expressiveness, modularity, and consistency. 
 It is a specification-driven language (with Rakudo being the primary implementation) that encourages "programming as a human language"—allowing code to be written in a way that feels natural and context-aware rather than rigid and machine-like.
 
 #### Design principles
