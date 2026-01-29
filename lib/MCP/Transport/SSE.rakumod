@@ -37,6 +37,7 @@ class X::MCP::Transport::SSE::HTTP is X::MCP::Transport::SSE {
 class SSEServerTransport does MCP::Transport::Base::Transport is export {
     has Str $.host = '127.0.0.1';
     has Int $.port = 8080;
+    has Str $.scheme = 'http';
     has Str $.sse-path = '/sse';
     has Str $.message-path = '/message';
     has @.allowed-origins = [];
@@ -131,7 +132,7 @@ class SSEServerTransport does MCP::Transport::Base::Transport is export {
                 }
 
                 $self!setup-sse-stream();
-                my $post-url = "http://{$self.host}:{$self.port}{$message-path}";
+                my $post-url = "{$self.scheme}://{$self.host}:{$self.port}{$message-path}";
                 my $endpoint-event = "event: endpoint\ndata: $post-url\n\n";
 
                 # Emit endpoint event after Supply is tapped by Cro
