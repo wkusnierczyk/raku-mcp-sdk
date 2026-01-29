@@ -75,7 +75,9 @@ See [Gap Analysis](https://github.com/wkusnierczyk/raku-mcp-sdk/blob/main/GAP_AN
   - [CI pipeline](#ci-pipeline)
 - [Project structure](#project-structure)
 - [Contributing](#contributing)
-- [Security](#security)
+- [Quality and roadmap](#quality-and-roadmap)
+  - [Security](#security)
+  - [Performance and stress testing](#performance-and-stress-testing)
 - [License](#license)
 - [References](#references)
 - [Acknowledgments](#acknowledgments)
@@ -565,15 +567,17 @@ Contributions are welcome. You can:
 >   You can only squash-merge as one commit, with a detailed description of your changes.
 
 
-## Security
+## Quality and roadmap
 
-A security review was conducted on the codebase. No critical vulnerabilities were found. The following defense-in-depth improvements have been identified and are tracked under the [Security hardening](https://github.com/wkusnierczyk/raku-mcp-sdk/milestone/23) milestone:
+### Security
 
-| Finding | Severity | Issue | Status |
-|---------|----------|-------|--------|
-| PKCE verifier retained in memory after token exchange | Medium | [#109](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/109) | Open |
-| Handler exceptions propagate raw to client | Medium | [#110](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/110) | Open |
-| SSE transport hardcodes HTTP scheme | Medium | [#111](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/111) | Open |
+A security review was conducted on the codebase. No critical vulnerabilities were found. The following defense-in-depth improvements are tracked under the [Security hardening](https://github.com/wkusnierczyk/raku-mcp-sdk/milestone/23) milestone:
+
+| Finding | Severity | Issue |
+|---------|----------|-------|
+| PKCE verifier retained in memory after token exchange | Medium | [#109](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/109) |
+| Handler exceptions propagate raw to client | Medium | [#110](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/110) |
+| SSE transport hardcodes HTTP scheme | Medium | [#111](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/111) |
 
 **Areas reviewed with no issues found:**
 
@@ -590,6 +594,15 @@ A security review was conducted on the codebase. No critical vulnerabilities wer
 - Rate limiting is not built in — deploy behind a reverse proxy for production use
 
 To report a security issue, please open a [confidential issue](https://github.com/wkusnierczyk/raku-mcp-sdk/security) or email the maintainer directly.
+
+### Performance and stress testing
+
+The SDK uses locks and async primitives extensively. Performance and resilience under load are tracked under the [Performance](https://github.com/wkusnierczyk/raku-mcp-sdk/milestone/24) milestone:
+
+| Area | Issue |
+|------|-------|
+| Benchmarks: message parsing, dispatch latency, transport throughput | [#113](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/113) |
+| Stress tests: concurrent requests, lock contention, thread pool saturation, memory stability | [#115](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/115) |
 
 ## License
 
