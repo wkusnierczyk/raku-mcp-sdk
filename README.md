@@ -16,7 +16,8 @@
 
 ## Status
 
-Raku MCP SDK provides comprehensive coverage of the [MCP specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25). See the [Gap Analysis](GAP_ANALYSIS.md) for details.
+Raku MCP SDK provides comprehensive coverage of the [MCP specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25).  
+See the [Gap Analysis](GAP_ANALYSIS.md) for details.
 
 ### Implementation progress
 
@@ -82,7 +83,7 @@ Raku MCP SDK provides comprehensive coverage of the [MCP specification 2025-11-2
 
 ### MCP
 
-**Model Context Protocol (MCP)** is an open standard that standardizes how AI models interact with external data and tools. 
+[**Model Context Protocol (MCP)**](https://modelcontextprotocol.io) is an open standard that standardizes how AI models interact with external data and tools. 
 Consider it a "USB-C port for AI applications", a universal interface that replaces the need to build custom connectors for every new data source or tool.
 
 #### What is it for?
@@ -107,7 +108,7 @@ It solves the "m-by-n" integration problem. Instead of every AI application (Cla
 
 ### Raku
 
-Raku (formerly Perl 6) is a high-level, multi-paradigm programming language optimized for expressiveness, modularity, and consistency. 
+[Raku](https://raku.org/) (formerly Perl 6) is a high-level, multi-paradigm programming language optimized for expressiveness, modularity, and consistency. 
 It is a specification-driven language (with Rakudo being the primary implementation) that encourages "programming as a human language"—allowing code to be written in a way that feels natural and context-aware rather than rigid and machine-like.
 
 #### Design principles
@@ -277,7 +278,7 @@ Available examples:
   • http-server          # Streamable HTTP server transport
   • oauth-server         # HTTP server with OAuth 2.1 token validation
   • sampling-client      # Client-side sampling handler
-  • extensions            # Extension registration, negotiation, and method dispatch
+  • extensions           # Extension registration, negotiation, and method dispatch
   • simple-server        # Stdio server with tools, resources, and prompts
 ```
 
