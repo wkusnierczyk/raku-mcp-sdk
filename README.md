@@ -75,6 +75,7 @@ See [Gap Analysis](https://github.com/wkusnierczyk/raku-mcp-sdk/blob/main/GAP_AN
   - [CI pipeline](#ci-pipeline)
 - [Project structure](#project-structure)
 - [Contributing](#contributing)
+- [Security](#security)
 - [License](#license)
 - [References](#references)
 - [Acknowledgments](#acknowledgments)
@@ -563,6 +564,32 @@ Contributions are welcome. You can:
 > * Merging into `main` with the whole multi-commit history of your branch is <strong style="color: red;">disallowed</strong>.  
 >   You can only squash-merge as one commit, with a detailed description of your changes.
 
+
+## Security
+
+A security review was conducted on the codebase. No critical vulnerabilities were found. The following defense-in-depth improvements have been identified and are tracked under the [Security hardening](https://github.com/wkusnierczyk/raku-mcp-sdk/milestone/23) milestone:
+
+| Finding | Severity | Issue | Status |
+|---------|----------|-------|--------|
+| PKCE verifier retained in memory after token exchange | Medium | [#109](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/109) | Open |
+| Handler exceptions propagate raw to client | Medium | [#110](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/110) | Open |
+| SSE transport hardcodes HTTP scheme | Medium | [#111](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/111) | Open |
+
+**Areas reviewed with no issues found:**
+
+- No hardcoded secrets or credentials
+- PKCE implementation is correct (RFC 7636 compliant character set, length, base64url encoding)
+- JSON deserialization uses `JSON::Fast` (no code execution risk)
+- Shared state access is synchronized with locks
+- Session and request ID generation has adequate entropy
+
+**User responsibility (by design for an SDK):**
+
+- Tool handlers receive unvalidated arguments — handler authors should validate inputs
+- Resource URIs are not scheme-restricted — server implementors should restrict URI schemes as needed
+- Rate limiting is not built in — deploy behind a reverse proxy for production use
+
+To report a security issue, please open a [confidential issue](https://github.com/wkusnierczyk/raku-mcp-sdk/security) or email the maintainer directly.
 
 ## License
 
