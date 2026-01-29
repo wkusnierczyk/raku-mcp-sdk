@@ -12,6 +12,39 @@ MCP::Server::Prompt - Prompt registration helpers
 
 Provides a builder-style DSL and wrapper class for registering MCP prompts.
 
+=head1 FUNCTIONS
+
+=head2 sub prompt(--> PromptBuilder)
+
+Create a new prompt builder.
+
+    my $p = prompt()
+        .name('summarize')
+        .description('Summarize content')
+        .argument('text', description => 'The text to summarize', :required)
+        .generator(-> :%params { user-message(%params<text>) })
+        .build;
+
+=head2 sub user-message(Str $text --> PromptMessage)
+
+Create a user-role prompt message.
+
+=head2 sub assistant-message(Str $text --> PromptMessage)
+
+Create an assistant-role prompt message.
+
+=head1 CLASSES
+
+=head2 PromptBuilder
+
+Fluent builder with chain methods: C<.name>, C<.description>, C<.argument>,
+C<.annotations>, C<.generator>, C<.build>.
+
+=head2 RegisteredPrompt
+
+=item C<.to-prompt(--> Prompt)> — Get the prompt definition.
+=item C<.get(%arguments --> Array)> — Generate prompt messages with arguments.
+
 =end pod
 
 use MCP::Types;

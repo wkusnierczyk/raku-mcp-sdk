@@ -18,6 +18,19 @@ compatibility with older clients. The server provides two endpoints:
 
 All server-to-client messages are sent as SSE C<message> events.
 
+=head1 CLASS
+
+=head2 SSEServerTransport
+
+    my $transport = SSEServerTransport.new(
+        host => 'localhost', port => 3001, scheme => 'https');
+
+Attributes:
+
+=item C<host> — Bind address (default: C<localhost>).
+=item C<port> — Bind port (default: C<3001>).
+=item C<scheme> — URL scheme for the endpoint URL sent to clients (default: C<http>).
+
 =end pod
 
 use MCP::JSONRPC;

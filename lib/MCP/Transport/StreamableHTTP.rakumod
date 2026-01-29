@@ -14,6 +14,41 @@ Implements the MCP Streamable HTTP transport using Cro::HTTP. Supports
 client-side POST/GET with SSE, and server-side handling of POST requests
 plus optional server-initiated SSE streams.
 
+=head1 CLASSES
+
+=head2 StreamableHTTPServerTransport
+
+Server-side transport that listens on an HTTP endpoint and dispatches
+JSON-RPC messages received via POST. Supports session management and
+SSE streaming for server-initiated messages.
+
+    my $transport = StreamableHTTPServerTransport.new(
+        host => 'localhost', port => 8080, path => '/mcp');
+
+Attributes:
+
+=item C<host> — Bind address (default: C<localhost>).
+=item C<port> — Bind port (default: C<8080>).
+=item C<path> — URL path for the MCP endpoint (default: C</mcp>).
+
+=head2 StreamableHTTPClientTransport
+
+Client-side transport that connects to an MCP HTTP server. Sends
+JSON-RPC messages via POST and receives responses and server-initiated
+messages via SSE.
+
+    my $transport = StreamableHTTPClientTransport.new(
+        url => 'http://localhost:8080/mcp');
+
+Attributes:
+
+=item C<url> — Server endpoint URL.
+=item C<headers> — Optional additional HTTP headers (e.g., for authentication).
+
+Key methods:
+
+=item C<terminate-session(--> Promise)> — Send DELETE to terminate the session.
+
 =end pod
 
 use MCP::JSONRPC;
