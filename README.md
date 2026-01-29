@@ -17,7 +17,7 @@
 ## Status
 
 Raku MCP SDK provides comprehensive coverage of the [MCP specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25).  
-See the [Gap Analysis](GAP_ANALYSIS.md) for details.
+See the [Gap Analysis](https://github.com/wkusnierczyk/raku-mcp-sdk/blob/main/GAP_ANALYSIS.md) for details.
 
 ### Implementation progress
 
@@ -566,7 +566,7 @@ Contributions are welcome. You can:
 
 ## License
 
-MIT License - see the [LICENSE](LICENSE) file and the [MIT License](https://opensource.org/licenses/MIT) site.
+MIT License - see the [LICENSE](https://github.com/wkusnierczyk/raku-mcp-sdk/blob/main/LICENSE) file and the [MIT License](https://opensource.org/licenses/MIT) site.
 
 ## References
 
