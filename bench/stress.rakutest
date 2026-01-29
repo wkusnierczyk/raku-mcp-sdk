@@ -1,0 +1,244 @@
+use v6.d;
+use lib 'lib';
+
+use MCP::Types;
+use MCP::Transport::Base;
+need MCP::JSONRPC;
+use MCP::Server;
+use JSON::Fast;
+
+=begin pod
+=head1 NAME
+
+stress.rakutest - Stress tests for MCP SDK
+
+=head1 DESCRIPTION
+
+Validates SDK behavior under sustained concurrent load.
+Run with: make stress
+
+Tests concurrent tool calls, resource reads, mixed operations,
+lock contention, and long-running handler resilience.
+
+=end pod
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+class StressTransport does MCP::Transport::Base::Transport {
+    has @.sent;
+    has Supplier $!supplier = Supplier.new;
+    has Lock $!lock = Lock.new;
+
+    method start(--> Supply) { $!supplier.Supply }
+    method send($msg) { $!lock.protect: { @!sent.push($msg) } }
+    method close(--> Promise) { start { True } }
+    method is-connected(--> Bool) { True }
+    method clear() { $!lock.protect: { @!sent = [] } }
+    method count(--> Int) { $!lock.protect: { @!sent.elems } }
+}
+
+my $timeout = 60;  # Global timeout per stress test (seconds)
+
+sub stress-test(Str $label, Int $total, Int $concurrency, &block) {
+    say "\n--- $label ($total requests, concurrency=$concurrency) ---";
+
+    my $start = now;
+    my @errors;
+    my @latencies;
+    my $completed = 0;
+    my $lock = Lock.new;
+
+    my @promises;
+    for ^$total {
+        @promises.push: start {
+            my $t0 = now;
+            try {
+                block();
+                CATCH {
+                    default {
+                        $lock.protect: { @errors.push($_.message) };
+                    }
+                }
+            }
+            my $lat = now - $t0;
+            $lock.protect: {
+                @latencies.push($lat);
+                $completed++;
+            };
+        };
+        if @promises.elems >= $concurrency {
+            await Promise.anyof(
+                Promise.allof(@promises),
+                Promise.in($timeout),
+            );
+            @promises = [];
+        }
+    }
+    if @promises {
+        await Promise.anyof(
+            Promise.allof(@promises),
+            Promise.in($timeout),
+        );
+    }
+
+    my $elapsed = now - $start;
+
+    # Compute percentiles
+    my @sorted = @latencies.sort;
+    my $p50 = @sorted ?? @sorted[(@sorted.elems * 0.5).Int] !! 0;
+    my $p95 = @sorted ?? @sorted[(@sorted.elems * 0.95).Int] !! 0;
+    my $p99 = @sorted ?? @sorted[(@sorted.elems * 0.99).Int] !! 0;
+
+    my $ops = $completed > 0 ?? ($completed / $elapsed).round(0.1) !! 0;
+    my $err-rate = $total > 0 ?? ((@errors.elems / $total) * 100).round(0.1) !! 0;
+
+    say sprintf("  Completed:   %d / %d", $completed, $total);
+    say sprintf("  Throughput:  %s ops/s", $ops);
+    say sprintf("  Latency:     p50=%sms  p95=%sms  p99=%sms",
+        ($p50 * 1000).round(0.1), ($p95 * 1000).round(0.1), ($p99 * 1000).round(0.1));
+    say sprintf("  Errors:      %d (%.1f%%)", @errors.elems, $err-rate);
+    say sprintf("  Elapsed:     %ss", $elapsed.round(0.1));
+
+    if @errors.elems > 0 {
+        say "  First error: @errors[0]";
+    }
+
+    # Return results for report
+    {
+        label => $label,
+        total => $total,
+        concurrency => $concurrency,
+        completed => $completed,
+        ops-per-sec => $ops,
+        p50-ms => ($p50 * 1000).round(0.1),
+        p95-ms => ($p95 * 1000).round(0.1),
+        p99-ms => ($p99 * 1000).round(0.1),
+        errors => @errors.elems,
+        error-rate => $err-rate,
+        elapsed => $elapsed.round(0.1),
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Setup
+# ---------------------------------------------------------------------------
+
+my $transport = StressTransport.new;
+my $server = MCP::Server::Server.new(
+    info => MCP::Types::Implementation.new(name => 'stress', version => '0.1'),
+    transport => $transport,
+);
+
+$server.add-tool(
+    name => 'add',
+    description => 'Add two numbers',
+    schema => { type => 'object', properties => { a => { type => 'number' }, b => { type => 'number' } } },
+    handler => -> :%params { %params<a> + %params<b> }
+);
+
+$server.add-tool(
+    name => 'slow',
+    description => 'Slow handler',
+    schema => { type => 'object', properties => { ms => { type => 'number' } } },
+    handler => -> :%params { sleep (%params<ms> // 10) / 1000; 'done' }
+);
+
+$server.add-resource(
+    uri => 'stress://data',
+    name => 'Stress Data',
+    mimeType => 'text/plain',
+    reader => { 'stress payload' }
+);
+
+my $tool-req = MCP::JSONRPC::Request.new(
+    id => 1, method => 'tools/call',
+    params => { name => 'add', arguments => { a => 1, b => 2 } }
+);
+
+my $slow-req = MCP::JSONRPC::Request.new(
+    id => 2, method => 'tools/call',
+    params => { name => 'slow', arguments => { ms => 10 } }
+);
+
+my $resource-req = MCP::JSONRPC::Request.new(
+    id => 3, method => 'resources/read',
+    params => { uri => 'stress://data' }
+);
+
+my $list-req = MCP::JSONRPC::Request.new(id => 4, method => 'tools/list');
+
+# ---------------------------------------------------------------------------
+# Stress tests
+# ---------------------------------------------------------------------------
+
+say "== MCP SDK Stress Tests ==";
+
+my @results;
+
+# High-volume concurrent tool calls
+@results.push: stress-test("Concurrent tool calls", 1000, 100, {
+    $server.dispatch-request($tool-req);
+});
+
+# Sustained resource reads
+@results.push: stress-test("Concurrent resource reads", 1000, 100, {
+    $server.dispatch-request($resource-req);
+});
+
+# Mixed operations (tools + resources + listing)
+my $mix-counter = 0;
+@results.push: stress-test("Mixed operations", 1000, 50, {
+    my $i = $mix-counter++;
+    given $i % 3 {
+        when 0 { $server.dispatch-request($tool-req) }
+        when 1 { $server.dispatch-request($resource-req) }
+        when 2 { $server.dispatch-request($list-req) }
+    }
+});
+
+# Slow handlers under load (thread pool saturation)
+@results.push: stress-test("Slow handlers under load", 200, 50, {
+    $server.dispatch-request($slow-req);
+});
+
+# High concurrency burst
+@results.push: stress-test("High concurrency burst", 500, 200, {
+    $server.dispatch-request($tool-req);
+});
+
+say "\n== Stress tests complete ==\n";
+
+# ---------------------------------------------------------------------------
+# Write reports
+# ---------------------------------------------------------------------------
+
+my $timestamp = DateTime.now.utc.truncated-to('minute');
+my $ts-str = $timestamp.yyyy-mm-dd ~ '-' ~ sprintf('%02d%02d', $timestamp.hour, $timestamp.minute);
+my $base = "bench/stress-report-$ts-str";
+
+# Markdown report
+my $md = "# Stress Test Report\n\n";
+$md ~= "**Date**: {$timestamp.yyyy-mm-dd} {sprintf('%02d:%02d', $timestamp.hour, $timestamp.minute)} UTC\n";
+$md ~= "**Raku**: {$*RAKU.compiler.version}\n\n";
+
+$md ~= "| Test | Total | Concurrency | Completed | ops/s | p50 ms | p95 ms | p99 ms | Errors |\n";
+$md ~= "| ---- | ----: | ----------: | --------: | ----: | -----: | -----: | -----: | -----: |\n";
+for @results -> $r {
+    $md ~= "| $r<label> | $r<total> | $r<concurrency> | $r<completed> | $r<ops-per-sec> | $r<p50-ms> | $r<p95-ms> | $r<p99-ms> | $r<errors> |\n";
+}
+$md ~= "\n";
+
+"$base.md".IO.spurt($md);
+say "Report: $base.md";
+
+# JSON report
+my %json = (
+    timestamp => ~$timestamp,
+    raku-version => ~$*RAKU.compiler.version,
+    results => @results.map(*.Hash).Array,
+);
+
+"$base.json".IO.spurt(to-json(%json, :sorted-keys));
+say "Report: $base.json";

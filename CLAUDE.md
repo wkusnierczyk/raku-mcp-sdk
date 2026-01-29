@@ -19,6 +19,8 @@ make check            # Run lint and tests together
 make coverage         # Generate test coverage report
 make run-example EXAMPLE=simple-server      # Run example server
 make repl             # Start REPL with project loaded
+make benchmark        # Run performance benchmarks
+make stress           # Run stress tests
 ```
 
 Environment: `V=1` for verbose output, `NO_COLOR=1` to disable colors.

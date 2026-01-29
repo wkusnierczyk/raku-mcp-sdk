@@ -450,6 +450,9 @@ make test        # Run test suite
     <tr><td><code>bump-patch</code></td><td>Patch bump</td><td><code>make bump-patch</code> bumps to the next patch version (no tag)</td></tr>
     <tr><td><code>bump-minor</code></td><td>Minor bump</td><td><code>make bump-minor</code> bumps to the next minor version (no tag)</td></tr>
     <tr><td><code>bump-major</code></td><td>Major bump</td><td><code>make bump-major</code> bumps to the next major version (no tag)</td></tr>
+    <tr><th colspan="3" align="left">Benchmarks and stress tests</th></tr>
+    <tr><td><code>benchmark</code></td><td>Run performance benchmarks</td><td>Writes timestamped reports to <code>bench/</code></td></tr>
+    <tr><td><code>stress</code></td><td>Run stress tests</td><td>Writes timestamped reports to <code>bench/</code></td></tr>
     <tr><th colspan="3" align="left">Cleaning</th></tr>
     <tr><td><code>clean</code></td><td>Remove build/coverage/dist</td><td>Runs clean-build/clean-coverage/clean-dist</td></tr>
     <tr><td><code>clean-build</code></td><td>Remove precomp/build dirs</td><td>Removes <code>.precomp</code> and <code>.build</code></td></tr>
@@ -571,15 +574,13 @@ Contributions are welcome. You can:
 
 ### Security
 
-A security review was conducted on the codebase. No critical vulnerabilities were found. The following defense-in-depth improvements are tracked under the [Security hardening](https://github.com/wkusnierczyk/raku-mcp-sdk/milestone/23) milestone:
+A security review was conducted on the codebase. No critical vulnerabilities were found. The following defense-in-depth measures are implemented:
 
-| Finding | Severity | Issue |
-|---------|----------|-------|
-| ~~Handler exceptions propagate raw to client~~ | ~~Medium~~ | [#110](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/110) ✅ |
-| ~~PKCE verifier retained in memory after token exchange~~ | ~~Medium~~ | [#109](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/109) ✅ |
-| ~~SSE transport hardcodes HTTP scheme~~ | ~~Medium~~ | [#111](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/111) ✅ |
+- Handler exceptions are sanitized before reaching clients (internal details are not leaked)
+- PKCE verifiers are cleared from memory after token exchange (single-use per RFC 7636)
+- SSE transport scheme is configurable (not hardcoded to HTTP)
 
-**Areas reviewed with no issues found:**
+Additional areas reviewed with no issues found:
 
 - No hardcoded secrets or credentials
 - PKCE implementation is correct (RFC 7636 compliant character set, length, base64url encoding)
@@ -597,12 +598,12 @@ To report a security issue, please open a [confidential issue](https://github.co
 
 ### Performance and stress testing
 
-The SDK uses locks and async primitives extensively. Performance and resilience under load are tracked under the [Performance](https://github.com/wkusnierczyk/raku-mcp-sdk/milestone/24) milestone:
+The SDK includes benchmarks and stress tests (`make benchmark`, `make stress`) that measure:
 
-| Area | Issue |
-|------|-------|
-| Benchmarks: message parsing, dispatch latency, transport throughput | [#113](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/113) |
-| Stress tests: concurrent requests, lock contention, thread pool saturation, memory stability | [#115](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/115) |
+- **Benchmarks**: JSON-RPC message parsing and serialization throughput, tool/resource/prompt dispatch latency, concurrent dispatch scaling
+- **Stress tests**: sustained concurrent tool calls and resource reads, mixed operations under load, slow handler thread pool saturation, high concurrency bursts with latency percentiles (p50/p95/p99) and error rate tracking
+
+Reports are written as timestamped Markdown and JSON files to `bench/`.
 
 ## License
 
@@ -632,7 +633,7 @@ Building this repository was supported by:
 $ make about
 
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
-├─ version:    0.29.0
+├─ version:    0.30.0
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT
