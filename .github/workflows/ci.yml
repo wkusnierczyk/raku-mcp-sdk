@@ -10,14 +10,6 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
-    inputs:
-      run_coverage:
-        description: 'Run coverage job (slow; currently non-gating)'
-        type: choice
-        options:
-          - 'false'
-          - 'true'
-        default: 'false'
 
 permissions:
   contents: write
@@ -25,8 +17,6 @@ permissions:
 env:
   # Raku version to use
   RAKU_VERSION: '2024.01'
-  # Coverage is slow and currently non-gating; keep it off until we enforce a threshold.
-  # TODO: Enable coverage and fail CI if coverage drops below an agreed threshold.
 
 jobs:
   # ----------------------------------------------------------------------------
@@ -127,44 +117,3 @@ jobs:
         run: |
           raku -I. t/01-types.rakutest
           raku -I. t/02-jsonrpc.rakutest
-
-  coverage:
-    name: Coverage
-    runs-on: ubuntu-latest
-    needs: test
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_coverage == 'true' }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Raku
-        uses: Raku/setup-raku@v1
-        with:
-          raku-version: ${{ env.RAKU_VERSION }}
-
-      - name: Cache Raku dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.raku
-            ~/.zef
-          key: raku-${{ runner.os }}-${{ env.RAKU_VERSION }}-${{ hashFiles('META6.json') }}
-          restore-keys: |
-            raku-${{ runner.os }}-${{ env.RAKU_VERSION }}-
-            raku-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: zef install --deps-only . --/test
-
-      - name: Install RaCoCo
-        run: zef install App::RaCoCo
-
-      - name: Generate coverage report
-        run: make coverage
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage-report
