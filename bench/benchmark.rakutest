@@ -1,0 +1,301 @@
+use v6.d;
+use lib 'lib';
+
+use MCP::Types;
+use MCP::Transport::Base;
+need MCP::JSONRPC;
+use MCP::Server;
+my &parse-message = &MCP::JSONRPC::EXPORT::DEFAULT::parse-message;
+use JSON::Fast;
+
+=begin pod
+=head1 NAME
+
+benchmark.rakutest - Performance benchmarks for MCP SDK
+
+=head1 DESCRIPTION
+
+Measures throughput and latency of core SDK operations.
+Run with: make benchmark
+
+Outputs results to screen, bench/benchmark-report-YYYY-MM-DD-hhmm.md,
+and bench/benchmark-report-YYYY-MM-DD-hhmm.json.
+
+=end pod
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+class BenchTransport does MCP::Transport::Base::Transport {
+    has @.sent;
+    has Supplier $!supplier = Supplier.new;
+
+    method start(--> Supply) { $!supplier.Supply }
+    method send($msg) { @!sent.push($msg) }
+    method close(--> Promise) { start { True } }
+    method is-connected(--> Bool) { True }
+}
+
+my @sections;   # [ { name => Str, results => [ { label, ops-per-sec, us-per-op, iterations, ?concurrency } ] } ]
+my @current-results;
+my $current-name = '';
+
+sub section(Str $name) {
+    $current-name = $name;
+    @current-results = [];
+    say "\n== $name ==";
+}
+
+sub end-section() {
+    @sections.push({ name => $current-name, results => @current-results.map(*.Hash).Array });
+}
+
+sub bench(Str $label, Int $iterations, &block) {
+    # Warmup
+    for ^(min($iterations, 100)) { block() }
+
+    my $start = now;
+    for ^$iterations { block() }
+    my $elapsed = now - $start;
+
+    my $ops-per-sec = ($iterations / $elapsed).round(0.1);
+    my $us-per-op = (($elapsed / $iterations) * 1_000_000).round(0.1);
+    say sprintf("  %-50s %10s ops/s  %8s µs/op", $label, $ops-per-sec, $us-per-op);
+
+    @current-results.push: {
+        label => $label,
+        iterations => $iterations,
+        ops-per-sec => $ops-per-sec,
+        us-per-op => $us-per-op,
+    };
+}
+
+sub bench-concurrent(Str $label, Int $iterations, Int $concurrency, &block) {
+    my $start = now;
+    my @promises;
+    for ^$iterations {
+        @promises.push: start { block() };
+        if @promises.elems >= $concurrency {
+            await @promises;
+            @promises = [];
+        }
+    }
+    await @promises if @promises;
+    my $elapsed = now - $start;
+    my $ops = ($iterations / $elapsed).round(0.1);
+    say sprintf("  %-50s %10s ops/s  (concurrency=%d)", $label, $ops, $concurrency);
+
+    @current-results.push: {
+        label => $label,
+        iterations => $iterations,
+        ops-per-sec => $ops,
+        concurrency => $concurrency,
+    };
+}
+
+# ---------------------------------------------------------------------------
+# JSON-RPC message parsing
+# ---------------------------------------------------------------------------
+
+section("JSON-RPC message parsing");
+
+my $request-json = '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add","arguments":{"a":1,"b":2}}}';
+my $response-json = '{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"3"}],"isError":false}}';
+my $notification-json = '{"jsonrpc":"2.0","method":"notifications/initialized"}';
+
+bench("Parse request", 10_000, { parse-message($request-json) });
+bench("Parse response", 10_000, { parse-message($response-json) });
+bench("Parse notification", 10_000, { parse-message($notification-json) });
+end-section();
+
+# ---------------------------------------------------------------------------
+# JSON-RPC message serialization
+# ---------------------------------------------------------------------------
+
+section("JSON-RPC message serialization");
+
+my $req-obj = MCP::JSONRPC::Request.new(id => 1, method => 'tools/call', params => { name => 'add', arguments => { a => 1, b => 2 } });
+my $resp-obj = MCP::JSONRPC::Response.success(1, { content => [{ type => 'text', text => '3' }], isError => False });
+my $notif-obj = MCP::JSONRPC::Notification.new(method => 'notifications/initialized');
+
+bench("Serialize request", 10_000, { $req-obj.Hash });
+bench("Serialize response", 10_000, { $resp-obj.Hash });
+bench("Serialize notification", 10_000, { $notif-obj.Hash });
+end-section();
+
+# ---------------------------------------------------------------------------
+# Tool dispatch
+# ---------------------------------------------------------------------------
+
+section("Tool dispatch");
+
+my $transport = BenchTransport.new;
+my $server = MCP::Server::Server.new(
+    info => MCP::Types::Implementation.new(name => 'bench', version => '0.1'),
+    transport => $transport,
+);
+
+$server.add-tool(
+    name => 'add',
+    description => 'Add two numbers',
+    schema => { type => 'object', properties => { a => { type => 'number' }, b => { type => 'number' } } },
+    handler => -> :%params { %params<a> + %params<b> }
+);
+
+$server.add-tool(
+    name => 'echo',
+    description => 'Echo input',
+    schema => { type => 'object', properties => { text => { type => 'string' } } },
+    handler => -> :%params { %params<text> }
+);
+
+my $tool-req = MCP::JSONRPC::Request.new(
+    id => 1, method => 'tools/call',
+    params => { name => 'add', arguments => { a => 1, b => 2 } }
+);
+
+my $echo-req = MCP::JSONRPC::Request.new(
+    id => 2, method => 'tools/call',
+    params => { name => 'echo', arguments => { text => 'hello' } }
+);
+
+my $list-req = MCP::JSONRPC::Request.new(id => 3, method => 'tools/list');
+
+bench("Dispatch tools/call (add)", 5_000, {
+    $transport.sent = [];
+    $server.dispatch-request($tool-req);
+});
+
+bench("Dispatch tools/call (echo)", 5_000, {
+    $transport.sent = [];
+    $server.dispatch-request($echo-req);
+});
+
+bench("Dispatch tools/list", 5_000, {
+    $transport.sent = [];
+    $server.dispatch-request($list-req);
+});
+end-section();
+
+# ---------------------------------------------------------------------------
+# Concurrent tool dispatch
+# ---------------------------------------------------------------------------
+
+section("Concurrent tool dispatch");
+
+for (10, 50, 100) -> $concurrency {
+    bench-concurrent("Concurrent tools/call", 500, $concurrency, {
+        $server.dispatch-request($tool-req);
+    });
+}
+end-section();
+
+# ---------------------------------------------------------------------------
+# Resource read
+# ---------------------------------------------------------------------------
+
+section("Resource operations");
+
+$server.add-resource(
+    uri => 'bench://data',
+    name => 'Bench Data',
+    mimeType => 'text/plain',
+    reader => { 'benchmark payload' }
+);
+
+my $resource-req = MCP::JSONRPC::Request.new(
+    id => 4, method => 'resources/read',
+    params => { uri => 'bench://data' }
+);
+
+my $resource-list-req = MCP::JSONRPC::Request.new(id => 5, method => 'resources/list');
+
+bench("Dispatch resources/read", 5_000, {
+    $server.dispatch-request($resource-req);
+});
+
+bench("Dispatch resources/list", 5_000, {
+    $server.dispatch-request($resource-list-req);
+});
+end-section();
+
+# ---------------------------------------------------------------------------
+# Prompt operations
+# ---------------------------------------------------------------------------
+
+section("Prompt operations");
+
+$server.add-prompt(
+    name => 'greet',
+    description => 'Greeting prompt',
+    generator => -> :%params { 'Hello!' }
+);
+
+my $prompt-req = MCP::JSONRPC::Request.new(
+    id => 6, method => 'prompts/get',
+    params => { name => 'greet' }
+);
+
+my $prompt-list-req = MCP::JSONRPC::Request.new(id => 7, method => 'prompts/list');
+
+bench("Dispatch prompts/get", 5_000, {
+    $server.dispatch-request($prompt-req);
+});
+
+bench("Dispatch prompts/list", 5_000, {
+    $server.dispatch-request($prompt-list-req);
+});
+end-section();
+
+# ---------------------------------------------------------------------------
+# Write reports
+# ---------------------------------------------------------------------------
+
+say "\n== Benchmark complete ==\n";
+
+my $timestamp = DateTime.now.utc.truncated-to('minute');
+my $ts-str = $timestamp.yyyy-mm-dd ~ '-' ~ sprintf('%02d%02d', $timestamp.hour, $timestamp.minute);
+my $base = "bench/benchmark-report-$ts-str";
+
+# Markdown report
+my $md = "# Benchmark Report\n\n";
+$md ~= "**Date**: {$timestamp.yyyy-mm-dd} {sprintf('%02d:%02d', $timestamp.hour, $timestamp.minute)} UTC\n";
+$md ~= "**Raku**: {$*RAKU.compiler.version}\n\n";
+
+for @sections -> %s {
+    $md ~= "## %s<name>\n\n";
+    my $has-concurrency = %s<results>.first({ $_<concurrency>:exists });
+    if $has-concurrency {
+        $md ~= "| Benchmark | ops/s | Concurrency |\n";
+        $md ~= "| --------- | ----: | ----------: |\n";
+        for %s<results>.list -> $r {
+            $md ~= "| $r<label> | $r<ops-per-sec> | $r<concurrency> |\n";
+        }
+    } else {
+        $md ~= "| Benchmark | ops/s | µs/op |\n";
+        $md ~= "| --------- | ----: | ----: |\n";
+        for %s<results>.list -> $r {
+            $md ~= "| $r<label> | $r<ops-per-sec> | $r<us-per-op> |\n";
+        }
+    }
+    $md ~= "\n";
+}
+
+"$base.md".IO.spurt($md);
+say "Report: $base.md";
+
+# JSON report
+my %json = (
+    timestamp => ~$timestamp,
+    raku-version => ~$*RAKU.compiler.version,
+    sections => @sections.map(-> %s {
+        {
+            name => %s<name>,
+            results => %s<results>.list.map(-> $r { $r.Hash }).Array,
+        }
+    }).Array,
+);
+
+"$base.json".IO.spurt(to-json(%json, :sorted-keys));
+say "Report: $base.json";
