@@ -21,6 +21,58 @@ MCP::JSONRPC - JSON-RPC 2.0 message types and parsing helpers
 Provides lightweight JSON-RPC message types (Request/Response/Notification),
 standard error codes, and a parser that maps JSON strings to message objects.
 
+=head1 MESSAGE TYPES
+
+All message types do the C<Message> role and implement C<to-json(--> Str)>
+for serialization.
+
+=head2 Request
+
+A JSON-RPC request: C<.id>, C<.method>, C<.params>.
+
+    my $req = Request.new(id => 1, method => 'tools/call',
+        params => { name => 'add', arguments => { a => 1, b => 2 } });
+
+=head2 Response
+
+A JSON-RPC response: C<.id>, C<.result>, C<.error>.
+
+=head2 Notification
+
+A JSON-RPC notification (no id, no response expected): C<.method>, C<.params>.
+
+=head2 Error
+
+A JSON-RPC error object: C<.code>, C<.message>, C<.data>.
+
+=head1 FUNCTIONS
+
+=head2 sub parse-message(Str $json --> Message)
+
+Parse a JSON string into a typed message object (Request, Response, or
+Notification). Dies on invalid JSON-RPC.
+
+    my $msg = parse-message($json-string);
+
+=head1 ERROR CODES
+
+The C<ErrorCode> enum defines standard JSON-RPC error codes:
+
+=item C<ParseError> (-32700)
+=item C<InvalidRequest> (-32600)
+=item C<MethodNotFound> (-32601)
+=item C<InvalidParams> (-32602)
+=item C<InternalError> (-32603)
+
+=head1 UTILITIES
+
+=head2 IdGenerator
+
+Thread-safe auto-incrementing ID generator for request IDs.
+
+    my $gen = IdGenerator.new;
+    my $id = $gen.next;  # 1, 2, 3, ...
+
 =end pod
 
 use JSON::Fast;
