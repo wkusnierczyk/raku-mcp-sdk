@@ -1,0 +1,365 @@
+use v6.d;
+use Test;
+use lib 'lib';
+
+use MCP::Transport::SSE;
+use MCP::JSONRPC;
+use JSON::Fast;
+
+=begin pod
+=head1 NAME
+
+14-sse-transport.rakutest - Tests for legacy SSE transport
+
+=head1 DESCRIPTION
+
+Validates legacy HTTP+SSE transport (MCP spec 2024-11-05).
+
+=end pod
+
+my $cro-load-error;
+my $cro-client-class;
+my $cro-error-class;
+
+sub cro-available(--> Bool) {
+    $cro-load-error = Nil;
+    my $result = try {
+        $cro-client-class = (require ::('Cro::HTTP::Client'));
+        require ::('Cro::HTTP::Server');
+        $cro-error-class = ::('X::Cro::HTTP::Error');
+        True
+    };
+    if $! {
+        $cro-load-error = $!;
+        return False;
+    }
+    return $result // False;
+}
+
+unless cro-available() {
+    plan 1;
+    flunk 'Cro::HTTP available';
+    if $cro-load-error.defined {
+        diag "Cro load error: {$cro-load-error.^name}: {$cro-load-error.message}";
+        diag "Install Cro for this Raku: zef install Cro::HTTP";
+    }
+    done-testing;
+    exit;
+}
+
+my $port-base = 34000 + ($*PID % 500);
+my $port-counter = 0;
+
+sub next-port(--> Int) {
+    $port-base + $port-counter++
+}
+
+sub start-sse-server(|c --> Hash) {
+    my $transport;
+    my $port;
+    my $last-error;
+    for ^20 -> $i {
+        $port = next-port();
+        $transport = MCP::Transport::SSE::SSEServerTransport.new(
+            host => '127.0.0.1',
+            port => $port,
+            |c
+        );
+        my $ok = try {
+            $transport.start;
+            True
+        };
+        $last-error = $! if $!;
+        return { transport => $transport, port => $port } if $ok;
+    }
+    diag "Server start failed: {$last-error.^name}: {$last-error.message}" if $last-error;
+    {}
+}
+
+subtest 'Server sends endpoint event on SSE connection', sub {
+    my %server = start-sse-server();
+    unless %server<transport> {
+        skip 'No free port', 1;
+        return;
+    }
+    my $transport = %server<transport>;
+    my $port = %server<port>;
+
+    $transport.start;
+
+    my $client = $cro-client-class.new;
+    my $resp = await $client.get(
+        "http://127.0.0.1:$port/sse",
+        headers => [Accept => 'text/event-stream']
+    );
+
+    is $resp.status, 200, 'SSE endpoint returns 200';
+    my $ct = $resp.header('Content-Type') // '';
+    ok $ct.contains('text/event-stream'), 'Content-Type is text/event-stream';
+
+    my $got-endpoint = Promise.new;
+    my $buffer = '';
+    start {
+        react {
+            whenever $resp.body-byte-stream -> $chunk {
+                $buffer ~= $chunk.decode('utf-8');
+                if $buffer.contains("\n\n") {
+                    try $got-endpoint.keep($buffer);
+                    done;
+                }
+            }
+        }
+    }
+
+    await Promise.anyof($got-endpoint, Promise.in(5));
+    ok $got-endpoint.status ~~ Kept, 'received endpoint event';
+    if $got-endpoint.status ~~ Kept {
+        my $data = $got-endpoint.result;
+        ok $data.contains('event: endpoint'), 'event type is endpoint';
+        ok $data.contains("http://127.0.0.1:$port/message"), 'endpoint contains POST URL';
+    }
+
+    await $transport.close;
+    sleep 1;
+};
+
+subtest 'Client POST to message endpoint, server receives message', sub {
+    my %server = start-sse-server();
+    unless %server<transport> {
+        skip 'No free port', 1;
+        return;
+    }
+    my $transport = %server<transport>;
+    my $port = %server<port>;
+
+    my $incoming = $transport.start;
+    my $got = Promise.new;
+    $incoming.tap(-> $msg {
+        try $got.keep($msg);
+    });
+
+    my $sse-client = $cro-client-class.new;
+    my $post-client = $cro-client-class.new;
+
+    # Connect SSE first to establish the stream
+    start {
+        try {
+            my $sse-resp = await $sse-client.get(
+                "http://127.0.0.1:$port/sse",
+                headers => [Accept => 'text/event-stream']
+            );
+        }
+    }
+    sleep 1;
+
+    # POST a notification
+    my $resp = await $post-client.post(
+        "http://127.0.0.1:$port/message",
+        content-type => 'application/json',
+        body => '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+    );
+
+    await Promise.anyof($got, Promise.in(3));
+    ok $got.status ~~ Kept, 'server received notification';
+    is $resp.status, 202, 'notification returns 202';
+
+    await $transport.close;
+};
+
+subtest 'Server sends message events to client via SSE', sub {
+    my %server = start-sse-server();
+    unless %server<transport> {
+        skip 'No free port', 1;
+        return;
+    }
+    my $transport = %server<transport>;
+    my $port = %server<port>;
+
+    my $incoming = $transport.start;
+    $incoming.tap(-> $msg {
+        if $msg ~~ MCP::JSONRPC::Request {
+            my $resp = MCP::JSONRPC::Response.success($msg.id, {
+                protocolVersion => '2024-11-05',
+                capabilities => {},
+                serverInfo => { name => 'sse-srv', version => '0.1' }
+            });
+            $transport.send($resp);
+        }
+    });
+
+    my $sse-client = $cro-client-class.new;
+    my $post-client = $cro-client-class.new;
+    my $sse-resp = await $sse-client.get(
+        "http://127.0.0.1:$port/sse",
+        headers => [Accept => 'text/event-stream']
+    );
+
+    # Collect SSE events
+    my $got-message = Promise.new;
+    my $buffer = '';
+    my $endpoint-seen = False;
+    start {
+        react {
+            whenever $sse-resp.body-byte-stream -> $chunk {
+                $buffer ~= $chunk.decode('utf-8');
+                loop {
+                    my $idx = $buffer.index("\n\n");
+                    last unless $idx.defined;
+                    my $event-block = $buffer.substr(0, $idx);
+                    $buffer = $buffer.substr($idx + 2);
+                    if $event-block.contains('event: endpoint') {
+                        $endpoint-seen = True;
+                    } elsif $event-block.contains('event: message') {
+                        try $got-message.keep($event-block);
+                        done;
+                    }
+                }
+            }
+        }
+    }
+
+    # Wait for endpoint event
+    sleep 0.5;
+
+    # POST a request
+    my $post-resp = await $post-client.post(
+        "http://127.0.0.1:$port/message",
+        content-type => 'application/json',
+        body => '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"cli","version":"0.1"}}}'
+    );
+
+    is $post-resp.status, 202, 'request POST returns 202';
+
+    await Promise.anyof($got-message, Promise.in(5));
+    ok $got-message.status ~~ Kept, 'received message event via SSE';
+    if $got-message.status ~~ Kept {
+        my $event = $got-message.result;
+        ok $event.contains('event: message'), 'event type is message';
+        ok $event.contains('"jsonrpc"'), 'contains JSON-RPC data';
+    }
+
+    await $transport.close;
+};
+
+subtest 'Request/response flow via SSE client transport', sub {
+    my %server = start-sse-server();
+    unless %server<transport> {
+        skip 'No free port', 1;
+        return;
+    }
+    my $server = %server<transport>;
+    my $port = %server<port>;
+
+    my $server-incoming = $server.start;
+    $server-incoming.tap(-> $msg {
+        if $msg ~~ MCP::JSONRPC::Request {
+            my $resp = MCP::JSONRPC::Response.success($msg.id, {
+                protocolVersion => '2024-11-05',
+                capabilities => {},
+                serverInfo => { name => 'sse-srv', version => '0.1' }
+            });
+            $server.send($resp);
+        }
+    });
+
+    my $client-transport = MCP::Transport::SSE::SSEClientTransport.new(
+        url => "http://127.0.0.1:$port/sse"
+    );
+
+    my $client-incoming = $client-transport.start;
+    my $got-response = Promise.new;
+    $client-incoming.tap(-> $msg {
+        try $got-response.keep($msg);
+    });
+
+    # Wait for endpoint to be received
+    my $tries = 0;
+    while !$client-transport.is-connected && $tries < 50 {
+        sleep 0.1;
+        $tries++;
+    }
+    ok $client-transport.is-connected, 'client connected and received endpoint';
+
+    my $req = MCP::JSONRPC::Request.new(
+        id => 42,
+        method => 'initialize',
+        params => {
+            protocolVersion => '2024-11-05',
+            capabilities => {},
+            clientInfo => { name => 'test-client', version => '0.1' }
+        }
+    );
+    await $client-transport.send($req);
+
+    await Promise.anyof($got-response, Promise.in(5));
+    ok $got-response.status ~~ Kept, 'client received response via SSE';
+
+    if $got-response.status ~~ Kept {
+        my $msg = $got-response.result;
+        isa-ok $msg, MCP::JSONRPC::Response, 'response is correct type';
+        is $msg.id, 42, 'response has matching id';
+    }
+
+    await $client-transport.close;
+    await $server.close;
+};
+
+subtest 'Server close behavior', sub {
+    my %server = start-sse-server();
+    unless %server<transport> {
+        skip 'No free port', 1;
+        return;
+    }
+    my $transport = %server<transport>;
+
+    $transport.start;
+
+    await $transport.close;
+    nok $transport.is-connected, 'not connected after close';
+};
+
+subtest 'Origin validation', sub {
+    my %server = start-sse-server(allowed-origins => ['http://allowed.example.com']);
+    unless %server<transport> {
+        skip 'No free port', 1;
+        return;
+    }
+    my $transport = %server<transport>;
+    my $port = %server<port>;
+
+    $transport.start;
+
+    my $client = $cro-client-class.new;
+
+    # Request with disallowed origin
+    my $resp;
+    try {
+        $resp = await $client.post(
+            "http://127.0.0.1:$port/message",
+            headers => [Origin => 'http://evil.example.com'],
+            content-type => 'application/json',
+            body => '{"jsonrpc":"2.0","method":"ping"}'
+        );
+        CATCH {
+            when $cro-error-class {
+                $resp = .response;
+            }
+        }
+    }
+
+    is $resp.status, 403, 'disallowed origin returns 403';
+
+    # Request with allowed origin on SSE
+    my $sse-resp = await $client.get(
+        "http://127.0.0.1:$port/sse",
+        headers => [
+            Accept => 'text/event-stream',
+            Origin => 'http://allowed.example.com'
+        ]
+    );
+    is $sse-resp.status, 200, 'allowed origin accepted on SSE';
+
+    await $transport.close;
+};
+
+done-testing;
