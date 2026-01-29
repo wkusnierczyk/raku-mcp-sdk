@@ -18,7 +18,7 @@
 PROJECT_NAME    := MCP
 PROJECT_TITLE   := Raku MCP SDK
 PROJECT_DESC    := Raku Implementation of the Model Context Protocol
-VERSION         := 0.28.3
+VERSION         := 0.28.4
 DEVELOPER_NAME  := Waclaw Kusnierczyk
 DEVELOPER_EMAIL := waclaw.kusnierczyk@gmail.com
 SOURCE_URL      := https://github.com/wkusnierczyk/raku-mcp-sdk
