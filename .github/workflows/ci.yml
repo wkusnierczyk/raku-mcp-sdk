@@ -117,3 +117,51 @@ jobs:
         run: |
           raku -I. t/01-types.rakutest
           raku -I. t/02-jsonrpc.rakutest
+
+  # ----------------------------------------------------------------------------
+  # Coverage Job - Generate coverage report and enforce threshold
+  # ----------------------------------------------------------------------------
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Raku
+        uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ env.RAKU_VERSION }}
+
+      - name: Cache Raku dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.raku
+            ~/.zef
+          key: raku-coverage-${{ runner.os }}-${{ env.RAKU_VERSION }}-${{ hashFiles('META6.json') }}
+          restore-keys: |
+            raku-coverage-${{ runner.os }}-${{ env.RAKU_VERSION }}-
+            raku-coverage-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: |
+          zef install --deps-only . --/test
+          zef install App::Prove6 || true
+          zef install App::RaCoCo || true
+
+      - name: Generate coverage report and check threshold
+        run: |
+          THRESHOLD=70
+          OUTPUT=$(make coverage 2>&1)
+          echo "$OUTPUT"
+          COVERAGE=$(echo "$OUTPUT" | grep -oP 'Coverage: \K[0-9.]+' || echo "0")
+          echo "Coverage: ${COVERAGE}%" >&2
+          echo "Threshold: ${THRESHOLD}%" >&2
+          if [ "$(echo "$COVERAGE < $THRESHOLD" | bc -l)" -eq 1 ]; then
+            echo "::error::Coverage ${COVERAGE}% is below threshold ${THRESHOLD}%"
+            exit 1
+          fi
+          echo "✓ Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%" >&2
