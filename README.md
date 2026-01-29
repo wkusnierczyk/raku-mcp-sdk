@@ -16,10 +16,7 @@
 
 ## Status
 
-Raku MCP SDK is **work in progress** (WIP).
-
-- See [Gap Analysis](GAP_ANALYSIS.md) for details on implemented and missing features.
-- See [MCP specification](https://modelcontextprotocol.io/specification/2025-11-25) for a full list of requirements.
+Raku MCP SDK provides comprehensive coverage of the [MCP specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25). See the [Gap Analysis](GAP_ANALYSIS.md) for details.
 
 ### Implementation progress
 
@@ -44,7 +41,8 @@ Raku MCP SDK is **work in progress** (WIP).
 | Extensions framework | ✅ Done (experimental) | Negotiation via `experimental` capabilities + extension method routing |
 | Completion | ✅ Done | Prompt and resource autocomplete with handler registration |
 | Tool output schemas | ✅ Done | `outputSchema` and `structuredContent` for structured results |
-| Tool metadata | ⚠️ Partial | Tool name validation (SEP-986); icon metadata planned |
+| Resource templates | ✅ Done | URI templates with pattern matching and builder API |
+| Tool metadata | ⚠️ Partial | Tool name validation (SEP-986); icon metadata not yet implemented |
 | OAuth 2.1 | ✅ Done | PKCE, token management, server validation, metadata discovery, dynamic client registration, M2M client credentials, enterprise IdP (SEP-990) |
 
 ## Table of contents
@@ -154,7 +152,7 @@ Raku is a "sleeper" choice for specific AI domains, particularly those involving
 zef install MCP
 
 # From source
-git clone https://github.com/your-username/raku-mcp-sdk
+git clone https://github.com/wkusnierczyk/raku-mcp-sdk
 cd raku-mcp-sdk
 zef install .
 ```
@@ -515,7 +513,8 @@ MCP/
 │   ├── Transport/
 │   │   ├── Base.rakumod            # Transport role
 │   │   ├── Stdio.rakumod           # Stdio transport
-│   │   └── StreamableHTTP.rakumod  # HTTP transport with SSE
+│   │   ├── StreamableHTTP.rakumod  # HTTP transport with SSE
+│   │   └── SSE.rakumod             # Legacy SSE transport (2024-11-05)
 │   ├── OAuth.rakumod               # OAuth 2.1 types, PKCE, exceptions
 │   ├── OAuth/
 │   │   ├── Client.rakumod          # Client-side OAuth flow
@@ -573,7 +572,7 @@ Building this repository was supported by:
 $ make about
 
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
-├─ version:    0.26.0
+├─ version:    0.26.1
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT
