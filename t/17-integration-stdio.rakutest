@@ -1,0 +1,224 @@
+use v6.d;
+use lib 'lib';
+use Test;
+use JSON::Fast;
+
+plan 7;
+
+# ---------------------------------------------------------------------------
+# Spawn a minimal MCP server as a subprocess over stdio
+# ---------------------------------------------------------------------------
+
+# Write a minimal server to a temp file (avoids quoting issues with -e)
+my $server-script = $*TMPDIR.add('mcp-integration-server.raku');
+$server-script.spurt(q:to/SERVER/);
+use v6.d;
+use lib 'lib';
+use MCP::Types;
+use MCP::Server;
+use MCP::Transport::Stdio;
+
+my $server = MCP::Server::Server.new(
+    info => MCP::Types::Implementation.new(name => 'test-server', version => '0.1'),
+    transport => MCP::Transport::Stdio::StdioTransport.new,
+);
+
+$server.add-tool(
+    name => 'add',
+    description => 'Add two numbers',
+    schema => { type => 'object', properties => { a => { type => 'number' }, b => { type => 'number' } }, required => ['a', 'b'] },
+    handler => -> :%params { "Result: {%params<a> + %params<b>}" }
+);
+
+$server.add-resource(
+    uri => 'test://hello',
+    name => 'Hello',
+    mimeType => 'text/plain',
+    reader => { 'Hello from integration test!' }
+);
+
+my %prompt-arg = name => 'name', required => True;
+$server.add-prompt(
+    name => 'greet',
+    description => 'Greet someone',
+    arguments => [%prompt-arg,],
+    generator => -> :%params {
+        [MCP::Types::PromptMessage.new(
+            role => 'user',
+            content => MCP::Types::TextContent.new(text => "Hello, %params<name>!")
+        )]
+    }
+);
+
+await $server.serve;
+SERVER
+
+my $proc = Proc::Async.new(:w, 'raku', $server-script.Str);
+$proc.stderr.tap(-> $ {});
+
+my $raw-buf = Buf.new;
+my $buf-lock = Lock.new;
+my $data-ready = Supplier.new;
+
+$proc.stdout(:bin).tap(-> $chunk {
+    $buf-lock.protect: { $raw-buf.append($chunk) };
+    $data-ready.emit(True);
+});
+
+my $proc-promise = $proc.start;
+sleep 2;  # Let the server compile and start up
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+my $next-id = 0;
+
+sub send-jsonrpc(%msg) {
+    %msg<jsonrpc> = '2.0';
+    my $json = to-json(%msg, :sorted-keys);
+    my $encoded = $json.encode('utf-8');
+    # Trailing \n needed: StdioTransport reads line-by-line via .get
+    $proc.print("Content-Length: {$encoded.elems}\r\n\r\n$json\n");
+}
+
+sub recv-jsonrpc(--> Hash) {
+    my $deadline = now + 15;
+    loop {
+        $buf-lock.protect: {
+            my $buf = $raw-buf.decode('utf-8');
+            my $cl-pos = $buf.index('Content-Length:');
+            if $cl-pos.defined {
+                $buf = $buf.substr($cl-pos) if $cl-pos > 0;
+                if $buf ~~ /^'Content-Length:' \h* (\d+) \r\n\r\n/ {
+                    my $length = $0.Int;
+                    my $header-end = $buf.index("\r\n\r\n");
+                    my $body-start = $header-end + 2;  # \r\n is 1 grapheme in Raku
+                    my $body = $buf.substr($body-start);
+                    if $body.encode('utf-8').elems >= $length {
+                        my $json = $body.substr(0, $length);
+                        my $consumed = ($cl-pos + $body-start + $length);
+                        my $full = $raw-buf.decode('utf-8');
+                        my $rest = $full.substr($consumed);
+                        $raw-buf = Buf.new($rest.encode('utf-8'));
+                        return from-json($json);
+                    }
+                }
+            }
+        };
+        if now > $deadline {
+            die "Timeout waiting for JSON-RPC response";
+        }
+        await Promise.anyof(
+            $data-ready.Supply.head(1).Promise,
+            Promise.in(0.1),
+        );
+    }
+}
+
+sub request(Str $method, $params? --> Hash) {
+    my $id = ++$next-id;
+    my %msg = id => $id, method => $method;
+    %msg<params> = $_ with $params;
+    send-jsonrpc(%msg);
+    recv-jsonrpc();
+}
+
+sub notify(Str $method, $params?) {
+    my %msg = method => $method;
+    %msg<params> = $_ with $params;
+    send-jsonrpc(%msg);
+}
+
+# ---------------------------------------------------------------------------
+# 1. Initialize
+# ---------------------------------------------------------------------------
+
+subtest 'Initialize handshake', {
+    plan 3;
+    my $resp = request('initialize', {
+        protocolVersion => '2025-11-25',
+        capabilities => {},
+        clientInfo => { name => 'integration-test', version => '0.1' },
+    });
+    ok $resp<result>.defined, 'got initialize result';
+    ok $resp<result><serverInfo><name> eq 'test-server', 'server name matches';
+    ok $resp<result><capabilities><tools>.defined, 'tools capability present';
+
+    notify('notifications/initialized');
+}
+
+# ---------------------------------------------------------------------------
+# 2. List tools
+# ---------------------------------------------------------------------------
+
+subtest 'List tools', {
+    plan 2;
+    my $resp = request('tools/list');
+    my @names = $resp<result><tools>.map(*<name>).sort;
+    ok @names.elems >= 1, "at least 1 tool (got {@names.elems})";
+    ok 'add' (elem) @names, 'add tool listed';
+}
+
+# ---------------------------------------------------------------------------
+# 3. Call tool
+# ---------------------------------------------------------------------------
+
+subtest 'Call tool (add 7 + 3)', {
+    plan 2;
+    my $resp = request('tools/call', { name => 'add', arguments => { a => 7, b => 3 } });
+    ok $resp<result>.defined, 'got call result';
+    ok $resp<result><content>[0]<text>.contains('10'),
+        "result contains 10 (got: {$resp<result><content>[0]<text>})";
+}
+
+# ---------------------------------------------------------------------------
+# 4. List resources
+# ---------------------------------------------------------------------------
+
+subtest 'List resources', {
+    plan 2;
+    my $resp = request('resources/list');
+    my @uris = $resp<result><resources>.map(*<uri>).sort;
+    ok @uris.elems >= 1, "at least 1 resource (got {@uris.elems})";
+    ok 'test://hello' (elem) @uris, 'hello resource listed';
+}
+
+# ---------------------------------------------------------------------------
+# 5. Read resource
+# ---------------------------------------------------------------------------
+
+subtest 'Read resource', {
+    plan 2;
+    my $resp = request('resources/read', { uri => 'test://hello' });
+    ok $resp<result><contents>.elems > 0, 'got resource contents';
+    ok $resp<result><contents>[0]<text>.contains('Hello'),
+        "content contains Hello (got: {$resp<result><contents>[0]<text>})";
+}
+
+# ---------------------------------------------------------------------------
+# 6. Get prompt
+# ---------------------------------------------------------------------------
+
+subtest 'Get prompt', {
+    plan 2;
+    my $resp = request('prompts/get', { name => 'greet', arguments => { name => 'World' } });
+    ok $resp<result><messages>.elems > 0, 'got prompt messages';
+    ok $resp<result><messages>[0]<content><text>.contains('World'), 'prompt mentions World';
+}
+
+# ---------------------------------------------------------------------------
+# 7. Ping
+# ---------------------------------------------------------------------------
+
+subtest 'Ping', {
+    plan 1;
+    my $resp = request('ping');
+    ok $resp<result>.defined, 'ping returned a result';
+}
+
+# ---------------------------------------------------------------------------
+# Cleanup
+# ---------------------------------------------------------------------------
+
+$proc.kill(SIGTERM);
