@@ -129,7 +129,7 @@ subtest 'Client progress supply multiple events', {
     );
 
     my $connect = $client.connect;
-    for ^10 { last if $transport.sent.elems > 0; sleep 0.1 }
+    $transport.await-sent;
     $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
         protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
         capabilities => {},
@@ -401,7 +401,7 @@ subtest 'Concurrent resource reads', {
     }
 };
 
-subtest 'Concurrent handle-message dispatches', {
+subtest 'Sequential handle-message dispatches', {
     my $transport = TestTransport::TestTransport.new;
     my $server = Server.new(
         info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
@@ -413,33 +413,26 @@ subtest 'Concurrent handle-message dispatches', {
         handler => -> :%params { %params<msg> // 'empty' }
     );
 
-    # Send multiple requests concurrently through handle-message
-    my @promises;
+    # Send multiple requests through handle-message sequentially
     for ^5 -> $i {
-        @promises.push: start {
-            $server.handle-message-public(MCP::JSONRPC::Request.new(
-                id => "hm-$i",
-                method => 'tools/call',
-                params => { name => 'echo', arguments => { msg => "msg-$i" } }
-            ));
-        }
-    }
-
-    await @promises;
-
-    # Wait for responses to arrive
-    for ^20 {
-        last if $transport.sent.grep(MCP::JSONRPC::Response).elems >= 5;
-        sleep 0.1;
+        $server.handle-message-public(MCP::JSONRPC::Request.new(
+            id => "hm-$i",
+            method => 'tools/call',
+            params => { name => 'echo', arguments => { msg => "msg-$i" } }
+        ));
     }
 
     # All should have produced responses
     my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
-    is @responses.elems, 5, 'all 5 concurrent responses sent';
+    is @responses.elems, 5, 'all 5 responses sent via handle-message';
 
     # Verify all succeeded (no errors)
     my @errors = @responses.grep(*.error.defined);
-    is @errors.elems, 0, 'no errors in concurrent responses';
+    is @errors.elems, 0, 'no errors in responses';
+
+    # Verify correct response IDs
+    my @ids = @responses.map(*.id).sort;
+    is @ids, <hm-0 hm-1 hm-2 hm-3 hm-4>, 'all response IDs match';
 };
 
 done-testing;

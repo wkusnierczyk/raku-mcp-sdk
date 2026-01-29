@@ -42,4 +42,15 @@ class TestTransport does MCP::Transport::Base::Transport is export {
     method clear-sent() {
         @!sent = ();
     }
+
+    #| Wait until at least $n messages have been sent (default 1).
+    #| Returns True if condition met, False on timeout.
+    method await-sent(Int $n = 1, Num :$timeout = 5e0 --> Bool) {
+        my $deadline = now + $timeout;
+        while now < $deadline {
+            return True if @!sent.elems >= $n;
+            sleep 0.05;
+        }
+        @!sent.elems >= $n
+    }
 }
