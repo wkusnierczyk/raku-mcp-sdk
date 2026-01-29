@@ -1,0 +1,164 @@
+use v6.d;
+use lib 'lib';
+use Test;
+
+need MCP::JSONRPC;
+my &parse-message = &MCP::JSONRPC::EXPORT::DEFAULT::parse-message;
+
+plan 8;
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+sub fuzz-survives(Str $input, Str $label) {
+    lives-ok {
+        try { parse-message($input); CATCH { default { } } }
+    }, $label;
+}
+
+sub fuzz-batch(@inputs, Str $label) {
+    subtest $label, {
+        plan +@inputs;
+        for @inputs.kv -> $i, $input {
+            fuzz-survives($input, "$label [$i]");
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# 1. Completely invalid JSON
+# ---------------------------------------------------------------------------
+
+fuzz-batch([
+    '',
+    ' ',
+    '{',
+    '}',
+    '{{}}',
+    '[1,2,3]',
+    'null',
+    '"hello"',
+    '12345',
+    'true',
+    'undefined',
+    "\x0",
+    "\n\n\n",
+    '{key: value}',
+    '{"truncated": ',
+    '{"nested": {"deep": {"deeper": ',
+    '{' ~ 'a' x 10000 ~ '}',
+], 'Invalid JSON survives without crash');
+
+# ---------------------------------------------------------------------------
+# 2. Valid JSON, missing jsonrpc field
+# ---------------------------------------------------------------------------
+
+fuzz-batch([
+    '{}',
+    '{"id": 1}',
+    '{"method": "test"}',
+    '{"id": 1, "method": "test"}',
+    '{"result": 42}',
+    '{"id": 1, "result": 42}',
+    '{"jsonrp": "2.0", "id": 1, "method": "test"}',
+], 'Missing jsonrpc field');
+
+# ---------------------------------------------------------------------------
+# 3. Wrong jsonrpc version
+# ---------------------------------------------------------------------------
+
+fuzz-batch([
+    '{"jsonrpc": "1.0", "id": 1, "method": "test"}',
+    '{"jsonrpc": "3.0", "id": 1, "method": "test"}',
+    '{"jsonrpc": "", "id": 1, "method": "test"}',
+    '{"jsonrpc": null, "id": 1, "method": "test"}',
+    '{"jsonrpc": 2, "id": 1, "method": "test"}',
+    '{"jsonrpc": true, "id": 1, "method": "test"}',
+    '{"jsonrpc": ["2.0"], "id": 1, "method": "test"}',
+    '{"jsonrpc": {"v": "2.0"}, "id": 1, "method": "test"}',
+], 'Wrong jsonrpc version');
+
+# ---------------------------------------------------------------------------
+# 4. Ambiguous or malformed message structure
+# ---------------------------------------------------------------------------
+
+fuzz-batch([
+    '{"jsonrpc": "2.0"}',
+    '{"jsonrpc": "2.0", "id": 1}',
+    '{"jsonrpc": "2.0", "extra": "field"}',
+    '{"jsonrpc": "2.0", "method": "test", "result": 42}',
+    '{"jsonrpc": "2.0", "method": "test", "error": {"code": -1, "message": "e"}}',
+    '{"jsonrpc": "2.0", "id": 1, "result": 42, "error": {"code": -1, "message": "e"}}',
+], 'Ambiguous message structure');
+
+# ---------------------------------------------------------------------------
+# 5. Type confusion on standard fields
+# ---------------------------------------------------------------------------
+
+fuzz-batch([
+    '{"jsonrpc": "2.0", "id": null, "method": "test"}',
+    '{"jsonrpc": "2.0", "id": true, "method": "test"}',
+    '{"jsonrpc": "2.0", "id": [1], "method": "test"}',
+    '{"jsonrpc": "2.0", "id": {}, "method": "test"}',
+    '{"jsonrpc": "2.0", "id": 1, "method": 123}',
+    '{"jsonrpc": "2.0", "id": 1, "method": null}',
+    '{"jsonrpc": "2.0", "id": 1, "method": true}',
+    '{"jsonrpc": "2.0", "id": 1, "method": "test", "params": "not-an-object"}',
+    '{"jsonrpc": "2.0", "id": 1, "method": "test", "params": [1,2,3]}',
+    '{"jsonrpc": "2.0", "id": 1, "method": "test", "params": null}',
+    '{"jsonrpc": "2.0", "id": 1, "result": 42, "error": null}',
+], 'Type confusion on fields');
+
+# ---------------------------------------------------------------------------
+# 6. Adversarial strings in field values
+# ---------------------------------------------------------------------------
+
+fuzz-batch([
+    '{"jsonrpc": "2.0", "id": 1, "method": ""}',
+    '{"jsonrpc": "2.0", "id": 1, "method": "' ~ 'A' x 10000 ~ '"}',
+    '{"jsonrpc": "2.0", "id": 1, "method": "../../../etc/passwd"}',
+    '{"jsonrpc": "2.0", "id": 1, "method": "test", "params": {"key": "' ~ 'B' x 100000 ~ '"}}',
+    '{"jsonrpc": "2.0", "id": 1, "method": "test", "params": {"a": {"b": {"c": {"d": {"e": "deep"}}}}}}',
+    '{"jsonrpc": "2.0", "id": 99999999999999999999, "method": "test"}',
+    '{"jsonrpc": "2.0", "id": -1, "method": "test"}',
+    '{"jsonrpc": "2.0", "id": 1.5, "method": "test"}',
+    '{"jsonrpc": "2.0", "id": 1, "method": "test\ninjection"}',
+    '{"jsonrpc": "2.0", "id": 1, "method": "<script>alert(1)</script>"}',
+], 'Adversarial field values');
+
+# ---------------------------------------------------------------------------
+# 7. Randomized payloads
+# ---------------------------------------------------------------------------
+
+subtest 'Randomized payloads', {
+    my $count = 100;
+    plan $count;
+
+    my @chars = flat('a'..'z', 'A'..'Z', '0'..'9', '{', '}', '"', ':', ',', ' ', '[', ']');
+    for ^$count -> $i {
+        my $len = (1..200).pick;
+        my $payload = (^$len).map({ @chars.pick }).join;
+        fuzz-survives($payload, "random payload [$i]");
+    }
+}
+
+# ---------------------------------------------------------------------------
+# 8. Valid messages still parse correctly after fuzz barrage
+# ---------------------------------------------------------------------------
+
+subtest 'Valid messages parse correctly after fuzz barrage', {
+    plan 4;
+
+    my $req = parse-message('{"jsonrpc": "2.0", "id": 1, "method": "test", "params": {"a": 1}}');
+    isa-ok $req, MCP::JSONRPC::Request, 'Request parses';
+
+    my $notif = parse-message('{"jsonrpc": "2.0", "method": "notify"}');
+    isa-ok $notif, MCP::JSONRPC::Notification, 'Notification parses';
+
+    my $resp = parse-message('{"jsonrpc": "2.0", "id": 1, "result": {"ok": true}}');
+    isa-ok $resp, MCP::JSONRPC::Response, 'Response with result parses';
+
+    my $err = parse-message('{"jsonrpc": "2.0", "id": 1, "error": {"code": -32600, "message": "Invalid"}}');
+    isa-ok $err, MCP::JSONRPC::Response, 'Response with error parses';
+}
