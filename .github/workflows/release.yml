@@ -344,9 +344,8 @@ jobs:
             raku-${{ runner.os }}-${{ env.RAKU_VERSION }}-
             raku-${{ runner.os }}-
 
-      - name: Install fez and HTTP dependency
+      - name: Install fez
         run: |
-          zef install Cro::HTTP || zef install HTTP::Tiny
           zef install fez
 
       - name: Configure fez
@@ -360,6 +359,18 @@ jobs:
 
           printf '%s' "$FEZ_CONFIG" > ~/.fez-config.json
           chmod 600 ~/.fez-config.json
+
+          # Ensure fez has a working HTTP requestor (curl is pre-installed on ubuntu)
+          # Fez discovers requestors at install time; the config may lack them
+          raku -MJSON::Fast -e '
+            my $path = $*HOME.add(".fez-config.json");
+            my %cfg = from-json($path.slurp);
+            unless %cfg<requestors> && %cfg<requestors>.elems > 0 {
+              %cfg<requestors> = ["Fez::Util::Curl"];
+              $path.spurt(to-json(%cfg, :sorted-keys));
+              note "✓ Added Fez::Util::Curl requestor to fez config";
+            }
+          '
 
       - name: Publish to Zef ecosystem
         env:
