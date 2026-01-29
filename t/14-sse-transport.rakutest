@@ -111,7 +111,11 @@ subtest 'Server sends endpoint event on SSE connection', sub {
         }
     }
 
-    await Promise.anyof($got-endpoint, Promise.in(10));
+    my $tries = 0;
+    while $got-endpoint.status ~~ Planned && $tries < 100 {
+        sleep 0.2;
+        $tries++;
+    }
     ok $got-endpoint.status ~~ Kept, 'received endpoint event';
     if $got-endpoint.status ~~ Kept {
         my $data = $got-endpoint.result;
