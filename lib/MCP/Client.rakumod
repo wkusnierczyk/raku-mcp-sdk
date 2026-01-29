@@ -78,14 +78,8 @@ class Client is export {
             # Start transport and message handling
             $!incoming = $!transport.start;
 
-            # Start message handler in background
-            start {
-                react {
-                    whenever $!incoming -> $msg {
-                        self!handle-message($msg);
-                    }
-                }
-            }
+            # Tap incoming messages before sending any requests
+            $!incoming.tap(-> $msg { self!handle-message($msg) });
 
             # Perform initialization handshake
             await self!initialize;
