@@ -572,7 +572,7 @@ Contributions are welcome. You can:
 > * Merging into `main` of stalled pull requests is <strong style="color: red;">disallowed</strong>.  
 >   You need to merge `main` into your branch, or rebase your branch onto `main` before being able to merge into `main`.
 > * Merging into `main` with the whole multi-commit history of your branch is <strong style="color: red;">disallowed</strong>.  
->   You can only squash-merge as one commit, with a detailed description of your changes.
+>   You can only **squash-merge** as one commit, with a detailed description of your changes.
 
 
 ## Quality and roadmap
