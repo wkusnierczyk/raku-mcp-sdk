@@ -2,15 +2,31 @@
 
 All notable changes to the Raku MCP SDK are documented in this file.
 
+## [0.32.0] - 2026-01-29
+
+### Added
+- End-to-end integration test over stdio (`t/17-integration-stdio.rakutest`): spawns MCP server subprocess, tests full protocol lifecycle
+
+### Fixed
+- Fez publish in release workflow: use `jq` instead of `raku -MJSON::Fast` for config patching (JSON::Fast not in default lib path on CI runners)
+
+## [0.31.0] - 2026-01-29
+
+### Added
+- Fuzz testing for JSON-RPC parsing (`t/16-fuzz-jsonrpc.rakutest`): invalid JSON, type confusion, adversarial values, 100 randomized payloads
+- Stress tests for concurrent operations (`make stress`)
+- Project governance: SECURITY.md, CODE_OF_CONDUCT.md, issue/PR templates, README badges
+- ARCHITECTURE.md prose walkthrough of module structure, data flow, and concurrency model
+- Expanded perldoc on all 15 public API modules
+- CHANGELOG.md
+
+### Fixed
+- Fez publish in release workflow: inject `Fez::Util::Curl` requestor into fez config when missing
+
 ## [0.29.0] - 2026-01-29
 
 ### Added
 - Performance benchmarks: JSON-RPC parsing/serialization throughput, dispatch latency, concurrent scaling (`make benchmark`)
-- Stress tests: concurrent tool calls, resource reads, mixed operations, slow handler saturation, high concurrency bursts (`make stress`)
-- SECURITY.md with responsible disclosure policy
-- CODE_OF_CONDUCT.md (Contributor Covenant v2.1)
-- GitHub issue and PR templates
-- README badges (CI status, zef, license)
 - Configurable scheme on SSE transport (no longer hardcoded to HTTP)
 
 ### Fixed
@@ -20,7 +36,6 @@ All notable changes to the Raku MCP SDK are documented in this file.
 - Handler exceptions sanitized before sending to clients (no longer leaks internal details)
 - PKCE verifier cleared from memory immediately after token exchange (single-use per RFC 7636)
 - Bumped Rakudo from 2024.01 to 2024.12 in CI and release workflows
-- Fixed release workflow fez publish (install Cro::HTTP before fez)
 
 ### Changed
 - CI now includes coverage job with 70% threshold
