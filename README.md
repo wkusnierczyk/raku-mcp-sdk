@@ -424,6 +424,7 @@ make test        # Run test suite
     <tr><td><code>test-file</code></td><td>Run a specific test file</td><td><code>FILE=t/01-types.rakutest</code></td></tr>
     <tr><td><code>test-quick</code></td><td>Run tests without build</td><td>Skips <code>build</code></td></tr>
     <tr><td><code>coverage</code></td><td>Generate coverage report</td><td>HTML in <code>coverage-report/report.html</code>, raw data in <code>.racoco/</code></td></tr>
+    <tr><td><code>benchmark</code></td><td>Run performance benchmarks</td><td>Parsing, dispatch, concurrency</td></tr>
     <tr><th colspan="3" align="left">Documentation</th></tr>
     <tr><td><code>docs</code></td><td>Generate text docs into <code>docs/</code></td><td>Uses <code>raku --doc=Text</code> per module</td></tr>
     <tr><td><code>docs-serve</code></td><td>Serve docs (placeholder)</td><td>Not implemented</td></tr>

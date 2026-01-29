@@ -17,6 +17,7 @@ make test-file FILE=t/03-builders.rakutest  # Run specific test
 make lint             # Run syntax and META6.json validation
 make check            # Run lint and tests together
 make coverage         # Generate test coverage report
+make benchmark        # Run performance benchmarks
 make run-example EXAMPLE=simple-server      # Run example server
 make repl             # Start REPL with project loaded
 make benchmark        # Run performance benchmarks
