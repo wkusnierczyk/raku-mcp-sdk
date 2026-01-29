@@ -67,12 +67,14 @@ class Server is export {
 
     # In-flight request tracking for cancellation support
     has %!in-flight-requests;  # id => { cancelled => Bool }
+    has Lock $!flight-lock = Lock.new;
 
     # Resource subscriptions tracking
     has %!subscriptions;  # uri => True (SetHash-like)
 
     # Task registry
     has %!tasks;  # taskId => { task => Task, promise => Promise, result => Any }
+    has Lock $!task-lock = Lock.new;
     has Int $!default-poll-interval = 1000;
 
     # Extension registry
@@ -318,7 +320,7 @@ class Server is export {
     #| Handle incoming request
     method !handle-request(MCP::JSONRPC::Request $req) {
         # Track this request as in-flight (for cancellation support)
-        %!in-flight-requests{$req.id} = { cancelled => False };
+        $!flight-lock.protect: { %!in-flight-requests{$req.id} = { cancelled => False } };
 
         my $result;
         my $error;
@@ -340,10 +342,12 @@ class Server is export {
         }
 
         # Check if request was cancelled - don't send response if so
-        if %!in-flight-requests{$req.id}<cancelled> {
+        my $cancelled = $!flight-lock.protect: {
+            my $c = %!in-flight-requests{$req.id}<cancelled>;
             %!in-flight-requests{$req.id}:delete;
-            return;
-        }
+            $c
+        };
+        return if $cancelled;
 
         # Send response
         my $response = $error
@@ -351,9 +355,6 @@ class Server is export {
             !! MCP::JSONRPC::Response.success($req.id, $result);
 
         $!transport.send($response);
-
-        # Clean up tracking
-        %!in-flight-requests{$req.id}:delete;
     }
 
     #| Dispatch request to appropriate handler using multi-dispatch
@@ -520,8 +521,10 @@ class Server is export {
                 # Request was cancelled - mark it so we don't send a response
                 my $id = $notif.params<requestId>;
                 if $id.defined {
-                    if %!in-flight-requests{$id}:exists {
-                        %!in-flight-requests{$id}<cancelled> = True;
+                    $!flight-lock.protect: {
+                        if %!in-flight-requests{$id}:exists {
+                            %!in-flight-requests{$id}<cancelled> = True;
+                        }
                     }
                 }
                 # Silently ignore unknown/completed requests per spec
@@ -542,12 +545,14 @@ class Server is export {
 
     #| Handle response to our requests
     method !handle-response(MCP::JSONRPC::Response $resp) {
-        if %!pending-requests{$resp.id}:exists {
-            my $vow = %!pending-requests{$resp.id}:delete;
-            if $resp.error {
-                $vow.break(X::MCP::JSONRPC.new(error => $resp.error));
-            } else {
-                $vow.keep($resp.result);
+        $!flight-lock.protect: {
+            if %!pending-requests{$resp.id}:exists {
+                my $vow = %!pending-requests{$resp.id}:delete;
+                if $resp.error {
+                    $vow.break(X::MCP::JSONRPC.new(error => $resp.error));
+                } else {
+                    $vow.keep($resp.result);
+                }
             }
         }
     }
@@ -614,35 +619,36 @@ class Server is export {
             $tool.call(%arguments)
         };
 
-        %!tasks{$task-id} = { task => $task, promise => $promise, result => Any };
-
-        # On completion, update task status and notify
-        $promise.then(-> $p {
-            my $now2 = self!iso-now;
-            if $p.status ~~ Kept {
-                my $result = $p.result;
-                %!tasks{$task-id}<result> = $result.Hash;
-                %!tasks{$task-id}<task> = MCP::Types::Task.new(
-                    taskId => $task-id,
-                    status => MCP::Types::TaskCompleted,
-                    createdAt => %!tasks{$task-id}<task>.createdAt,
-                    lastUpdatedAt => $now2,
-                    ttl => $ttl.Int,
-                    pollInterval => $!default-poll-interval,
-                );
-            } else {
-                %!tasks{$task-id}<task> = MCP::Types::Task.new(
-                    taskId => $task-id,
-                    status => MCP::Types::TaskFailed,
-                    statusMessage => $p.cause.message,
-                    createdAt => %!tasks{$task-id}<task>.createdAt,
-                    lastUpdatedAt => $now2,
-                    ttl => $ttl.Int,
-                    pollInterval => $!default-poll-interval,
-                );
+        my $completion = $promise.then(-> $p {
+            $!task-lock.protect: {
+                my $now2 = self!iso-now;
+                if $p.status ~~ Kept {
+                    my $result = $p.result;
+                    %!tasks{$task-id}<result> = $result.Hash;
+                    %!tasks{$task-id}<task> = MCP::Types::Task.new(
+                        taskId => $task-id,
+                        status => MCP::Types::TaskCompleted,
+                        createdAt => %!tasks{$task-id}<task>.createdAt,
+                        lastUpdatedAt => $now2,
+                        ttl => $ttl.Int,
+                        pollInterval => $!default-poll-interval,
+                    );
+                } else {
+                    %!tasks{$task-id}<task> = MCP::Types::Task.new(
+                        taskId => $task-id,
+                        status => MCP::Types::TaskFailed,
+                        statusMessage => $p.cause.message,
+                        createdAt => %!tasks{$task-id}<task>.createdAt,
+                        lastUpdatedAt => $now2,
+                        ttl => $ttl.Int,
+                        pollInterval => $!default-poll-interval,
+                    );
+                }
+                try self.notify('notifications/tasks/status', %!tasks{$task-id}<task>.Hash);
             }
-            try self.notify('notifications/tasks/status', %!tasks{$task-id}<task>.Hash);
         });
+
+        $!task-lock.protect: { %!tasks{$task-id} = { task => $task, promise => $promise, completion => $completion, result => Any } };
 
         MCP::Types::CreateTaskResult.new(task => $task).Hash;
     }
@@ -656,14 +662,16 @@ class Server is export {
             )
         );
 
-        my $entry = %!tasks{$task-id} // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Unknown task: $task-id"
-            )
-        );
+        $!task-lock.protect: {
+            my $entry = %!tasks{$task-id} // die X::MCP::JSONRPC.new(
+                error => MCP::JSONRPC::Error.from-code(
+                    MCP::JSONRPC::InvalidParams,
+                    "Unknown task: $task-id"
+                )
+            );
 
-        $entry<task>.Hash
+            $entry<task>.Hash
+        }
     }
 
     #| Get task result (blocks until terminal)
@@ -675,26 +683,29 @@ class Server is export {
             )
         );
 
-        my $entry = %!tasks{$task-id} // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Unknown task: $task-id"
-            )
-        );
+        my ($entry, $completion);
+        $!task-lock.protect: {
+            $entry = %!tasks{$task-id} // die X::MCP::JSONRPC.new(
+                error => MCP::JSONRPC::Error.from-code(
+                    MCP::JSONRPC::InvalidParams,
+                    "Unknown task: $task-id"
+                )
+            );
+            $completion = $entry<completion>;
+        };
 
-        # If not terminal, block until the promise settles
+        # If not terminal, block until the .then callback has updated state
         unless $entry<task>.is-terminal {
-            my $p = $entry<promise>;
-            try { $p.result }
-            # Give the .then callback a moment to update state
-            sleep 0.05;
+            try { await $completion }
         }
 
         # Return stored result or task status
-        my %result;
-        %result<task> = %!tasks{$task-id}<task>.Hash;
-        %result<result> = $_ with %!tasks{$task-id}<result>;
-        %result
+        $!task-lock.protect: {
+            my %result;
+            %result<task> = %!tasks{$task-id}<task>.Hash;
+            %result<result> = $_ with %!tasks{$task-id}<result>;
+            %result
+        }
     }
 
     #| Cancel a task
@@ -706,32 +717,34 @@ class Server is export {
             )
         );
 
-        my $entry = %!tasks{$task-id} // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Unknown task: $task-id"
-            )
-        );
-
-        unless $entry<task>.is-terminal {
-            my $now = self!iso-now;
-            %!tasks{$task-id}<task> = MCP::Types::Task.new(
-                taskId => $task-id,
-                status => MCP::Types::TaskCancelled,
-                createdAt => $entry<task>.createdAt,
-                lastUpdatedAt => $now,
-                ttl => $entry<task>.ttl,
-                pollInterval => $entry<task>.pollInterval,
+        $!task-lock.protect: {
+            my $entry = %!tasks{$task-id} // die X::MCP::JSONRPC.new(
+                error => MCP::JSONRPC::Error.from-code(
+                    MCP::JSONRPC::InvalidParams,
+                    "Unknown task: $task-id"
+                )
             );
-            try self.notify('notifications/tasks/status', %!tasks{$task-id}<task>.Hash);
-        }
 
-        %!tasks{$task-id}<task>.Hash
+            unless $entry<task>.is-terminal {
+                my $now = self!iso-now;
+                %!tasks{$task-id}<task> = MCP::Types::Task.new(
+                    taskId => $task-id,
+                    status => MCP::Types::TaskCancelled,
+                    createdAt => $entry<task>.createdAt,
+                    lastUpdatedAt => $now,
+                    ttl => $entry<task>.ttl,
+                    pollInterval => $entry<task>.pollInterval,
+                );
+                try self.notify('notifications/tasks/status', %!tasks{$task-id}<task>.Hash);
+            }
+
+            %!tasks{$task-id}<task>.Hash
+        }
     }
 
     #| List tasks with pagination
     method !list-tasks($params?) {
-        my @tasks = %!tasks.values.map(*<task>.Hash).Array;
+        my @tasks = $!task-lock.protect: { %!tasks.values.map(*<task>.Hash).Array };
         self!paginate(@tasks, $params, key => 'tasks')
     }
 
@@ -851,7 +864,7 @@ class Server is export {
     method request(Str $method, $params? --> Promise) {
         my $id = $!id-gen.next;
         my $p = Promise.new;
-        %!pending-requests{$id} = $p.vow;
+        $!flight-lock.protect: { %!pending-requests{$id} = $p.vow };
 
         my $request = MCP::JSONRPC::Request.new(:$id, :$method, :$params);
         $!transport.send($request);
@@ -891,8 +904,10 @@ class Server is export {
     #| Check if a request has been cancelled
     #| Useful for long-running tool handlers to check periodically
     method is-cancelled($request-id --> Bool) {
-        return False unless %!in-flight-requests{$request-id}:exists;
-        %!in-flight-requests{$request-id}<cancelled>
+        $!flight-lock.protect: {
+            return False unless %!in-flight-requests{$request-id}:exists;
+            %!in-flight-requests{$request-id}<cancelled>
+        }
     }
 
     #| Cancel a request (for server-initiated cancellation)
