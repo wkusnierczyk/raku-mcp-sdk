@@ -148,7 +148,7 @@ Raku is a "sleeper" choice for specific AI domains, particularly those involving
 ## Installation
 
 ```bash
-# From zef (once published)
+# From zef
 zef install MCP
 
 # From source

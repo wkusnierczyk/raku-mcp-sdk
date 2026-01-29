@@ -4,7 +4,7 @@
     "version": "0.28.0",
     "api": "1",
     "perl": "6.d",
-    "auth": "github:wkusnierczyk",
+    "auth": "zef:wkusnierczyk",
     "license": "MIT",
     "authors": [
         "Waclaw Kusnierczyk <waclaw.kusnierczyk@gmail.com>"
