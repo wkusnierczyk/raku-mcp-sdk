@@ -577,7 +577,7 @@ A security review was conducted on the codebase. No critical vulnerabilities wer
 |---------|----------|-------|
 | ~~Handler exceptions propagate raw to client~~ | ~~Medium~~ | [#110](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/110) ✅ |
 | ~~PKCE verifier retained in memory after token exchange~~ | ~~Medium~~ | [#109](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/109) ✅ |
-| SSE transport hardcodes HTTP scheme | Medium | [#111](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/111) |
+| ~~SSE transport hardcodes HTTP scheme~~ | ~~Medium~~ | [#111](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/111) ✅ |
 
 **Areas reviewed with no issues found:**
 
