@@ -575,7 +575,7 @@ A security review was conducted on the codebase. No critical vulnerabilities wer
 
 | Finding | Severity | Issue |
 |---------|----------|-------|
-| PKCE verifier retained in memory after token exchange | Medium | [#109](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/109) |
+| ~~PKCE verifier retained in memory after token exchange~~ | ~~Medium~~ | [#109](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/109) ✅ |
 | Handler exceptions propagate raw to client | Medium | [#110](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/110) |
 | SSE transport hardcodes HTTP scheme | Medium | [#111](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/111) |
 
@@ -632,7 +632,7 @@ Building this repository was supported by:
 $ make about
 
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
-├─ version:    0.28.7
+├─ version:    0.29.0
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT
