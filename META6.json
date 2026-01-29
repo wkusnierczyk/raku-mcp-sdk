@@ -2,6 +2,7 @@
     "name": "MCP",
     "description": "Model Context Protocol SDK for Raku - Build MCP servers and clients",
     "version": "0.28.0",
+    "api": "1",
     "perl": "6.d",
     "auth": "github:wkusnierczyk",
     "license": "MIT",
