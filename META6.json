@@ -1,7 +1,7 @@
 {
     "name": "MCP",
     "description": "Model Context Protocol SDK for Raku - Build MCP servers and clients",
-    "version": "0.25.0",
+    "version": "0.26.0",
     "perl": "6.d",
     "auth": "github:wkusnierczyk",
     "license": "MIT",
@@ -15,6 +15,7 @@
         "MCP::Transport::Base": "lib/MCP/Transport/Base.rakumod",
         "MCP::Transport::Stdio": "lib/MCP/Transport/Stdio.rakumod",
         "MCP::Transport::StreamableHTTP": "lib/MCP/Transport/StreamableHTTP.rakumod",
+        "MCP::Transport::SSE": "lib/MCP/Transport/SSE.rakumod",
         "MCP::Server": "lib/MCP/Server.rakumod",
         "MCP::Server::Tool": "lib/MCP/Server/Tool.rakumod",
         "MCP::Server::Resource": "lib/MCP/Server/Resource.rakumod",

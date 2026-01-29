@@ -38,6 +38,7 @@ Raku MCP SDK is **work in progress** (WIP).
 | Roots | ✅ Done | Client roots, server list-roots |
 | Sampling | ✅ Done | Full support with tools, toolChoice, includeContext, stopReason |
 | HTTP Transport | ✅ Done | Full client/server with session management, SSE, resumption |
+| Legacy SSE Transport | ✅ Done | Backwards-compatible HTTP+SSE transport (spec 2024-11-05) |
 | Elicitation | ✅ Done | Form and URL modes with handler callbacks |
 | Tasks (experimental) | ✅ Done | Async tool execution, status polling, cancellation |
 | Extensions framework | ✅ Done (experimental) | Negotiation via `experimental` capabilities + extension method routing |
@@ -572,7 +573,7 @@ Building this repository was supported by:
 $ make about
 
 Raku MCP SDK: Raku Implementation of the Model Context Protocol
-├─ version:    0.25.0
+├─ version:    0.26.0
 ├─ developer:  mailto:waclaw.kusnierczyk@gmail.com
 ├─ source:     https://github.com/wkusnierczyk/raku-mcp-sdk
 └─ licence:    MIT https://opensource.org/licenses/MIT

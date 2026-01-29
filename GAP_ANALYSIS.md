@@ -11,7 +11,7 @@ This document compares the current implementation of the Raku MCP SDK against th
 | Category | Status | Notes |
 |----------|--------|-------|
 | **Base Protocol** | ✅ Mostly Complete | JSON-RPC 2.0, lifecycle, basic message handling |
-| **Transports** | ✅ Mostly Complete | Stdio complete, Streamable HTTP complete |
+| **Transports** | ✅ Complete | Stdio, Streamable HTTP, Legacy SSE |
 | **Server Features** | ✅ Mostly Complete | Tools/Resources/Prompts + pagination, tool name validation, prompts list_changed |
 | **Client Features** | ✅ Done | Sampling with tools, includeContext, stopReason, completion |
 | **Utilities** | ⚠️ Partial | Logging, progress, cancellation implemented |
@@ -73,8 +73,11 @@ This document compares the current implementation of the Raku MCP SDK against th
 - Protocol version validation (`MCP-Protocol-Version` header)
 - Proper error responses per spec (400, 403, 404, 405, 406, 415)
 
-#### ❌ Missing
-- **SSE Transport** (legacy, but some clients still use it)
+#### ✅ Legacy SSE Transport (`MCP::Transport::SSE`)
+- Server-side: GET `/sse` for SSE stream, POST `/message` for client messages
+- Client-side: connects to SSE endpoint, receives POST URL via `endpoint` event
+- Origin validation
+- Single-client model (one SSE connection at a time)
 
 ---
 
@@ -251,7 +254,7 @@ The [official Python SDK](https://github.com/modelcontextprotocol/python-sdk) im
 | Elicitation | ✅ Full + URL mode | ✅ Full |
 | OAuth 2.1 | ✅ Full | ✅ Full |
 | Streamable HTTP | ✅ Full client + server | ✅ Full |
-| SSE Transport | ✅ Full | ❌ No |
+| SSE Transport | ✅ Full | ✅ Full |
 | Tasks | ✅ Experimental | ✅ Done (experimental) |
 | Completion | ✅ Full | ✅ Full |
 | Pagination | ✅ Full | ✅ Full |
@@ -314,8 +317,4 @@ Missing tests for:
 
 ## Conclusion
 
-The Raku MCP SDK provides comprehensive MCP specification coverage. The only remaining gap is:
-
-- SSE transport (legacy)
-
-The SDK's architecture is well-designed and should accommodate this addition without major refactoring.
+The Raku MCP SDK provides comprehensive MCP specification coverage with no remaining gaps. All transport types (Stdio, Streamable HTTP, Legacy SSE) are fully implemented.
