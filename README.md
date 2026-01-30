@@ -56,7 +56,7 @@ The Raku MCP SDK is current in review by the community.
 Planned and currently ongoing efforts:
 
 * [Increased test coverage](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/143)  
-  Current test coverage is slightly above 70% (~74%). The target is to achieve at least 90% coverage.  
+  Current test coverage is at ~87%. The target is to achieve at least 90% coverage.  
   For the current coverage, use `make coverage` (see [Makefile targets](#makefile-targets) below).
 
 ## Table of contents
