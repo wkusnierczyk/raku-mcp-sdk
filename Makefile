@@ -18,7 +18,7 @@
 PROJECT_NAME    := MCP
 PROJECT_TITLE   := Raku MCP SDK
 PROJECT_DESC    := Raku Implementation of the Model Context Protocol
-VERSION         := 0.33.5
+VERSION         := 0.33.6
 DEVELOPER_NAME  := Waclaw Kusnierczyk
 DEVELOPER_EMAIL := waclaw.kusnierczyk@gmail.com
 SOURCE_URL      := https://github.com/wkusnierczyk/raku-mcp-sdk
@@ -335,7 +335,7 @@ dependencies-dev: dependencies
 dependencies-update:
 	$(call log-info,Updating dependencies...)
 	$(Q)$(ZEF) update
-	$(Q)$(ZEF) upgrade
+	$(Q)$(ZEF) install --deps-only . --force-install
 	$(call log-success,Dependencies updated)
 
 # ------------------------------------------------------------------------------
