@@ -229,7 +229,7 @@ class Server is export {
         my Int $offset = 0;
 
         if $params && $params<cursor> {
-            try {
+            {
                 $offset = self!decode-cursor($params<cursor>);
                 CATCH {
                     default {
@@ -455,7 +455,7 @@ class Server is export {
         my $result;
         my $error;
 
-        try {
+        {
             $result = self.dispatch-request($req);
 
             CATCH {

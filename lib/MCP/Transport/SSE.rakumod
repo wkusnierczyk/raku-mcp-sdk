@@ -185,7 +185,7 @@ class SSEServerTransport does MCP::Transport::Base::Transport is export {
                 my $body = await $req.body;
                 my Str $json = $self!coerce-body-json($body);
                 my $msg;
-                try {
+                {
                     $msg = parse-message($json);
                     CATCH {
                         default {
@@ -229,7 +229,7 @@ class SSEServerTransport does MCP::Transport::Base::Transport is export {
 
     method !validate-oauth($req, $resp, &content --> Bool) {
         return True unless $!oauth-handler.defined;
-        try {
+        {
             $!oauth-handler.validate-request($req);
             return True;
             CATCH {
@@ -294,10 +294,8 @@ class SSEServerTransport does MCP::Transport::Base::Transport is export {
     }
 
     method !cro-class(Str $name) {
-        try {
-            require ::($name);
-            return ::($name);
-        }
+        require ::($name);
+        return ::($name);
         CATCH {
             default {
                 die X::MCP::Transport::SSE::HTTP.new(
@@ -417,7 +415,7 @@ class SSEClientTransport does MCP::Transport::Base::Transport is export {
     method !emit-json(Str $json) {
         return unless $json.defined && $json.chars;
         my $msg;
-        try {
+        {
             $msg = parse-message($json);
             CATCH { default { return } }
         }
@@ -425,10 +423,8 @@ class SSEClientTransport does MCP::Transport::Base::Transport is export {
     }
 
     method !cro-class(Str $name) {
-        try {
-            require ::($name);
-            return ::($name);
-        }
+        require ::($name);
+        return ::($name);
         CATCH {
             default {
                 die X::MCP::Transport::SSE::HTTP.new(
