@@ -90,7 +90,7 @@ Tests in `t/` numbered by layer:
 
 Runtime: `JSON::Fast`, `Cro::HTTP`, `MIME::Base64`
 Optional (loaded at runtime): `Digest::SHA256::Native` (for OAuth PKCE)
-Dev: `Test`, `Test::META`, `App::Prove6`, `App::Racoco`
+Dev: `Test`, `Test::META`, `App::Prove6`, `Test::Coverage`
 
 ## Implementation Status
 

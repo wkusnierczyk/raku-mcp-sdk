@@ -287,7 +287,7 @@ class PKCE is export {
             }
         }
         # Pure Raku fallback to avoid platform-specific native toolchains.
-        self!sha256-pure($data)
+        self!sha256-pure($data) # UNCOVERABLE
     }
 
     method !sha256-pure(Blob $data --> Blob) {

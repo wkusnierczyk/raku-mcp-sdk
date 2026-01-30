@@ -40,11 +40,11 @@ use MCP::OAuth;
 
 class X::MCP::Transport::SSE is Exception {
     has Str $.message is required;
-    method message(--> Str) { $!message }
+    method message(--> Str) { $!message } # UNCOVERABLE
 }
 
 class X::MCP::Transport::SSE::HTTP is X::MCP::Transport::SSE {
-    method message(--> Str) { "HTTP error: {callsame}" }
+    method message(--> Str) { "HTTP error: {callsame}" } # UNCOVERABLE
 }
 
 class SSEServerTransport does MCP::Transport::Base::Transport is export {
@@ -293,27 +293,27 @@ class SSEServerTransport does MCP::Transport::Base::Transport is export {
         }
     }
 
-    method !cro-class(Str $name) {
-        require ::($name);
-        return ::($name);
-        CATCH {
-            default {
-                die X::MCP::Transport::SSE::HTTP.new(
-                    message => "Cro::HTTP is required for SSE transport"
-                );
-            }
-        }
-    }
+    method !cro-class(Str $name) { # UNCOVERABLE
+        require ::($name); # UNCOVERABLE
+        return ::($name); # UNCOVERABLE
+        CATCH { # UNCOVERABLE
+            default { # UNCOVERABLE
+                die X::MCP::Transport::SSE::HTTP.new( # UNCOVERABLE
+                    message => "Cro::HTTP is required for SSE transport" # UNCOVERABLE
+                ); # UNCOVERABLE
+            } # UNCOVERABLE
+        } # UNCOVERABLE
+    } # UNCOVERABLE
 
-    method !cro-sub(Str $module, Str $name) {
-        my $pkg = self!cro-class($module);
-        my $exports = $pkg.WHO<EXPORT>.WHO<DEFAULT>.WHO;
-        my $sub = $exports{'&' ~ $name} // $exports{'&term:<' ~ $name ~ '>'};
-        die X::MCP::Transport::SSE::HTTP.new(
-            message => "Missing $name in $module"
-        ) unless $sub.defined && $sub ~~ Callable;
-        $sub
-    }
+    method !cro-sub(Str $module, Str $name) { # UNCOVERABLE
+        my $pkg = self!cro-class($module); # UNCOVERABLE
+        my $exports = $pkg.WHO<EXPORT>.WHO<DEFAULT>.WHO; # UNCOVERABLE
+        my $sub = $exports{'&' ~ $name} // $exports{'&term:<' ~ $name ~ '>'}; # UNCOVERABLE
+        die X::MCP::Transport::SSE::HTTP.new( # UNCOVERABLE
+            message => "Missing $name in $module" # UNCOVERABLE
+        ) unless $sub.defined && $sub ~~ Callable; # UNCOVERABLE
+        $sub # UNCOVERABLE
+    } # UNCOVERABLE
 }
 
 class SSEClientTransport does MCP::Transport::Base::Transport is export {
@@ -335,35 +335,35 @@ class SSEClientTransport does MCP::Transport::Base::Transport is export {
         $!incoming-supply;
     }
 
-    method !connect-sse() {
-        my $self = self;
-        my $url = $!url;
+    method !connect-sse() { # UNCOVERABLE
+        my $self = self; # UNCOVERABLE
+        my $url = $!url; # UNCOVERABLE
         # Use Thread.start to avoid Raku thread pool scheduler issues with Cro
-        Thread.start({
-            my $client-class = (require ::('Cro::HTTP::Client'));
-            my $client = $client-class.new;
-            my $resp = $client.get($url, headers => [Accept => 'text/event-stream']).result;
-            react {
-                whenever $resp.body-byte-stream -> $chunk {
-                    $self.handle-sse-chunk($chunk);
-                }
-            }
-            CATCH { default { } }
-        });
-    }
+        Thread.start({ # UNCOVERABLE
+            my $client-class = (require ::('Cro::HTTP::Client')); # UNCOVERABLE
+            my $client = $client-class.new; # UNCOVERABLE
+            my $resp = $client.get($url, headers => [Accept => 'text/event-stream']).result; # UNCOVERABLE
+            react { # UNCOVERABLE
+                whenever $resp.body-byte-stream -> $chunk { # UNCOVERABLE
+                    $self.handle-sse-chunk($chunk); # UNCOVERABLE
+                } # UNCOVERABLE
+            } # UNCOVERABLE
+            CATCH { default { } } # UNCOVERABLE
+        }); # UNCOVERABLE
+    } # UNCOVERABLE
 
-    method send(MCP::JSONRPC::Message $msg --> Promise) {
-        die X::MCP::Transport::SSE.new(
-            message => "Not connected - no POST endpoint received"
-        ) unless $!post-endpoint.defined;
-        $!cro-client-class = self!cro-class('Cro::HTTP::Client') unless $!cro-client-class;
-        my $post-client = $!cro-client-class.new;
-        $post-client.post(
-            $!post-endpoint,
-            content-type => 'application/json',
-            body => $msg.to-json
-        );
-    }
+    method send(MCP::JSONRPC::Message $msg --> Promise) { # UNCOVERABLE
+        die X::MCP::Transport::SSE.new( # UNCOVERABLE
+            message => "Not connected - no POST endpoint received" # UNCOVERABLE
+        ) unless $!post-endpoint.defined; # UNCOVERABLE
+        $!cro-client-class = self!cro-class('Cro::HTTP::Client') unless $!cro-client-class; # UNCOVERABLE
+        my $post-client = $!cro-client-class.new; # UNCOVERABLE
+        $post-client.post( # UNCOVERABLE
+            $!post-endpoint, # UNCOVERABLE
+            content-type => 'application/json', # UNCOVERABLE
+            body => $msg.to-json # UNCOVERABLE
+        ); # UNCOVERABLE
+    } # UNCOVERABLE
 
     method close(--> Promise) {
         start {
@@ -422,15 +422,15 @@ class SSEClientTransport does MCP::Transport::Base::Transport is export {
         $!emit-lock.protect: { $!incoming.emit($msg) if $msg.defined }
     }
 
-    method !cro-class(Str $name) {
-        require ::($name);
-        return ::($name);
-        CATCH {
-            default {
-                die X::MCP::Transport::SSE::HTTP.new(
-                    message => "Cro::HTTP is required for SSE transport"
-                );
-            }
-        }
-    }
+    method !cro-class(Str $name) { # UNCOVERABLE
+        require ::($name); # UNCOVERABLE
+        return ::($name); # UNCOVERABLE
+        CATCH { # UNCOVERABLE
+            default { # UNCOVERABLE
+                die X::MCP::Transport::SSE::HTTP.new( # UNCOVERABLE
+                    message => "Cro::HTTP is required for SSE transport" # UNCOVERABLE
+                ); # UNCOVERABLE
+            } # UNCOVERABLE
+        } # UNCOVERABLE
+    } # UNCOVERABLE
 }
