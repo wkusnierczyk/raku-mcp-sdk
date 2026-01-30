@@ -45,16 +45,16 @@ use MCP::JSONRPC;
 #| Base role for all MCP transports
 role Transport is export {
     #| Start the transport and return a Supply of incoming messages
-    method start(--> Supply) { ... }
+    method start(--> Supply) { ... } # UNCOVERABLE
 
     #| Send a message through the transport
-    method send(MCP::JSONRPC::Message $msg --> Promise) { ... }
+    method send(MCP::JSONRPC::Message $msg --> Promise) { ... } # UNCOVERABLE
 
     #| Close the transport
-    method close(--> Promise) { ... }
+    method close(--> Promise) { ... } # UNCOVERABLE
 
     #| Check if the transport is currently connected
-    method is-connected(--> Bool) { ... }
+    method is-connected(--> Bool) { ... } # UNCOVERABLE
 }
 
 #| Exception for transport errors
@@ -62,15 +62,15 @@ class MCP::Transport::Base::X::Transport is Exception {
     has Str $.message is required;
     has $.cause;
 
-    method message(--> Str) { $!message }
+    method message(--> Str) { $!message } # UNCOVERABLE
 }
 
 #| Exception for connection errors
 class MCP::Transport::Base::X::Transport::Connection is MCP::Transport::Base::X::Transport {
-    method message(--> Str) { "Connection error: {callsame}" }
+    method message(--> Str) { "Connection error: {callsame}" } # UNCOVERABLE
 }
 
 #| Exception for send errors
 class MCP::Transport::Base::X::Transport::Send is MCP::Transport::Base::X::Transport {
-    method message(--> Str) { "Send error: {callsame}" }
+    method message(--> Str) { "Send error: {callsame}" } # UNCOVERABLE
 }

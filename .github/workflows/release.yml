@@ -151,7 +151,9 @@ jobs:
               --exclude='.git' \
               --exclude='.github' \
               --exclude='.precomp' \
+              --exclude='*.rakucov' \
               --exclude='.racoco' \
+              --exclude='coverage-report' \
               --exclude='*.tar.gz' \
               -czvf "dist/${ARCHIVE_FILENAME}" .
 

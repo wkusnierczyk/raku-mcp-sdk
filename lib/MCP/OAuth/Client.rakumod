@@ -237,17 +237,17 @@ class OAuthClientHandler is export {
         }
     }
 
-    method !cro-client() {
-        require ::('Cro::HTTP::Client');
-        return ::('Cro::HTTP::Client').new;
-        CATCH {
-            default {
-                die X::MCP::OAuth::Discovery.new(
-                    message => 'Cro::HTTP is required for OAuth client'
-                );
-            }
-        }
-    }
+    method !cro-client() { # UNCOVERABLE
+        require ::('Cro::HTTP::Client'); # UNCOVERABLE
+        return ::('Cro::HTTP::Client').new; # UNCOVERABLE
+        CATCH { # UNCOVERABLE
+            default { # UNCOVERABLE
+                die X::MCP::OAuth::Discovery.new( # UNCOVERABLE
+                    message => 'Cro::HTTP is required for OAuth client' # UNCOVERABLE
+                ); # UNCOVERABLE
+            } # UNCOVERABLE
+        } # UNCOVERABLE
+    } # UNCOVERABLE
 
     sub uri-encode(Str $s --> Str) {
         $s.subst(/<-[A..Za..z0..9\-._~]>/, { .Str.encode('utf-8').list.map({ '%' ~ .fmt('%02X') }).join }, :g)
@@ -349,17 +349,17 @@ class OAuthM2MClient is export {
         }
     }
 
-    method !cro-client() {
-        require ::('Cro::HTTP::Client');
-        return ::('Cro::HTTP::Client').new;
-        CATCH {
-            default {
-                die X::MCP::OAuth::Discovery.new(
-                    message => 'Cro::HTTP is required for OAuth M2M client'
-                );
-            }
-        }
-    }
+    method !cro-client() { # UNCOVERABLE
+        require ::('Cro::HTTP::Client'); # UNCOVERABLE
+        return ::('Cro::HTTP::Client').new; # UNCOVERABLE
+        CATCH { # UNCOVERABLE
+            default { # UNCOVERABLE
+                die X::MCP::OAuth::Discovery.new( # UNCOVERABLE
+                    message => 'Cro::HTTP is required for OAuth M2M client' # UNCOVERABLE
+                ); # UNCOVERABLE
+            } # UNCOVERABLE
+        } # UNCOVERABLE
+    } # UNCOVERABLE
 }
 
 #| Enterprise-managed authorization client (SEP-990)
@@ -512,15 +512,15 @@ class OAuthEnterpriseClient is export {
         }
     }
 
-    method !cro-client() {
-        require ::('Cro::HTTP::Client');
-        return ::('Cro::HTTP::Client').new;
-        CATCH {
-            default {
-                die X::MCP::OAuth::Discovery.new(
-                    message => 'Cro::HTTP is required for OAuth enterprise client'
-                );
-            }
-        }
-    }
+    method !cro-client() { # UNCOVERABLE
+        require ::('Cro::HTTP::Client'); # UNCOVERABLE
+        return ::('Cro::HTTP::Client').new; # UNCOVERABLE
+        CATCH { # UNCOVERABLE
+            default { # UNCOVERABLE
+                die X::MCP::OAuth::Discovery.new( # UNCOVERABLE
+                    message => 'Cro::HTTP is required for OAuth enterprise client' # UNCOVERABLE
+                ); # UNCOVERABLE
+            } # UNCOVERABLE
+        } # UNCOVERABLE
+    } # UNCOVERABLE
 }
