@@ -143,15 +143,15 @@ class RegisteredTool is export {
 
 #| Builder for creating tool definitions
 class ToolBuilder is export {
-    has Str $!name;
-    has Str $!description;
-    has Str $!title;
-    has @!icons;
-    has Hash $!inputSchema = { type => 'object', properties => {}, required => [] };
-    has Hash $!outputSchema;
-    has MCP::Types::ToolAnnotations $!annotations;
-    has MCP::Types::TaskExecution $!execution;
-    has &!handler;
+    has Str $.name;
+    has Str $.description;
+    has Str $.title;
+    has @.icons;
+    has Hash $.inputSchema = { type => 'object', properties => {}, required => [] };
+    has Hash $.outputSchema;
+    has MCP::Types::ToolAnnotations $.annotations;
+    has MCP::Types::TaskExecution $.execution;
+    has &.handler;
 
     method name(Str $!name --> ToolBuilder) { self }
 

@@ -1,0 +1,27 @@
+# ==============================================================================
+# Rerun Failed Jobs - Automatically retry flaky test failures
+# ==============================================================================
+
+name: Rerun failed jobs
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  actions: write
+
+jobs:
+  rerun-failed:
+    name: Rerun failed jobs
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.workflow_run.conclusion == 'failure'
+      && github.event.workflow_run.run_attempt < 3
+    steps:
+      - name: Rerun failed jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run rerun ${{ github.event.workflow_run.id }} --failed --repo ${{ github.repository }}

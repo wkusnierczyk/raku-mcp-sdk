@@ -103,12 +103,12 @@ class RegisteredPrompt is export {
 
 #| Builder for creating prompt definitions
 class PromptBuilder is export {
-    has Str $!name;
-    has Str $!description;
-    has Str $!title;
-    has @!icons;
-    has @!arguments;
-    has &!generator;
+    has Str $.name;
+    has Str $.description;
+    has Str $.title;
+    has @.icons;
+    has @.arguments;
+    has &.generator;
 
     method name(Str $!name --> PromptBuilder) { self }
 
