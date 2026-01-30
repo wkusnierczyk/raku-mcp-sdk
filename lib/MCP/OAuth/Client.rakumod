@@ -71,7 +71,7 @@ class OAuthClientHandler is export {
 
             my $issuer-base = $issuer.subst(/ '/' $ /, '');
             my $as-body;
-            try {
+            {
                 my $as-resp = await $client.get("$issuer-base/.well-known/oauth-authorization-server");
                 $as-body = await $as-resp.body;
                 CATCH {
@@ -242,10 +242,8 @@ class OAuthClientHandler is export {
     }
 
     method !cro-client() {
-        try {
-            require ::('Cro::HTTP::Client');
-            return ::('Cro::HTTP::Client').new;
-        }
+        require ::('Cro::HTTP::Client');
+        return ::('Cro::HTTP::Client').new;
         CATCH {
             default {
                 die X::MCP::OAuth::Discovery.new(
@@ -288,7 +286,7 @@ class OAuthM2MClient is export {
 
             my $issuer-base = $issuer.subst(/ '/' $ /, '');
             my $as-body;
-            try {
+            {
                 my $as-resp = await $client.get("$issuer-base/.well-known/oauth-authorization-server");
                 $as-body = await $as-resp.body;
                 CATCH {
@@ -360,10 +358,8 @@ class OAuthM2MClient is export {
     }
 
     method !cro-client() {
-        try {
-            require ::('Cro::HTTP::Client');
-            return ::('Cro::HTTP::Client').new;
-        }
+        require ::('Cro::HTTP::Client');
+        return ::('Cro::HTTP::Client').new;
         CATCH {
             default {
                 die X::MCP::OAuth::Discovery.new(
@@ -416,7 +412,7 @@ class OAuthEnterpriseClient is export {
 
             my $issuer-base = $issuer.subst(/ '/' $ /, '');
             my $as-body;
-            try {
+            {
                 my $as-resp = await $client.get("$issuer-base/.well-known/oauth-authorization-server");
                 $as-body = await $as-resp.body;
                 CATCH {
@@ -533,10 +529,8 @@ class OAuthEnterpriseClient is export {
     }
 
     method !cro-client() {
-        try {
-            require ::('Cro::HTTP::Client');
-            return ::('Cro::HTTP::Client').new;
-        }
+        require ::('Cro::HTTP::Client');
+        return ::('Cro::HTTP::Client').new;
         CATCH {
             default {
                 die X::MCP::OAuth::Discovery.new(

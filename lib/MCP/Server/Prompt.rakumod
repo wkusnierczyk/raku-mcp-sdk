@@ -73,7 +73,7 @@ class RegisteredPrompt is export {
     method get(%arguments --> Array) {
         my $result;
         my $called = False;
-        try {
+        {
             $result = &!generator(:params(%arguments));
             $called = True;
             CATCH {
@@ -82,23 +82,19 @@ class RegisteredPrompt is export {
             }
         }
         unless $called {
-            try {
-                $result = &!generator(|%arguments);
-                $called = True;
-                CATCH {
-                    when X::AdHoc | X::Multi::NoMatch { }
-                    default { .rethrow }
-                }
+            $result = &!generator(|%arguments);
+            $called = True;
+            CATCH {
+                when X::AdHoc | X::Multi::NoMatch { }
+                default { .rethrow }
             }
         }
         unless $called {
-            try {
-                $result = &!generator(%arguments);
-                $called = True;
-                CATCH {
-                    when X::AdHoc | X::Multi::NoMatch { }
-                    default { .rethrow }
-                }
+            $result = &!generator(%arguments);
+            $called = True;
+            CATCH {
+                when X::AdHoc | X::Multi::NoMatch { }
+                default { .rethrow }
             }
         }
         unless $called {

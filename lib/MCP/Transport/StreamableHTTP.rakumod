@@ -276,7 +276,7 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
                 my $body = await $req.body;
                 my Str $json = $self!coerce-body-json($body);
                 my $msg;
-                try {
+                {
                     $msg = parse-message($json);
                     CATCH {
                         default {
@@ -382,7 +382,7 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
 
     method !validate-oauth($req, $resp, &content --> Bool) {
         return True unless $!oauth-handler.defined;
-        try {
+        {
             $!oauth-handler.validate-request($req);
             return True;
             CATCH {
@@ -502,10 +502,8 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
     }
 
     method !cro-class(Str $name) {
-        try {
-            require ::($name);
-            return ::($name);
-        }
+        require ::($name);
+        return ::($name);
         CATCH {
             default {
                 die X::MCP::Transport::StreamableHTTP::HTTP.new(
@@ -643,7 +641,7 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
             # Use a fresh client to avoid conflicts with SSE connection
             my $delete-client = self!cro-client;
             my $result = False;
-            try {
+            {
                 my $resp = await $delete-client.delete($!endpoint, headers => @headers);
                 if $resp.status == 204 || $resp.status == 200 {
                     $!session-id = Nil;
@@ -662,32 +660,30 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
     method !sse-loop() {
         loop {
             last if $!closing;
-            try {
-                my @headers = (
-                    Accept => DEFAULT_ACCEPT_SSE,
-                    'MCP-Protocol-Version' => $!protocol-version,
-                );
-                if $!session-id.defined {
-                    @headers.push('MCP-Session-Id' => $!session-id);
-                }
-                if $!last-event-id.defined {
-                    @headers.push('Last-Event-ID' => $!last-event-id);
-                }
-                if $!oauth-handler.defined {
-                    my $auth = await $!oauth-handler.authorization-header;
-                    @headers.push('Authorization' => $auth);
-                }
-                $!client //= self!cro-client;
-                my $resp = await $!client.get($!endpoint, headers => @headers);
-                self!capture-session-id($resp);
-                if $resp.status == 405 {
-                    last;
-                }
-                if $resp.status >= 400 {
-                    last;
-                }
-                await self!consume-sse($resp.body-byte-stream);
+            my @headers = (
+                Accept => DEFAULT_ACCEPT_SSE,
+                'MCP-Protocol-Version' => $!protocol-version,
+            );
+            if $!session-id.defined {
+                @headers.push('MCP-Session-Id' => $!session-id);
             }
+            if $!last-event-id.defined {
+                @headers.push('Last-Event-ID' => $!last-event-id);
+            }
+            if $!oauth-handler.defined {
+                my $auth = await $!oauth-handler.authorization-header;
+                @headers.push('Authorization' => $auth);
+            }
+            $!client //= self!cro-client;
+            my $resp = await $!client.get($!endpoint, headers => @headers);
+            self!capture-session-id($resp);
+            if $resp.status == 405 {
+                last;
+            }
+            if $resp.status >= 400 {
+                last;
+            }
+            await self!consume-sse($resp.body-byte-stream);
             CATCH { default { } }
             last if $!closing;
             sleep $!retry-ms / 1000;
@@ -742,7 +738,7 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
     method !emit-json(Str $json) {
         return unless $json.defined && $json.chars;
         my $msg;
-        try {
+        {
             $msg = parse-message($json);
             CATCH { default { return } }
         }
@@ -760,10 +756,8 @@ class StreamableHTTPClientTransport does MCP::Transport::Base::Transport is expo
     }
 
     method !cro-class(Str $name) {
-        try {
-            require ::($name);
-            return ::($name);
-        }
+        require ::($name);
+        return ::($name);
         CATCH {
             default {
                 die X::MCP::Transport::StreamableHTTP::HTTP.new(

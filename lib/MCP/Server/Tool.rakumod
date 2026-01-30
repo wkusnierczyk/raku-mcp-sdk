@@ -100,7 +100,7 @@ class RegisteredTool is export {
     method call(%arguments --> MCP::Types::CallToolResult) {
         my $result;
         my $called = False;
-        try {
+        {
             $result = &!handler(:params(%arguments));
             $called = True;
             CATCH {
@@ -109,23 +109,19 @@ class RegisteredTool is export {
             }
         }
         unless $called {
-            try {
-                $result = &!handler(|%arguments);
-                $called = True;
-                CATCH {
-                    when X::AdHoc | X::Multi::NoMatch { }
-                    default { .rethrow }
-                }
+            $result = &!handler(|%arguments);
+            $called = True;
+            CATCH {
+                when X::AdHoc | X::Multi::NoMatch { }
+                default { .rethrow }
             }
         }
         unless $called {
-            try {
-                $result = &!handler(%arguments);
-                $called = True;
-                CATCH {
-                    when X::AdHoc | X::Multi::NoMatch { }
-                    default { .rethrow }
-                }
+            $result = &!handler(%arguments);
+            $called = True;
+            CATCH {
+                when X::AdHoc | X::Multi::NoMatch { }
+                default { .rethrow }
             }
         }
         unless $called {
