@@ -1,0 +1,1235 @@
+use v6.d;
+use Test;
+use lib 'lib';
+use lib 't/lib';
+
+use MCP::Server;
+use MCP::Client;
+use MCP::Types;
+need MCP::JSONRPC;
+my &parse-message = &MCP::JSONRPC::EXPORT::DEFAULT::parse-message;
+use MCP::OAuth;
+use MCP::OAuth::Client;
+use MCP::OAuth::Server;
+use MCP::Transport::Base;
+use MCP::Transport::StreamableHTTP;
+use MCP::Server::Tool;
+use MCP::Server::Resource;
+use MCP::Server::Prompt;
+need TestTransport;
+use JSON::Fast;
+
+# Helper: round-trip through JSON to ensure proper Hash structures
+sub j(%h) { $(from-json(to-json(%h))) }
+
+plan *;
+
+# =============================================================================
+# Transport::Base exception classes
+# =============================================================================
+
+subtest 'Transport::Base exception classes', {
+    my $base = MCP::Transport::Base::X::Transport.new(message => 'base error');
+    is $base.message, 'base error', 'base transport exception message';
+
+    my $conn = MCP::Transport::Base::X::Transport::Connection.new(message => 'refused');
+    ok $conn.message.contains('Connection error'), 'connection exception prefix';
+    ok $conn.message.contains('refused'), 'connection exception contains cause';
+
+    my $send = MCP::Transport::Base::X::Transport::Send.new(message => 'timeout');
+    ok $send.message.contains('Send error'), 'send exception prefix';
+    ok $send.message.contains('timeout'), 'send exception contains cause';
+
+    ok $conn ~~ MCP::Transport::Base::X::Transport, 'Connection is-a Transport exception';
+    ok $send ~~ MCP::Transport::Base::X::Transport, 'Send is-a Transport exception';
+};
+
+# =============================================================================
+# StreamableHTTP Stream class
+# =============================================================================
+
+subtest 'StreamableHTTP Stream emit and replay', {
+    my $supplier = Supplier.new;
+    my @received;
+    $supplier.Supply.tap(-> $v { @received.push($v) });
+
+    my $stream = MCP::Transport::StreamableHTTP::Stream.new(
+        id => 'test-stream',
+        supplier => $supplier,
+        history-size => 5,
+    );
+
+    # Emit priming event
+    my $prime-id = $stream.emit-priming;
+    ok $prime-id.starts-with('test-stream:'), 'priming event ID has stream prefix';
+    ok @received[0].contains('data:'), 'priming event has data line';
+
+    # Emit message
+    my $msg-id = $stream.emit-message('{"jsonrpc":"2.0","method":"ping"}');
+    ok $msg-id.starts-with('test-stream:'), 'message event ID has stream prefix';
+    ok @received[1].contains('data:'), 'message has data lines';
+    ok @received[1].contains('"ping"'), 'message contains JSON payload';
+    ok @received[1].contains("id: $msg-id"), 'message contains event ID';
+
+    # Emit several messages to test history truncation
+    for ^6 -> $i { $stream.emit-message('{"n":' ~ $i ~ '}') }
+    # History should be capped at 5
+    pass 'history truncation did not error';
+};
+
+subtest 'StreamableHTTP Stream replay', {
+    my $supplier = Supplier.new;
+    my @received;
+    $supplier.Supply.tap(-> $v { @received.push($v) });
+
+    my $stream = MCP::Transport::StreamableHTTP::Stream.new(
+        id => 'replay-test',
+        supplier => $supplier,
+    );
+
+    # Emit 3 messages
+    $stream.emit-priming;
+    $stream.emit-message('{"a":1}');
+    $stream.emit-message('{"a":2}');
+
+    @received = [];  # clear
+    # Replay from seq 1 (should get seq 2 and 3)
+    $stream.replay-from(1);
+    ok @received.elems >= 1, 'replay emitted events after given seq';
+};
+
+# =============================================================================
+# StreamableHTTP exceptions
+# =============================================================================
+
+subtest 'StreamableHTTP exception classes', {
+    my $base = X::MCP::Transport::StreamableHTTP.new(message => 'generic');
+    is $base.message, 'generic', 'base message';
+
+    my $proto = X::MCP::Transport::StreamableHTTP::Protocol.new(message => 'bad version');
+    ok $proto.message.contains('Protocol error'), 'Protocol prefix';
+
+    my $http = X::MCP::Transport::StreamableHTTP::HTTP.new(message => '404');
+    ok $http.message.contains('HTTP error'), 'HTTP prefix';
+};
+
+# =============================================================================
+# JSONRPC additional coverage
+# =============================================================================
+
+subtest 'JSONRPC parse-message all types', {
+    # Request
+    my $req-json = '{"jsonrpc":"2.0","id":1,"method":"ping"}';
+    my $req = parse-message($req-json);
+    isa-ok $req, MCP::JSONRPC::Request, 'parsed as Request';
+    is $req.method, 'ping', 'method correct';
+
+    # Notification (no id)
+    my $notif-json = '{"jsonrpc":"2.0","method":"notify","params":{"x":1}}';
+    my $notif = parse-message($notif-json);
+    isa-ok $notif, MCP::JSONRPC::Notification, 'parsed as Notification';
+    is $notif.params<x>, 1, 'notification params';
+
+    # Response with result
+    my $resp-json = '{"jsonrpc":"2.0","id":2,"result":{"ok":true}}';
+    my $resp = parse-message($resp-json);
+    isa-ok $resp, MCP::JSONRPC::Response, 'parsed as Response';
+    ok $resp.result<ok>, 'result present';
+
+    # Response with error
+    my $err-json = '{"jsonrpc":"2.0","id":3,"error":{"code":-32600,"message":"bad"}}';
+    my $err-resp = parse-message($err-json);
+    isa-ok $err-resp, MCP::JSONRPC::Response, 'error response parsed';
+    ok $err-resp.error.defined, 'error field present';
+    is $err-resp.error.code, -32600, 'error code';
+
+    # Invalid JSON-RPC version
+    dies-ok { parse-message('{"jsonrpc":"1.0","method":"x"}') }, 'invalid version dies';
+
+    # Invalid structure
+    dies-ok { parse-message('{"jsonrpc":"2.0"}') }, 'invalid structure dies';
+};
+
+subtest 'JSONRPC Error.from-code all codes', {
+    for (MCP::JSONRPC::ParseError, MCP::JSONRPC::InvalidRequest, MCP::JSONRPC::MethodNotFound, MCP::JSONRPC::InvalidParams, MCP::JSONRPC::InternalError, MCP::JSONRPC::URLElicitationRequired) -> $code {
+        my $err = MCP::JSONRPC::Error.from-code($code);
+        is $err.code, $code.value, "code {$code.key} value correct";
+        ok $err.message.chars > 0, "code {$code.key} has default message";
+    }
+
+    # Custom message
+    my $custom = MCP::JSONRPC::Error.from-code(MCP::JSONRPC::ParseError, 'custom msg');
+    is $custom.message, 'custom msg', 'custom message override';
+
+    # With data
+    my $with-data = MCP::JSONRPC::Error.from-code(MCP::JSONRPC::InternalError, data => { details => 'x' });
+    ok $with-data.data<details> eq 'x', 'data passed through';
+};
+
+subtest 'X::JSONRPC exception', {
+    my $err = MCP::JSONRPC::Error.new(code => -32600, message => 'bad request');
+    my $ex = ::('X::JSONRPC').new(error => $err);
+    ok $ex.message.contains('-32600'), 'exception message has code';
+    ok $ex.message.contains('bad request'), 'exception message has text';
+};
+
+subtest 'JSONRPC IdGenerator', {
+    my $gen = MCP::JSONRPC::IdGenerator.new;
+    my $a = $gen.next;
+    my $b = $gen.next;
+    ok $b > $a, 'IDs are monotonically increasing';
+};
+
+subtest 'JSONRPC Message serialization', {
+    my $req = MCP::JSONRPC::Request.new(id => 1, method => 'test', params => { x => 1 });
+    my $json = $req.to-json;
+    ok $json.contains('"method"'), 'request serializes to JSON';
+
+    my $notif = MCP::JSONRPC::Notification.new(method => 'ping', params => { y => 2 });
+    my %h = $notif.Hash;
+    is %h<method>, 'ping', 'notification Hash method';
+    is %h<params><y>, 2, 'notification Hash params';
+
+    my $resp = MCP::JSONRPC::Response.new(id => 1, result => 'ok');
+    my %rh = $resp.Hash;
+    is %rh<result>, 'ok', 'success response Hash';
+    nok %rh<error>:exists, 'no error in success response Hash';
+
+    my $err-resp = MCP::JSONRPC::Response.new(id => 2,
+        error => MCP::JSONRPC::Error.new(code => -1, message => 'fail'));
+    my %eh = $err-resp.Hash;
+    ok %eh<error>:exists, 'error in error response Hash';
+    nok %eh<result>:exists, 'no result in error response Hash';
+};
+
+# =============================================================================
+# Client extensions, roots, capabilities
+# =============================================================================
+
+subtest 'Client extensions in initialization', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+    );
+
+    $client.register-extension(name => 'test/ext', version => '1.0', settings => { foo => 'bar' });
+    dies-ok { $client.register-extension(name => 'bad-no-slash') }, 'extension without / dies';
+
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+
+    # Verify init request contains extensions
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    my $init-params = @reqs[0].params;
+    ok $init-params<capabilities><experimental><test/ext>:exists, 'extension in init capabilities';
+    is $init-params<capabilities><experimental><test/ext><version>, '1.0', 'extension version';
+
+    # Complete initialization with server extensions
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => { experimental => { 'test/ext' => { version => '1.0' } } },
+        instructions => 'hello',
+    }));
+    await $connect;
+
+    is $client.server-instructions, 'hello', 'server-instructions accessor';
+    ok $client.server-capabilities.defined, 'server-capabilities defined';
+    ok $client.supports-extension('test/ext'), 'supports-extension';
+    nok $client.supports-extension('other/ext'), 'does not support unknown extension';
+    ok $client.server-extensions<test/ext>:exists, 'server-extensions hash';
+    ok $client.negotiated-extensions<test/ext>:exists, 'negotiated extension';
+};
+
+subtest 'Client roots handling', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+        roots => [Root.new(uri => 'file:///home', name => 'home')],
+    );
+
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+
+    # Verify roots capability in init
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    ok @reqs[0].params<capabilities><roots>:exists, 'roots in init capabilities';
+
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    # Test get-roots
+    my @roots = $client.get-roots;
+    is @roots[0].uri, 'file:///home', 'get-roots returns roots';
+
+    # Handle roots/list request from server
+    $transport.clear-sent;
+    $transport.emit(MCP::JSONRPC::Request.new(id => 99, method => 'roots/list'));
+    sleep 0.1;
+    my @resps = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @resps.elems >= 1, 'roots/list response sent';
+    ok @resps[0].result<roots>.elems == 1, 'roots in response';
+
+    # set-roots
+    $transport.clear-sent;
+    $client.set-roots([Root.new(uri => 'file:///new')]);
+    sleep 0.1;
+    my @notifs = $transport.sent.grep(MCP::JSONRPC::Notification);
+    ok @notifs.grep({ .method eq 'notifications/roots/list_changed' }).elems >= 1,
+        'roots list changed notification sent';
+};
+
+subtest 'Client list-tools and list-resources', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+    );
+
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    # list-tools
+    $transport.clear-sent;
+    my $tools-p = $client.list-tools;
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        tools => [j(%( name => 'add', description => 'Add', inputSchema => %( type => 'object' ) ))],
+    }));
+    my $tools-result = await $tools-p;
+    is $tools-result<tools>[0].name, 'add', 'list-tools parses Tool';
+
+    # list-resources
+    $transport.clear-sent;
+    my $res-p = $client.list-resources;
+    $transport.await-sent;
+    @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        resources => [j(%( uri => 'file:///x', name => 'x' ))],
+    }));
+    my $res-result = await $res-p;
+    is $res-result<resources>[0].uri, 'file:///x', 'list-resources parses Resource';
+
+    # list-prompts
+    $transport.clear-sent;
+    my $prompts-p = $client.list-prompts;
+    $transport.await-sent;
+    @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        prompts => [j(%( name => 'summarize' ))],
+    }));
+    my $prompts-result = await $prompts-p;
+    is $prompts-result<prompts>[0].name, 'summarize', 'list-prompts parses Prompt';
+
+    # list-resource-templates
+    $transport.clear-sent;
+    my $tpl-p = $client.list-resource-templates;
+    $transport.await-sent;
+    @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        resourceTemplates => [j(%( uriTemplate => 'file:///{path}', name => 'files' ))],
+    }));
+    my $tpl-result = await $tpl-p;
+    is $tpl-result<resourceTemplates>[0].uriTemplate, 'file:///{path}', 'list-resource-templates';
+};
+
+subtest 'Client read-resource', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+    );
+
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    $transport.clear-sent;
+    my $read-p = $client.read-resource('file:///data.txt');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        contents => [j(%( uri => 'file:///data.txt', mimeType => 'text/plain', text => 'hello' ))],
+    }));
+    my @contents = await $read-p;
+    is @contents[0].text, 'hello', 'read-resource returns contents';
+};
+
+subtest 'Client ping', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+    );
+
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    $transport.clear-sent;
+    my $ping-p = $client.ping;
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].method, 'ping', 'ping sends ping method';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {}));
+    ok await($ping-p), 'ping resolves to True';
+};
+
+subtest 'Client cancel-request', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+    );
+
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    $transport.clear-sent;
+    my $p = $client.request('tools/list');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    my $req-id = @reqs[0].id;
+
+    $transport.clear-sent;
+    $client.cancel-request($req-id, reason => 'user cancelled');
+    sleep 0.1;
+
+    # Verify cancellation notification
+    my @notifs = $transport.sent.grep(MCP::JSONRPC::Notification);
+    ok @notifs.grep({ .method eq 'notifications/cancelled' }).elems >= 1, 'cancel notification sent';
+
+    # Promise should be broken
+    dies-ok { await $p }, 'cancelled request promise is broken';
+};
+
+subtest 'Client notifications supply', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+    );
+
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    my @notifs;
+    $client.notifications.tap(-> $n { @notifs.push($n) });
+
+    $transport.emit(MCP::JSONRPC::Notification.new(
+        method => 'notifications/tools/list_changed',
+    ));
+    sleep 0.1;
+    ok @notifs.elems >= 1, 'notification forwarded to supply';
+    is @notifs[0].method, 'notifications/tools/list_changed', 'correct notification method';
+};
+
+subtest 'Client set-log-level', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+    );
+
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    $transport.clear-sent;
+    my $p = $client.set-log-level(MCP::Types::Warning);
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].method, 'logging/setLevel', 'set-log-level method';
+    is @reqs[0].params<level>, 'warning', 'level param';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {}));
+    await $p;
+    pass 'set-log-level completes';
+};
+
+# =============================================================================
+# Client elicitation with handler
+# =============================================================================
+
+subtest 'Client elicitation with handler returning accept', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+        elicitation-handler => -> %params {
+            ElicitationResponse.new(action => ElicitAccept, content => { name => 'test' })
+        },
+    );
+
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+
+    # Verify elicitation capability in init
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    ok @reqs[0].params<capabilities><elicitation>:exists, 'elicitation in init capabilities';
+
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    # Send elicitation request
+    $transport.clear-sent;
+    $transport.emit(MCP::JSONRPC::Request.new(id => 50, method => 'elicitation/create',
+        params => { message => 'Enter name', requestedSchema => {} }));
+    sleep 0.2;
+
+    my @resps = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @resps.elems >= 1, 'elicitation response sent';
+    is @resps[0].result<action>, 'accept', 'accept action in response';
+    ok @resps[0].result<content><name> eq 'test', 'content in response';
+};
+
+# =============================================================================
+# OAuth Client error paths
+# =============================================================================
+
+subtest 'OAuthClientHandler error paths', {
+    my $handler = OAuthClientHandler.new(
+        resource-url => 'https://api.example.com',
+        client-id => 'test',
+        authorization-callback => -> Str $url { 'code' },
+    );
+
+    # authorization-url without discover
+    dies-ok { $handler.authorization-url }, 'authorization-url without discover dies';
+
+    # refresh without token
+    dies-ok { await $handler.refresh }, 'refresh without token dies';
+};
+
+subtest 'OAuthClientHandler get-token with cached valid token', {
+    my $handler = OAuthClientHandler.new(
+        resource-url => 'https://api.example.com',
+        client-id => 'test',
+        authorization-callback => -> Str $url { 'code' },
+    );
+
+    $handler.token = TokenResponse.new(
+        access-token => 'cached-abc',
+        expires-in => 3600,
+    );
+    my $token = await $handler.get-token;
+    is $token.access-token, 'cached-abc', 'get-token returns cached token';
+
+    my $header = await $handler.authorization-header;
+    is $header, 'Bearer cached-abc', 'authorization-header correct';
+};
+
+subtest 'OAuthClientHandler handle-unauthorized resets state', {
+    my $handler = OAuthClientHandler.new(
+        resource-url => 'https://api.example.com',
+        client-id => 'test',
+        authorization-callback => -> Str $url { 'code' },
+    );
+
+    $handler.token = TokenResponse.new(access-token => 'old', expires-in => 3600);
+    $handler.pkce-verifier = 'old-verifier';
+
+    # handle-unauthorized will try to authenticate, which will fail without metadata
+    # but it should reset token and verifier first
+    try { await $handler.handle-unauthorized }
+    nok $handler.pkce-verifier.defined, 'pkce-verifier reset after handle-unauthorized';
+};
+
+subtest 'OAuthM2MClient error paths', {
+    my $m2m = OAuthM2MClient.new(
+        resource-url => 'https://api.example.com',
+        client-id => 'test',
+        client-secret => 'secret',
+    );
+
+    # request-token without discover
+    dies-ok { await $m2m.request-token }, 'request-token without discover dies';
+};
+
+subtest 'OAuthEnterpriseClient error paths', {
+    my $ent = OAuthEnterpriseClient.new(
+        resource-url => 'https://mcp.example.com',
+        client-id => 'client-1',
+        idp-token-endpoint => 'https://idp.example.com/token',
+        idp-client-id => 'idp-1',
+    );
+
+    # exchange-token without subject token
+    dies-ok { await $ent.exchange-token }, 'exchange-token without subject dies';
+
+    # request-token without id-jag
+    dies-ok { await $ent.request-token }, 'request-token without id-jag dies';
+
+    # exchange-token without metadata
+    $ent.subject-token = 'some-token';
+    dies-ok { await $ent.exchange-token }, 'exchange-token without metadata dies';
+};
+
+subtest 'OAuthEnterpriseClient authorization-header with cached token', {
+    my $ent = OAuthEnterpriseClient.new(
+        resource-url => 'https://mcp.example.com',
+        client-id => 'client-1',
+        idp-token-endpoint => 'https://idp.example.com/token',
+        idp-client-id => 'idp-1',
+    );
+    $ent.token = TokenResponse.new(access-token => 'ent-token', expires-in => 3600);
+    my $header = await $ent.authorization-header;
+    is $header, 'Bearer ent-token', 'enterprise authorization-header';
+};
+
+# =============================================================================
+# Types coverage gaps
+# =============================================================================
+
+subtest 'IconDefinition round-trip', {
+    my $icon = IconDefinition.new(src => 'icon.png', mimeType => 'image/png', sizes => ['16x16', '32x32']);
+    my %h = $icon.Hash;
+    is %h<src>, 'icon.png', 'src in Hash';
+    is %h<mimeType>, 'image/png', 'mimeType in Hash';
+    is %h<sizes>.elems, 2, 'sizes in Hash';
+
+    my $from = IconDefinition.from-hash(%h);
+    is $from.src, 'icon.png', 'from-hash src';
+};
+
+subtest 'Implementation with title and icons', {
+    my $impl = Implementation.new(
+        name => 'srv', version => '1.0', title => 'My Server',
+        icons => [IconDefinition.new(src => 'logo.svg')],
+    );
+    my %h = $impl.Hash;
+    is %h<title>, 'My Server', 'title in Hash';
+    ok %h<icons>.elems == 1, 'icons in Hash';
+
+    my $from = Implementation.from-hash(%h);
+    is $from.title, 'My Server', 'from-hash title';
+};
+
+subtest 'Content type Hash methods', {
+    # ImageContent Hash
+    my $img = ImageContent.new(data => 'base64data', mimeType => 'image/png');
+    my %ih = $img.Hash;
+    is %ih<type>, 'image', 'image type';
+    is %ih<data>, 'base64data', 'image data';
+
+    # AudioContent Hash
+    my $aud = AudioContent.new(data => 'audiodata', mimeType => 'audio/wav');
+    my %ah = $aud.Hash;
+    is %ah<type>, 'audio', 'audio type';
+
+    # EmbeddedResource Hash
+    my $rc = ResourceContents.new(uri => 'file:///x', text => 'hello');
+    my $er = EmbeddedResource.new(resource => $rc);
+    my %eh = $er.Hash;
+    is %eh<type>, 'resource', 'embedded resource type';
+    is %eh<resource><text>, 'hello', 'embedded resource text';
+
+    # ResourceLink Hash
+    my $rl = ResourceLink.new(name => 'doc', uri => 'file:///doc', title => 'Doc',
+        description => 'A document', size => 1024);
+    my %rh = $rl.Hash;
+    is %rh<type>, 'resource_link', 'resource_link type';
+    is %rh<size>, 1024, 'size in Hash';
+
+    # ToolUseContent Hash
+    my $tu = ToolUseContent.new(id => 'tu-1', name => 'calc', input => { x => 1 });
+    my %th = $tu.Hash;
+    is %th<type>, 'tool_use', 'tool_use type';
+
+    # ToolResultContent Hash
+    my $tr = ToolResultContent.new(toolUseId => 'tu-1',
+        content => [TextContent.new(text => 'result')],
+        isError => True, structuredContent => { val => 42 }, meta => { id => 'x' });
+    my %trh = $tr.Hash;
+    is %trh<isError>, True, 'isError in Hash';
+    ok %trh<structuredContent><val> == 42, 'structuredContent in Hash';
+    ok %trh<_meta><id> eq 'x', 'meta in Hash';
+};
+
+subtest 'ResourceContents with blob', {
+    my $rc = ResourceContents.new(uri => 'file:///bin', blob => Buf.new(65, 66, 67));
+    my %h = $rc.Hash;
+    ok %h<blob>.defined, 'blob encoded in Hash';
+};
+
+subtest 'Prompt from-hash with arguments and icons', {
+    my $p = Prompt.from-hash({
+        name => 'test',
+        description => 'Test prompt',
+        title => 'Test',
+        icons => [j(%( src => 'icon.png' ))],
+        arguments => [j(%( name => 'text', description => 'The text', required => True ))],
+    });
+    is $p.name, 'test', 'name from-hash';
+    is $p.title, 'Test', 'title from-hash';
+    ok $p.icons.elems == 1, 'icons from-hash';
+    ok $p.arguments.elems == 1, 'arguments from-hash';
+    is $p.arguments[0].name, 'text', 'argument name';
+};
+
+subtest 'Resource from-hash with all fields', {
+    my $r = Resource.from-hash({
+        uri => 'file:///x', name => 'x', description => 'A file',
+        title => 'File X', mimeType => 'text/plain',
+        icons => [j(%( src => 'file.png' ))],
+    });
+    is $r.title, 'File X', 'title from-hash';
+    is $r.mimeType, 'text/plain', 'mimeType from-hash';
+    ok $r.icons.elems == 1, 'icons from-hash';
+};
+
+subtest 'Tool from-hash with all fields', {
+    my $t = Tool.from-hash({
+        name => 'calc', description => 'Calculate', title => 'Calculator',
+        inputSchema => { type => 'object' },
+        outputSchema => { type => 'object', properties => { result => { type => 'number' } } },
+        annotations => { readOnlyHint => True },
+        execution => { taskSupport => 'required' },
+        icons => [j(%( src => 'calc.png' ))],
+    });
+    is $t.title, 'Calculator', 'title from-hash';
+    ok $t.outputSchema.defined, 'outputSchema from-hash';
+    ok $t.annotations.readOnlyHint, 'annotations from-hash';
+    is $t.execution.taskSupport, TaskRequired, 'execution from-hash';
+    ok $t.icons.elems == 1, 'icons from-hash';
+};
+
+subtest 'ServerCapabilities from-hash full', {
+    my $caps = ServerCapabilities.from-hash(%(
+        logging => %(),
+        prompts => %( listChanged => True ),
+        resources => %( subscribe => True, listChanged => True ),
+        tools => %( listChanged => True ),
+        completions => %(),
+        experimental => %( 'custom/ext' => %( version => '1' ) ),
+        tasks => %( supported => True ),
+    ));
+    ok $caps.prompts.listChanged, 'prompts listChanged';
+    ok $caps.resources.subscribe, 'resources subscribe';
+    ok $caps.tools.listChanged, 'tools listChanged';
+    ok $caps.experimental<custom/ext>:exists, 'experimental';
+    ok $caps.tasks.defined, 'tasks capability';
+
+    my %h = $caps.Hash;
+    ok %h<prompts><listChanged>, 'prompts in Hash';
+    ok %h<tasks>:exists, 'tasks in Hash';
+};
+
+subtest 'ClientCapabilities Hash', {
+    my $caps = ClientCapabilities.new(
+        roots => RootsCapability.new(listChanged => True),
+        sampling => SamplingCapability.new(tools => True, context => True),
+        elicitation => ElicitationCapability.new(form => True, url => True),
+        experimental => { 'test/ext' => {} },
+        tasks => { supported => True },
+    );
+    my %h = $caps.Hash;
+    ok %h<roots><listChanged>, 'roots in Hash';
+    ok %h<sampling><tools>:exists, 'sampling tools in Hash';
+    ok %h<sampling><context>:exists, 'sampling context in Hash';
+    ok %h<elicitation><form>:exists, 'elicitation form in Hash';
+    ok %h<elicitation><url>:exists, 'elicitation url in Hash';
+    ok %h<experimental>:exists, 'experimental in Hash';
+    ok %h<tasks>:exists, 'tasks in Hash';
+};
+
+subtest 'ElicitationCapability from-hash', {
+    my $ec = ElicitationCapability.from-hash({ form => {}, url => {} });
+    ok $ec.supports-form, 'supports-form';
+    ok $ec.supports-url, 'supports-url';
+
+    my $ec2 = ElicitationCapability.from-hash({});
+    ok $ec2.supports-form, 'empty hash defaults to form';
+    nok $ec2.supports-url, 'empty hash no url';
+};
+
+subtest 'CompletionResult from-hash', {
+    my $cr = CompletionResult.from-hash({
+        values => ['a', 'b', 'c'],
+        total => 10,
+        hasMore => True,
+    });
+    is $cr.values.elems, 3, 'values count';
+    is $cr.total, 10, 'total';
+    ok $cr.hasMore, 'hasMore';
+    my %h = $cr.Hash;
+    is %h<total>, 10, 'total in Hash';
+};
+
+subtest 'Extension round-trip', {
+    my $ext = Extension.new(name => 'test/ext', version => '1.0', settings => { foo => 'bar' });
+    my %h = $ext.Hash;
+    is %h<name>, 'test/ext', 'name in Hash';
+    is %h<version>, '1.0', 'version in Hash';
+
+    my $from = Extension.from-hash(%h);
+    is $from.name, 'test/ext', 'from-hash name';
+    is $from.settings<foo>, 'bar', 'from-hash settings';
+};
+
+subtest 'Root from-hash', {
+    my $r = Root.from-hash({ uri => 'file:///home', name => 'home' });
+    is $r.uri, 'file:///home', 'uri';
+    is $r.name, 'home', 'name';
+    my %h = $r.Hash;
+    is %h<name>, 'home', 'name in Hash';
+};
+
+subtest 'Progress Hash', {
+    my $p = Progress.new(progressToken => 'tok1', progress => 5e0, total => 10e0, message => 'halfway');
+    my %h = $p.Hash;
+    is %h<progressToken>, 'tok1', 'token in Hash';
+    is %h<total>, 10, 'total in Hash';
+    is %h<message>, 'halfway', 'message in Hash';
+};
+
+subtest 'LogEntry Hash', {
+    my $le = LogEntry.new(level => MCP::Types::Info, logger => 'main', data => 'hello');
+    my %h = $le.Hash;
+    is %h<level>, 'info', 'level in Hash';
+    is %h<logger>, 'main', 'logger in Hash';
+    is %h<data>, 'hello', 'data in Hash';
+};
+
+subtest 'log-level-at-or-above and parse-log-level', {
+    ok log-level-at-or-above(MCP::Types::Error, MCP::Types::Warning), 'error >= warning';
+    ok log-level-at-or-above(MCP::Types::Warning, MCP::Types::Warning), 'warning >= warning';
+    nok log-level-at-or-above(MCP::Types::Debug, MCP::Types::Warning), 'debug < warning';
+
+    is parse-log-level('info'), MCP::Types::Info, 'parse info';
+    is parse-log-level('emergency'), MCP::Types::Emergency, 'parse emergency';
+    dies-ok { parse-log-level('bogus') }, 'parse unknown level dies';
+};
+
+subtest 'CreateMessageResult Hash', {
+    my $cmr = CreateMessageResult.new(
+        content => TextContent.new(text => 'hi'),
+        model => 'claude', role => 'assistant',
+        stopReason => 'endTurn', meta => { id => 'x' },
+    );
+    my %h = $cmr.Hash;
+    is %h<model>, 'claude', 'model in Hash';
+    is %h<stopReason>, 'endTurn', 'stopReason in Hash';
+    ok %h<_meta><id> eq 'x', 'meta in Hash';
+};
+
+subtest 'ModelPreferences Hash', {
+    my $mp = ModelPreferences.new(
+        hints => [ModelHint.new(name => 'claude-3')],
+        costPriority => 0.5e0,
+        speedPriority => 0.8e0,
+        intelligencePriority => 0.9e0,
+    );
+    my %h = $mp.Hash;
+    is %h<hints>[0]<name>, 'claude-3', 'hint name';
+    is %h<costPriority>, 0.5, 'costPriority';
+};
+
+subtest 'ToolChoice Hash', {
+    my $tc = ToolChoice.new(mode => 'tool', name => 'calc');
+    my %h = $tc.Hash;
+    is %h<mode>, 'tool', 'mode';
+    is %h<name>, 'calc', 'name';
+};
+
+subtest 'CreateTaskResult Hash', {
+    my $task = Task.new(taskId => 't1', status => TaskWorking);
+    my $ctr = CreateTaskResult.new(task => $task);
+    my %h = $ctr.Hash;
+    is %h<task><taskId>, 't1', 'task in Hash';
+};
+
+subtest 'Task with all optional fields', {
+    my $t = Task.new(
+        taskId => 't1', status => TaskWorking,
+        statusMessage => 'processing', createdAt => '2025-01-01',
+        lastUpdatedAt => '2025-01-02', ttl => 30000, pollInterval => 1000,
+    );
+    my %h = $t.Hash;
+    is %h<statusMessage>, 'processing', 'statusMessage';
+    is %h<createdAt>, '2025-01-01', 'createdAt';
+    is %h<lastUpdatedAt>, '2025-01-02', 'lastUpdatedAt';
+    is %h<pollInterval>, 1000, 'pollInterval';
+
+    my $from = Task.from-hash(%h);
+    is $from.statusMessage, 'processing', 'from-hash statusMessage';
+    is $from.pollInterval, 1000, 'from-hash pollInterval';
+};
+
+# =============================================================================
+# Server/Tool builder string-param with enum (if supported)
+# =============================================================================
+
+subtest 'ToolBuilder all param types', {
+    my $t = tool()
+        .name('test')
+        .string-param('s', description => 'str', :required)
+        .number-param('n', description => 'num', :required)
+        .integer-param('i', description => 'int', :required)
+        .boolean-param('b', description => 'bool', :required)
+        .array-param('a', description => 'arr', items => { type => 'string' }, :required)
+        .handler(-> { 'ok' })
+        .build;
+
+    my $schema = $t.to-tool.inputSchema;
+    is $schema<properties><s><type>, 'string', 'string param';
+    is $schema<properties><n><type>, 'number', 'number param';
+    is $schema<properties><i><type>, 'integer', 'integer param';
+    is $schema<properties><b><type>, 'boolean', 'boolean param';
+    is $schema<properties><a><type>, 'array', 'array param';
+    ok $schema<properties><a><items><type> eq 'string', 'array items';
+    is $schema<required>.elems, 5, 'all required';
+};
+
+subtest 'ToolBuilder annotations all fields', {
+    my $t = tool()
+        .name('test')
+        .title('Test Tool')
+        .icon('tool.png', mimeType => 'image/png', sizes => ['16x16'])
+        .annotations(title => 'T', :readOnlyHint, :destructiveHint, :idempotentHint, :openWorldHint)
+        .handler(-> { 'ok' })
+        .build;
+
+    my $tool = $t.to-tool;
+    is $tool.title, 'Test Tool', 'title on tool';
+    ok $tool.icons.elems == 1, 'icon on tool';
+    ok $tool.annotations.readOnlyHint, 'readOnlyHint';
+    ok $tool.annotations.destructiveHint, 'destructiveHint';
+    ok $tool.annotations.idempotentHint, 'idempotentHint';
+    ok $tool.annotations.openWorldHint, 'openWorldHint';
+};
+
+subtest 'ResourceBuilder all fields', {
+    my $r = resource()
+        .uri('config://app')
+        .name('App Config')
+        .description('Application configuration')
+        .title('Config')
+        .icon('config.png')
+        .mimeType('application/json')
+        .annotations(<user assistant>, priority => 0.5)
+        .reader({ '{"key":"value"}' })
+        .build;
+
+    my $res = $r.to-resource;
+    is $res.title, 'Config', 'title';
+    ok $res.icons.elems == 1, 'icon';
+    is $res.mimeType, 'application/json', 'mimeType';
+    ok $res.annotations.defined, 'annotations';
+
+    my @contents = $r.read;
+    is @contents[0].text, '{"key":"value"}', 'read returns text';
+};
+
+subtest 'PromptBuilder all fields', {
+    my $p = prompt()
+        .name('summarize')
+        .description('Summarize text')
+        .title('Summarizer')
+        .icon('prompt.png')
+        .required-argument('text', description => 'Input text')
+        .optional-argument('style', description => 'Summary style')
+        .generator(-> :%params { user-message(%params<text> // 'default') })
+        .build;
+
+    my $prompt = $p.to-prompt;
+    is $prompt.title, 'Summarizer', 'title';
+    ok $prompt.icons.elems == 1, 'icon';
+    is $prompt.arguments.elems, 2, 'two arguments';
+    ok $prompt.arguments[0].required, 'first arg required';
+    nok $prompt.arguments[1].required, 'second arg optional';
+};
+
+subtest 'ResourceTemplateBuilder all fields', {
+    my $rt = resource-template()
+        .uri-template('file:///{path}')
+        .name('files')
+        .description('Access files')
+        .title('File Access')
+        .icon('file.png')
+        .mimeType('text/plain')
+        .annotations(['user'], priority => 0.8)
+        .reader(-> %p { "content of %p<path>" })
+        .build;
+
+    my $tmpl = $rt.to-resource-template;
+    is $tmpl.title, 'File Access', 'title';
+    ok $tmpl.icons.elems == 1, 'icon';
+};
+
+# =============================================================================
+# Server tool handler returning various types
+# =============================================================================
+
+subtest 'RegisteredTool call with various return types', {
+    # Return Content object
+    my $t1 = RegisteredTool.new(name => 'a',
+        handler => -> { TextContent.new(text => 'direct') });
+    my $r1 = $t1.call({});
+    is $r1.content[0].text, 'direct', 'Content return type';
+
+    # Return Array of Content
+    my $t2 = RegisteredTool.new(name => 'b',
+        handler => -> { [TextContent.new(text => 'a'), TextContent.new(text => 'b')] });
+    my $r2 = $t2.call({});
+    is $r2.content.elems, 2, 'Array return type';
+
+    # Return Hash with outputSchema
+    my $t3 = RegisteredTool.new(name => 'c',
+        outputSchema => { type => 'object' },
+        handler => -> { { result => 42 } });
+    my $r3 = $t3.call({});
+    ok $r3.structuredContent.defined, 'structuredContent set for Hash+outputSchema';
+
+    # Return Hash without outputSchema
+    my $t4 = RegisteredTool.new(name => 'd',
+        handler => -> { { result => 42 } });
+    my $r4 = $t4.call({});
+    nok $r4.structuredContent.defined, 'no structuredContent without outputSchema';
+
+    # Return non-string (Int)
+    my $t5 = RegisteredTool.new(name => 'e',
+        handler => -> { 42 });
+    my $r5 = $t5.call({});
+    ok $r5.content[0].text.contains('42'), 'non-string coerced to text';
+};
+
+subtest 'RegisteredResource read with various return types', {
+    # Blob return
+    my $r1 = RegisteredResource.new(uri => 'test://x', name => 'x',
+        reader => -> { Buf.new(65, 66) });
+    my @c1 = $r1.read;
+    ok @c1[0].mimeType eq 'application/octet-stream', 'Blob default mimeType';
+
+    # Positional return
+    my $r2 = RegisteredResource.new(uri => 'test://x', name => 'x',
+        reader => -> { [ResourceContents.new(uri => 'test://x', text => 'a')] });
+    my @c2 = $r2.read;
+    is @c2[0].text, 'a', 'Positional return';
+
+    # Non-string return
+    my $r3 = RegisteredResource.new(uri => 'test://x', name => 'x',
+        reader => -> { 42 });
+    my @c3 = $r3.read;
+    ok @c3[0].text.contains('42'), 'non-string coerced';
+};
+
+# =============================================================================
+# Client get-prompt and complete-prompt
+# =============================================================================
+
+subtest 'Client get-prompt', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+    );
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    $transport.clear-sent;
+    my $p = $client.get-prompt('summarize', arguments => { text => 'hello' });
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        description => 'A summarizer',
+        messages => [j(%( role => 'user', content => %( type => 'text', text => 'Summarize: hello' ) ))],
+    }));
+    my $result = await $p;
+    is $result<description>, 'A summarizer', 'description';
+    is $result<messages>[0].role, 'user', 'message role';
+};
+
+subtest 'Client complete-prompt', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+    );
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    $transport.clear-sent;
+    my $p = $client.complete-prompt('summarize', argument-name => 'text', value => 'hel');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].method, 'completion/complete', 'correct method';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        completion => j(%( values => ['hello', 'help'], hasMore => False )),
+    }));
+    my $result = await $p;
+    is $result.values.elems, 2, 'completion values';
+};
+
+subtest 'Client subscribe/unsubscribe resource', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+    );
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    # subscribe
+    $transport.clear-sent;
+    my $sub-p = $client.subscribe-resource('file:///x');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].method, 'resources/subscribe', 'subscribe method';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {}));
+    await $sub-p;
+
+    # unsubscribe
+    $transport.clear-sent;
+    my $unsub-p = $client.unsubscribe-resource('file:///x');
+    $transport.await-sent;
+    @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].method, 'resources/unsubscribe', 'unsubscribe method';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {}));
+    await $unsub-p;
+    pass 'subscribe/unsubscribe complete';
+};
+
+# =============================================================================
+# Client task methods
+# =============================================================================
+
+subtest 'Client task methods', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+    );
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    # call-tool-as-task
+    $transport.clear-sent;
+    my $task-p = $client.call-tool-as-task('slow-calc', arguments => { x => 1 });
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    ok @reqs[0].params<task><ttl> == 30000, 'default ttl';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        task => j(%( taskId => 'task-1', status => 'working' )),
+    }));
+    my $task = await $task-p;
+    is $task.taskId, 'task-1', 'task created';
+
+    # get-task
+    $transport.clear-sent;
+    my $get-p = $client.get-task('task-1');
+    $transport.await-sent;
+    @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        taskId => 'task-1', status => 'completed',
+    }));
+    my $got = await $get-p;
+    is $got.status, TaskCompleted, 'task completed';
+
+    # cancel-task
+    $transport.clear-sent;
+    my $cancel-p = $client.cancel-task('task-1');
+    $transport.await-sent;
+    @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        taskId => 'task-1', status => 'cancelled',
+    }));
+    my $cancelled = await $cancel-p;
+    is $cancelled.status, TaskCancelled, 'task cancelled';
+
+    # list-tasks
+    $transport.clear-sent;
+    my $list-p = $client.list-tasks;
+    $transport.await-sent;
+    @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        tasks => [j(%( taskId => 'task-1', status => 'cancelled' ))],
+    }));
+    my $list = await $list-p;
+    is $list<tasks>.elems, 1, 'list-tasks returns tasks';
+};
+
+# =============================================================================
+# X::MCP::Client error types
+# =============================================================================
+
+subtest 'X::MCP::Client error classes', {
+    my $err = MCP::JSONRPC::Error.new(code => -32600, message => 'bad');
+    my $client-err = X::MCP::Client::Error.new(error => $err);
+    ok $client-err.message.contains('bad'), 'Client::Error message';
+
+    my $timeout = X::MCP::Client::Timeout.new(method => 'tools/list');
+    ok $timeout.message.contains('tools/list'), 'Timeout message contains method';
+};
+
+# =============================================================================
+# MCP.rakumod re-exports
+# =============================================================================
+
+done-testing;
