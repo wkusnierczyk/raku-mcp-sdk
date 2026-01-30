@@ -110,13 +110,6 @@ jobs:
         run: |
           zef install App::Prove6 || true
           prove6 -I. -v t/
-        # TODO: Consider a targeted one-time retry for specific flaky tests only.
-
-      - name: Run tests (fallback)
-        if: failure()
-        run: |
-          raku -I. t/01-types.rakutest
-          raku -I. t/02-jsonrpc.rakutest
 
   # ----------------------------------------------------------------------------
   # Coverage Job - Generate coverage report and enforce threshold
@@ -165,3 +158,4 @@ jobs:
             exit 1
           fi
           echo "✓ Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%" >&2
+
