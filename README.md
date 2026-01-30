@@ -79,7 +79,7 @@ See [Gap Analysis](https://github.com/wkusnierczyk/raku-mcp-sdk/blob/main/GAP_AN
   - [CI pipeline](#ci-pipeline)
 - [Project structure](#project-structure)
 - [Contributing](#contributing)
-- [Quality and roadmap](#quality-and-roadmap)
+- [Quality](#quality)
   - [Security](#security)
   - [Performance and stress testing](#performance-and-stress-testing)
 - [License](#license)
@@ -575,7 +575,7 @@ Contributions are welcome. You can:
 >   You can only **squash-merge** as one commit, with a detailed description of your changes.
 
 
-## Quality and roadmap
+## Quality
 
 ### Security
 
