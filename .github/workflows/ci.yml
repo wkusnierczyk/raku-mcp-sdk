@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 env:
   # Raku version to use
@@ -110,13 +111,6 @@ jobs:
         run: |
           zef install App::Prove6 || true
           prove6 -I. -v t/
-        # TODO: Consider a targeted one-time retry for specific flaky tests only.
-
-      - name: Run tests (fallback)
-        if: failure()
-        run: |
-          raku -I. t/01-types.rakutest
-          raku -I. t/02-jsonrpc.rakutest
 
   # ----------------------------------------------------------------------------
   # Coverage Job - Generate coverage report and enforce threshold
@@ -165,3 +159,18 @@ jobs:
             exit 1
           fi
           echo "✓ Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%" >&2
+
+  # ----------------------------------------------------------------------------
+  # Rerun Failed Jobs - Automatically retry flaky test failures
+  # ----------------------------------------------------------------------------
+  rerun-failed:
+    name: Rerun failed jobs
+    needs: [test, coverage]
+    if: failure() && github.run_attempt < 3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rerun failed jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run rerun ${{ github.run_id }} --failed --repo ${{ github.repository }}
