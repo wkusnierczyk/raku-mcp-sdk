@@ -23,6 +23,7 @@ docs/
 .racoco/
 coverage-report/
 coverage.json
+__pycache__/
 
 # ------------------------------------------------------------------------------
 # IDE and editors
