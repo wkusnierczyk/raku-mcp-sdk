@@ -71,35 +71,11 @@ class RegisteredPrompt is export {
 
     #| Generate the prompt messages
     method get(%arguments --> Array) {
-        my $result;
-        my $called = False;
-        {
-            $result = &!generator(:params(%arguments));
-            $called = True;
-            CATCH {
-                when X::AdHoc | X::Multi::NoMatch { }
-                default { .rethrow }
-            }
-        }
-        unless $called {
-            $result = &!generator(|%arguments);
-            $called = True;
-            CATCH {
-                when X::AdHoc | X::Multi::NoMatch { }
-                default { .rethrow }
-            }
-        }
-        unless $called {
-            $result = &!generator(%arguments);
-            $called = True;
-            CATCH {
-                when X::AdHoc | X::Multi::NoMatch { }
-                default { .rethrow }
-            }
-        }
-        unless $called {
-            $result = &!generator();
-        }
+        my $result =
+            (try &!generator(:params(%arguments)))
+            // (try &!generator(|%arguments))
+            // (try &!generator(%arguments))
+            // &!generator();
 
         # Normalize to array of PromptMessage
         given $result {

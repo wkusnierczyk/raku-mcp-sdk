@@ -98,35 +98,11 @@ class RegisteredTool is export {
 
     #| Call the tool with given arguments
     method call(%arguments --> MCP::Types::CallToolResult) {
-        my $result;
-        my $called = False;
-        {
-            $result = &!handler(:params(%arguments));
-            $called = True;
-            CATCH {
-                when X::AdHoc | X::Multi::NoMatch { }
-                default { .rethrow }
-            }
-        }
-        unless $called {
-            $result = &!handler(|%arguments);
-            $called = True;
-            CATCH {
-                when X::AdHoc | X::Multi::NoMatch { }
-                default { .rethrow }
-            }
-        }
-        unless $called {
-            $result = &!handler(%arguments);
-            $called = True;
-            CATCH {
-                when X::AdHoc | X::Multi::NoMatch { }
-                default { .rethrow }
-            }
-        }
-        unless $called {
-            $result = &!handler();
-        }
+        my $result =
+            (try &!handler(:params(%arguments)))
+            // (try &!handler(|%arguments))
+            // (try &!handler(%arguments))
+            // &!handler();
 
         # Normalize result to CallToolResult
         given $result {

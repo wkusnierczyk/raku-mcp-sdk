@@ -449,13 +449,6 @@ coverage: dependencies-dev build
 		--exec="$(PROVE) $(PROVE_FLAGS) $(TEST_DIR)"
 	$(call log-success,Coverage report generated: $(COVERAGE_REPORT)/report.html)
 
-.PHONY: benchmark
-# benchmark: Run performance benchmarks
-benchmark: build
-	$(call log-info,Running benchmarks...)
-	$(Q)$(RAKU) -Ilib bench/benchmark.rakutest
-	$(call log-success,Benchmarks complete)
-
 # ------------------------------------------------------------------------------
 # Validation
 # ------------------------------------------------------------------------------
