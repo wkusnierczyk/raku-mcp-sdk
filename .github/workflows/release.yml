@@ -350,14 +350,14 @@ jobs:
 
       - name: Configure fez
         env:
-          FEZ_CONFIG: ${{ secrets.FEZ_CONFIG }}
+          FEZ_CONFIG_CONTENT: ${{ secrets.FEZ_CONFIG }}
         run: |
-          if [[ -z "$FEZ_CONFIG" ]]; then
+          if [[ -z "$FEZ_CONFIG_CONTENT" ]]; then
             echo "::warning::FEZ_CONFIG secret not set, skipping publish"
             exit 0
           fi
 
-          printf '%s' "$FEZ_CONFIG" > ~/.fez-config.json
+          printf '%s' "$FEZ_CONFIG_CONTENT" > ~/.fez-config.json
           chmod 600 ~/.fez-config.json
 
           # Ensure fez has a working HTTP requestor (curl is pre-installed on ubuntu)
@@ -368,12 +368,12 @@ jobs:
             echo "✓ Added Fez::Util::Curl requestor to fez config" >&2
           fi
 
+          echo "✓ Fez configured" >&2
+
       - name: Publish to Zef ecosystem
-        env:
-          FEZ_CONFIG: ${{ secrets.FEZ_CONFIG }}
         run: |
-          if [[ -z "$FEZ_CONFIG" ]]; then
-            echo "::warning::Skipping publish - FEZ_CONFIG not configured"
+          if [[ ! -f ~/.fez-config.json ]]; then
+            echo "::warning::Skipping publish - fez config not found"
             exit 0
           fi
 
