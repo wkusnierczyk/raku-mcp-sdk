@@ -1,0 +1,4 @@
+use Test::Coverage;
+plan 2;
+coverage-at-least 90;
+uncovered-at-most 200;

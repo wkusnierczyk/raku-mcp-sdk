@@ -32,8 +32,12 @@ EXAMPLES_DIR    := examples
 DOCS_DIR        := docs
 BUILD_DIR       := .build
 DIST_DIR        := dist
-COVERAGE_DIR    := .racoco
 COVERAGE_REPORT := coverage-report
+RACOCO          := racoco
+RACOCO_BIN      := $(shell command -v $(RACOCO) 2>/dev/null)
+RACOCO_HOME_BIN := $(shell ls $(HOME)/.raku/bin/$(RACOCO) 2>/dev/null)
+RACOCO_SITE_BIN := $(shell ls $(HOME)/.raku/share/perl6/site/bin/$(RACOCO) 2>/dev/null)
+RACOCO_CMD      := $(or $(RACOCO_BIN),$(RACOCO_HOME_BIN),$(RACOCO_SITE_BIN),$(RACOCO))
 ARCH_DIR        := architecture
 ARCH_MMD        := $(ARCH_DIR)/architecture.mmd
 ARCH_PNG        := $(ARCH_DIR)/architecture.png
@@ -57,10 +61,6 @@ ZEF             := zef
 PROVE           := prove6
 MI6             := mi6
 FEZ             := fez
-RACOCO          := racoco
-RACOCO_BIN      := $(shell command -v $(RACOCO) 2>/dev/null)
-RACOCO_HOME_BIN := $(shell $(RAKU) -e 'say $$*REPO.repo-chain.grep(*.can("prefix")).first.prefix.Str ~ "/bin"' 2>/dev/null)
-RACOCO_SITE_BIN := $(shell $(RAKU) -e 'say $$*REPO.repo-chain.grep(*.can("prefix")).map(*.prefix.Str).grep({ .contains("/site") })[0] ~ "/bin"' 2>/dev/null)
 MMDC            := mmdc
 MMDC_BIN        := $(shell command -v $(MMDC) 2>/dev/null)
 
@@ -68,8 +68,6 @@ MMDC_BIN        := $(shell command -v $(MMDC) 2>/dev/null)
 RAKU_FLAGS      := -I$(SOURCE_DIR)
 PROVE_FLAGS     := -I. -v
 ZEF_FLAGS       := --deps-only
-RACOCO_FLAGS    := -l
-RACOCO_COVERAGE_FLAGS :=
 MMDC_FLAGS      :=
 
 # Installation options
@@ -195,7 +193,8 @@ help:
 	$(call log,  $(CLR_GREEN)test$(CLR_RESET)                 Run all tests)
 	$(call log,  $(CLR_GREEN)test-verbose$(CLR_RESET)         Run tests with verbose output)
 	$(call log,  $(CLR_GREEN)test-file$(CLR_RESET)            Run a specific test (FILE=path))
-	$(call log,  $(CLR_GREEN)coverage$(CLR_RESET)             Generate test coverage report)
+	$(call log,  $(CLR_GREEN)coverage$(CLR_RESET)             Check coverage threshold (CI))
+	$(call log,  $(CLR_GREEN)coverage-report$(CLR_RESET)      Generate HTML coverage report (RaCoCo))
 	$(call log,)
 	$(call log,$(CLR_YELLOW)Distribution Targets:$(CLR_RESET))
 	$(call log,  $(CLR_GREEN)dist$(CLR_RESET)                 Create distribution tarball)
@@ -287,11 +286,12 @@ clean-build:
 	$(Q)find . -name '.precomp' -type d -exec rm -rf {} + 2>/dev/null || true
 
 .PHONY: clean-coverage
-# clean-coverage: Remove coverage reports
+# clean-coverage: Remove coverage reports (Test::Coverage and RaCoCo)
 clean-coverage:
 	$(call log-info,Cleaning coverage data...)
-	$(Q)rm -rf $(COVERAGE_DIR)
+	$(Q)rm -f *.rakucov
 	$(Q)rm -rf $(COVERAGE_REPORT)
+	$(Q)rm -rf .racoco
 
 .PHONY: clean-dist
 # clean-dist: Remove distribution artifacts
@@ -326,6 +326,7 @@ dependencies-dev: dependencies
 	$(Q)$(ZEF) install App::Prove6 || true
 	$(Q)$(ZEF) install Test::META || true
 	$(Q)$(ZEF) install App::Mi6 || true
+	$(Q)$(ZEF) install Test::Coverage || true
 	$(Q)$(ZEF) install App::Racoco || true
 	$(call log-success,Development dependencies installed)
 
@@ -431,24 +432,20 @@ test-quick:
 	$(Q)$(PROVE) -I. $(TEST_DIR)
 
 .PHONY: coverage
-# coverage: Generate coverage report (if Racoco installed)
-coverage: dependencies-dev build
-	$(call log-info,Generating coverage report...)
-	@RACOCO_CMD="$(RACOCO_BIN)"; \
-	if [ -z "$$RACOCO_CMD" ]; then RACOCO_CMD="$(RACOCO)"; fi; \
-	if ! command -v "$$RACOCO_CMD" >/dev/null 2>&1; then \
-		if [ -x "$(RACOCO_HOME_BIN)/racoco" ]; then RACOCO_CMD="$(RACOCO_HOME_BIN)/racoco"; fi; \
-		if [ -x "$(RACOCO_SITE_BIN)/racoco" ]; then RACOCO_CMD="$(RACOCO_SITE_BIN)/racoco"; fi; \
-	fi; \
-	if ! command -v "$$RACOCO_CMD" >/dev/null 2>&1 && [ ! -x "$$RACOCO_CMD" ]; then \
-		printf "RaCoCo not found on PATH\\n" >&2; \
-		printf "Try: zef install App::RaCoCo\\n" >&2; \
-		exit 1; \
-	fi; \
-	"$$RACOCO_CMD" $(RACOCO_COVERAGE_FLAGS) --html --cache-dir=$(COVERAGE_REPORT) \
+# coverage: Check coverage threshold using Test::Coverage (used in CI)
+coverage: build
+	$(call log-info,Checking coverage threshold...)
+	$(Q)$(RAKU) -I. xt/coverage.rakutest
+	$(call log-success,Coverage check passed)
+
+.PHONY: coverage-report
+# coverage-report: Generate HTML/JSON coverage report using RaCoCo (local use)
+coverage-report: build
+	$(call log-info,Generating coverage report with RaCoCo...)
+	$(Q)$(RACOCO_CMD) --html --cache-dir=$(COVERAGE_REPORT) \
 		--exec="$(PROVE) $(PROVE_FLAGS) $(TEST_DIR)"
 	@python3 tools/coverage-report.py --coverage-dir $(COVERAGE_REPORT)
-	$(call log-success,Coverage reports generated in $(COVERAGE_REPORT)/)
+	$(call log-success,Coverage report generated in $(COVERAGE_REPORT)/)
 
 # ------------------------------------------------------------------------------
 # Validation
@@ -492,7 +489,9 @@ dist: clean validate
 	$(Q)mkdir -p $(DIST_DIR)
 	$(Q)tar --exclude='$(DIST_DIR)' \
 		--exclude='$(BUILD_DIR)' \
-		--exclude='$(COVERAGE_DIR)' \
+		--exclude='*.rakucov' \
+		--exclude='.racoco' \
+		--exclude='$(COVERAGE_REPORT)' \
 		--exclude='.git' \
 		--exclude='.precomp' \
 		--exclude='*.tar.gz' \

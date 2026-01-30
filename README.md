@@ -55,9 +55,9 @@ See [Gap Analysis](https://github.com/wkusnierczyk/raku-mcp-sdk/blob/main/GAP_AN
 The Raku MCP SDK is currently **in review by the community**.  
 Planned and currently ongoing efforts:
 
-* [Increased test coverage](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/143)  
-  Current test coverage is at ~87%. The target is to achieve at least 90% coverage.  
-  For the current coverage, use `make coverage` (see [Makefile targets](#makefile-targets) below).
+* [Increased test coverage](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/143)
+  Current test coverage is at ~87%. The target is to achieve at least 90% coverage.
+  For the current coverage, use `make coverage` or `make coverage-report` (see [Makefile targets](#makefile-targets) and [Coverage](#coverage) below).
 
 ## Table of contents
 
@@ -84,7 +84,7 @@ Planned and currently ongoing efforts:
 - [Development](#development)
   - [Makefile targets](#makefile-targets)
   - [Environment variables](#environment-variables)
-  - [Coverage prerequisites](#coverage-prerequisites)
+  - [Coverage](#coverage)
   - [CI pipeline](#ci-pipeline)
 - [Project structure](#project-structure)
 - [Contributing](#contributing)
@@ -419,7 +419,7 @@ make test        # Run test suite
     <tr><td><code>validate-provides</code></td><td>Verify <code>provides</code> paths exist</td><td>Prints each resolved entry</td></tr>
     <tr><th colspan="3" align="left">Dependencies</th></tr>
     <tr><td><code>dependencies</code></td><td>Install runtime dependencies</td><td><code>zef install --deps-only .</code></td></tr>
-    <tr><td><code>dependencies-dev</code></td><td>Install dev dependencies</td><td>Includes Prove6, Test::META, Mi6, Racoco</td></tr>
+    <tr><td><code>dependencies-dev</code></td><td>Install dev dependencies</td><td>Includes Prove6, Test::META, Mi6, Test::Coverage, RaCoCo</td></tr>
     <tr><td><code>dependencies-update</code></td><td>Update dependencies</td><td>Runs <code>zef update</code> and <code>zef upgrade</code></td></tr>
     <tr><th colspan="3" align="left">Lint and formatting</th></tr>
     <tr><td><code>lint</code></td><td>Run syntax + META checks</td><td>Runs <code>lint-syntax</code> and <code>lint-meta</code></td></tr>
@@ -432,7 +432,8 @@ make test        # Run test suite
     <tr><td><code>test-verbose</code></td><td>Run tests with verbose output</td><td>Uses <code>prove6</code> with <code>--verbose</code></td></tr>
     <tr><td><code>test-file</code></td><td>Run a specific test file</td><td><code>FILE=t/01-types.rakutest</code></td></tr>
     <tr><td><code>test-quick</code></td><td>Run tests without build</td><td>Skips <code>build</code></td></tr>
-    <tr><td><code>coverage</code></td><td>Generate coverage report</td><td>HTML in <code>coverage-report/report.html</code>, raw data in <code>.racoco/</code></td></tr>
+    <tr><td><code>coverage</code></td><td>Check coverage threshold (CI)</td><td>Uses <code>Test::Coverage</code>; fails if below threshold</td></tr>
+    <tr><td><code>coverage-report</code></td><td>Generate coverage report (local)</td><td>Uses <code>RaCoCo</code>; produces HTML, JSON, and Markdown reports</td></tr>
     <tr><td><code>benchmark</code></td><td>Run performance benchmarks</td><td>Parsing, dispatch, concurrency</td></tr>
     <tr><th colspan="3" align="left">Documentation</th></tr>
     <tr><td><code>docs</code></td><td>Generate text docs into <code>docs/</code></td><td>Uses <code>raku --doc=Text</code> per module</td></tr>
@@ -466,7 +467,7 @@ make test        # Run test suite
     <tr><th colspan="3" align="left">Cleaning</th></tr>
     <tr><td><code>clean</code></td><td>Remove build/coverage/dist</td><td>Runs clean-build/clean-coverage/clean-dist</td></tr>
     <tr><td><code>clean-build</code></td><td>Remove precomp/build dirs</td><td>Removes <code>.precomp</code> and <code>.build</code></td></tr>
-    <tr><td><code>clean-coverage</code></td><td>Remove coverage output</td><td>Removes <code>.racoco</code> and <code>coverage-report</code></td></tr>
+    <tr><td><code>clean-coverage</code></td><td>Remove coverage output</td><td>Removes <code>*.rakucov</code>, <code>coverage-report/</code>, and <code>.racoco/</code></td></tr>
     <tr><td><code>clean-dist</code></td><td>Remove tarballs/dist dir</td><td>Removes <code>dist/</code> and <code>*.tar.gz</code></td></tr>
     <tr><td><code>clean-all</code></td><td>Deep clean</td><td>Also removes docs build output</td></tr>
   </tbody>
@@ -504,20 +505,31 @@ make bump-major    # (x+1).0.0
 ```
 
 
-### Coverage Prerequisites
+### Coverage
 
-The coverage report uses RaCoCo. If `racoco` is not on your PATH, add the
-Raku site bin directory:
+The project uses two complementary coverage tools with separate `make` targets:
+
+| Target | Tool | Purpose | Output |
+|--------|------|---------|--------|
+| `make coverage` | [Test::Coverage](https://raku.land/zef:patrickb/Test::Coverage) | Threshold check (CI) | Pass/fail TAP output |
+| `make coverage-report` | [RaCoCo](https://raku.land/zef:patrickb/App::RaCoCo) | Detailed report (local) | HTML, JSON, and Markdown in `coverage-report/` |
+
+**Important:** The two tools measure coverage differently, so their reported percentages will not match.
+Test::Coverage instruments at the statement level and is used in CI to enforce a minimum threshold.
+RaCoCo instruments at the line level and produces detailed per-module reports for local analysis.
+The CI workflow uses only `make coverage`; `make coverage-report` is for local use.
+
+Install both with:
 
 ```bash
-export PATH="$(brew --prefix rakudo-star)/share/perl6/site/bin:$PATH"
+make dependencies-dev
 ```
 
-Then run:
+Or individually:
 
 ```bash
-make coverage
-# report: coverage-report/report.html
+zef install Test::Coverage   # for make coverage
+zef install App::RaCoCo      # for make coverage-report
 ```
 
 ### CI pipeline
@@ -528,7 +540,7 @@ The project runs automated checks on every push and pull request via GitHub Acti
 
 1. **Lint** — validates META6.json, checks syntax, and scans formatting.
 2. **Test** — runs the full test suite across a matrix of 3 OSes (Ubuntu, macOS, Windows) and 2 Raku versions (2024.12, latest). Windows is tested on `latest` only.
-3. **Coverage** — runs after tests pass on Ubuntu, generates a coverage report with [RaCoCo](https://github.com/atroxaper/raku-RaCoCo), and fails if coverage drops below 70%.
+3. **Coverage** — runs after tests pass on Ubuntu, checks coverage with [Test::Coverage](https://raku.land/zef:patrickb/Test::Coverage), and fails if coverage drops below the configured threshold (see [Coverage](#coverage)).
 
 **Release workflow** (`release.yml`), triggered on version tags (`v*.*.*`):
 

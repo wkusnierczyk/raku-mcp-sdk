@@ -33,7 +33,8 @@
     ],
     "test-depends": [
         "Test",
-        "Test::META"
+        "Test::META",
+        "Test::Coverage"
     ],
     "resources": [],
     "tags": [

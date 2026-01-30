@@ -92,7 +92,7 @@ role Message is export {
     has Str $.jsonrpc = '2.0';
 
     #| Convert the message into a Hash suitable for JSON encoding
-    method Hash(--> Hash) { ... }
+    method Hash(--> Hash) { ... } # UNCOVERABLE
     #| Serialize the message to a JSON string
     method to-json(--> Str) { to-json(self.Hash) }
 }
@@ -128,7 +128,7 @@ class Error is export {
             when InvalidParams           { 'Invalid params' }
             when InternalError           { 'Internal error' }
             when URLElicitationRequired  { 'URL elicitation required' }
-            default                      { 'Unknown error' }
+            default                      { 'Unknown error' } # UNCOVERABLE
         };
         self.new(code => $code.value, message => $msg, :$data)
     }

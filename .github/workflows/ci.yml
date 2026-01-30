@@ -143,19 +143,8 @@ jobs:
         run: |
           zef install --deps-only . --/test
           zef install App::Prove6 || true
-          zef install App::RaCoCo || true
+          zef install Test::Coverage || true
 
       - name: Generate coverage report and check threshold
-        run: |
-          THRESHOLD=70
-          OUTPUT=$(make coverage 2>&1)
-          echo "$OUTPUT"
-          COVERAGE=$(echo "$OUTPUT" | grep -oP 'Coverage: \K[0-9.]+' | head -1 || echo "0")
-          echo "Coverage: ${COVERAGE}%" >&2
-          echo "Threshold: ${THRESHOLD}%" >&2
-          if [ "$(echo "$COVERAGE < $THRESHOLD" | bc -l)" -eq 1 ]; then
-            echo "::error::Coverage ${COVERAGE}% is below threshold ${THRESHOLD}%"
-            exit 1
-          fi
-          echo "✓ Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%" >&2
+        run: make coverage
 

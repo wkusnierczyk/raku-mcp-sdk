@@ -192,8 +192,8 @@ class ToolAnnotations is export {
 
 #| Base role for content types
 role Content is export {
-    method type(--> Str) { ... }
-    method Hash(--> Hash) { ... }
+    method type(--> Str) { ... } # UNCOVERABLE
+    method Hash(--> Hash) { ... } # UNCOVERABLE
 }
 
 #| Text content
