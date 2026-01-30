@@ -7,6 +7,7 @@ use MCP::Client;
 use MCP::Types;
 need MCP::JSONRPC;
 need TestTransport;
+use JSON::Fast;
 
 =begin pod
 =head1 NAME
@@ -39,6 +40,28 @@ sub respond-to-last(TestTransport::TestTransport $transport, $payload --> Bool) 
     }
     $transport.emit(MCP::JSONRPC::Response.success($req.id, $payload));
     True
+}
+
+# Helper: round-trip through JSON to ensure proper Hash structures
+sub j(%h) { $(from-json(to-json(%h))) }
+
+# Helper: create connected client
+sub make-client(:$transport = TestTransport::TestTransport.new, :@roots, :&sampling-handler, :&elicitation-handler, :$capabilities) {
+    my %opts = info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'), :$transport;
+    %opts<roots> = @roots if @roots;
+    %opts<sampling-handler> = &sampling-handler if &sampling-handler;
+    %opts<elicitation-handler> = &elicitation-handler if &elicitation-handler;
+    %opts<capabilities> = $capabilities if $capabilities;
+    my $client = Client.new(|%opts);
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => %(),
+        instructions => '',
+    }));
+    await $connect;
+    $client
 }
 
 subtest 'Client connect and requests', {
@@ -657,6 +680,454 @@ subtest 'Client progress supply', {
     sleep 0.1;
 
     is @received.elems, 1, 'non-progress notification not in progress supply';
+};
+
+subtest 'Client parses all content types', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $call-p = $client.call-tool('multi');
+    $transport.await-sent;
+
+    my @req = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@req[0].id, {
+        content => [
+            { type => 'text', text => 'hello' },
+            { type => 'image', data => 'abc', mimeType => 'image/png' },
+            { type => 'audio', data => 'wav', mimeType => 'audio/wav' },
+            { type => 'resource', resource => { uri => 'file:///x', mimeType => 'text/plain', text => 'embedded' } },
+            { type => 'resource_link', name => 'doc', uri => 'file:///doc', title => 'Doc', description => 'A doc', mimeType => 'application/pdf', size => 1024 },
+            { type => 'tool_use', id => 'tu-1', name => 'calc', input => { x => 1 } },
+            { type => 'tool_result', toolUseId => 'tu-1', content => [{ type => 'text', text => 'result' }], isError => False },
+        ],
+    }));
+
+    my $result = await $call-p;
+    is $result.content.elems, 7, '7 content items parsed';
+    isa-ok $result.content[0], MCP::Types::TextContent, 'text parsed';
+    isa-ok $result.content[1], MCP::Types::ImageContent, 'image parsed';
+    isa-ok $result.content[2], MCP::Types::AudioContent, 'audio parsed';
+    isa-ok $result.content[3], MCP::Types::EmbeddedResource, 'embedded resource parsed';
+    isa-ok $result.content[4], MCP::Types::ResourceLink, 'resource link parsed';
+    isa-ok $result.content[5], MCP::Types::ToolUseContent, 'tool_use parsed';
+    isa-ok $result.content[6], MCP::Types::ToolResultContent, 'tool_result parsed';
+};
+
+subtest 'Client elicitation handler exception', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport,
+        elicitation-handler => -> %params { die "Elicitation failed!" },
+    );
+    $transport.clear-sent;
+
+    $transport.emit(MCP::JSONRPC::Request.new(
+        id => 'e-1',
+        method => 'elicitation/create',
+        params => { mode => 'form', message => 'Enter name', requestedSchema => {} }
+    ));
+
+    sleep 0.3;
+    my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @responses.elems >= 1, 'response sent';
+    ok @responses[0].error.defined, 'error response for failed handler';
+    is @responses[0].error.code, MCP::JSONRPC::InternalError.value, 'InternalError code';
+};
+
+subtest 'Client rejects unknown server request', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+    $transport.clear-sent;
+
+    $transport.emit(MCP::JSONRPC::Request.new(
+        id => 'unk-1',
+        method => 'unknown/serverMethod',
+        params => {}
+    ));
+
+    sleep 0.3;
+    my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @responses.elems >= 1, 'response sent';
+    ok @responses[0].error.defined, 'error for unknown method';
+    is @responses[0].error.code, MCP::JSONRPC::MethodNotFound.value, 'MethodNotFound';
+};
+
+subtest 'Client sampling handler exception', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport,
+        sampling-handler => -> %params { die "Handler crashed!" },
+        capabilities => MCP::Types::ClientCapabilities.new(
+            sampling => MCP::Types::SamplingCapability.new,
+        ),
+    );
+    $transport.clear-sent;
+
+    $transport.emit(MCP::JSONRPC::Request.new(
+        id => 's-1',
+        method => 'sampling/createMessage',
+        params => {
+            messages => [{ role => 'user', content => { type => 'text', text => 'hi' } }],
+            maxTokens => 100,
+        }
+    ));
+
+    sleep 0.3;
+    my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @responses.elems >= 1, 'response sent';
+    ok @responses[0].error.defined, 'error response for crashed handler';
+    is @responses[0].error.code, MCP::JSONRPC::InternalError.value, 'InternalError code';
+};
+
+subtest 'Client extensions in initialization', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+    );
+
+    $client.register-extension(name => 'test/ext', version => '1.0', settings => { foo => 'bar' });
+    dies-ok { $client.register-extension(name => 'bad-no-slash') }, 'extension without / dies';
+
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    my $init-params = @reqs[0].params;
+    ok $init-params<capabilities><experimental><test/ext>:exists, 'extension in init capabilities';
+
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => { experimental => { 'test/ext' => { version => '1.0' } } },
+        instructions => 'hello',
+    }));
+    await $connect;
+
+    is $client.server-instructions, 'hello', 'server-instructions accessor';
+    ok $client.supports-extension('test/ext'), 'supports-extension';
+    nok $client.supports-extension('other/ext'), 'does not support unknown extension';
+};
+
+subtest 'Client get-task-result', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.get-task-result('task-42');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].method, 'tasks/result', 'tasks/result method';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        content => [j(%( type => 'text', text => 'done' ))],
+    }));
+    my $result = await $p;
+    ok $result<content>.elems >= 1, 'result has content';
+};
+
+subtest 'Client complete-resource', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.complete-resource('file:///x', argument-name => 'path', value => '/ho');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].method, 'completion/complete', 'completion/complete method';
+    is @reqs[0].params<ref><type>, 'ref/resource', 'ref type is resource';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        completion => j(%( values => ['/home', '/host'] )),
+    }));
+    my $result = await $p;
+    is $result.values.elems, 2, 'completion values';
+};
+
+subtest 'Client close', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+    await $client.close;
+    pass 'client close completes';
+};
+
+subtest 'Client request error response via make-client', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.request('tools/list');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+
+    $transport.emit(MCP::JSONRPC::Response.new(
+        id => @reqs[0].id,
+        error => MCP::JSONRPC::Error.new(code => -32601, message => 'not found'),
+    ));
+    dies-ok { await $p }, 'error response breaks promise';
+};
+
+subtest 'Client list-tools with cursor and nextCursor', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.list-tools(cursor => 'page2');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].params<cursor>, 'page2', 'cursor passed';
+
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        tools => [j(%( name => 'x', inputSchema => %( type => 'object' ) ))],
+        nextCursor => 'page3',
+    }));
+    my $result = await $p;
+    is $result<nextCursor>, 'page3', 'nextCursor returned';
+};
+
+subtest 'Client list-tasks with nextCursor', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.list-tasks(cursor => 'tk1');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        tasks => [j(%( taskId => 't1', status => 'working' ))],
+        nextCursor => 'tk2',
+    }));
+    my $result = await $p;
+    is $result<nextCursor>, 'tk2', 'nextCursor returned';
+};
+
+subtest 'Client sampling handler success with result coercion', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        :$transport,
+        sampling-handler => -> %params {
+            %(
+                role => 'assistant',
+                model => 'test-model',
+                content => %( type => 'text', text => 'response' ),
+                stopReason => 'endTurn',
+            )
+        },
+    );
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, %(
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => %(),
+        instructions => '',
+    )));
+    await $connect;
+
+    $transport.clear-sent;
+    $transport.emit(MCP::JSONRPC::Request.new(
+        id => 100,
+        method => 'sampling/createMessage',
+        params => %(
+            messages => [%( role => 'user', content => %( type => 'text', text => 'hi' ) )],
+            maxTokens => 100,
+        ),
+    ));
+    sleep 0.3;
+
+    my @resps = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @resps.elems >= 1, 'sampling response sent';
+    ok @resps[0].result.defined, 'result present (not error)';
+};
+
+subtest 'Client task methods', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    # call-tool-as-task
+    $transport.clear-sent;
+    my $task-p = $client.call-tool-as-task('slow-calc', arguments => { x => 1 });
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    ok @reqs[0].params<task><ttl> == 30000, 'default ttl';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        task => j(%( taskId => 'task-1', status => 'working' )),
+    }));
+    my $task = await $task-p;
+    is $task.taskId, 'task-1', 'task created';
+
+    # get-task
+    $transport.clear-sent;
+    my $get-p = $client.get-task('task-1');
+    $transport.await-sent;
+    @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        taskId => 'task-1', status => 'completed',
+    }));
+    my $got = await $get-p;
+    is $got.status, MCP::Types::TaskCompleted, 'task completed';
+
+    # cancel-task
+    $transport.clear-sent;
+    my $cancel-p = $client.cancel-task('task-1');
+    $transport.await-sent;
+    @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        taskId => 'task-1', status => 'cancelled',
+    }));
+    my $cancelled = await $cancel-p;
+    is $cancelled.status, MCP::Types::TaskCancelled, 'task cancelled';
+
+    # list-tasks
+    $transport.clear-sent;
+    my $list-p = $client.list-tasks;
+    $transport.await-sent;
+    @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        tasks => [j(%( taskId => 'task-1', status => 'cancelled' ))],
+    }));
+    my $list = await $list-p;
+    is $list<tasks>.elems, 1, 'list-tasks returns tasks';
+};
+
+subtest 'X::MCP::Client error classes', {
+    my $err = MCP::JSONRPC::Error.new(code => -32600, message => 'bad');
+    my $client-err = X::MCP::Client::Error.new(error => $err);
+    ok $client-err.message.contains('bad'), 'Client::Error message';
+
+    my $timeout = X::MCP::Client::Timeout.new(method => 'tools/list');
+    ok $timeout.message.contains('tools/list'), 'Timeout message contains method';
+};
+
+subtest 'Client get-prompt via make-client', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.get-prompt('summarize', arguments => { text => 'hello' });
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        description => 'A summarizer',
+        messages => [j(%( role => 'user', content => %( type => 'text', text => 'Summarize: hello' ) ))],
+    }));
+    my $result = await $p;
+    is $result<description>, 'A summarizer', 'description';
+    is $result<messages>[0].role, 'user', 'message role';
+};
+
+subtest 'Client complete-prompt via make-client', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.complete-prompt('summarize', argument-name => 'text', value => 'hel');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].method, 'completion/complete', 'correct method';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        completion => j(%( values => ['hello', 'help'], hasMore => False )),
+    }));
+    my $result = await $p;
+    is $result.values.elems, 2, 'completion values';
+};
+
+subtest 'Client subscribe/unsubscribe resource via make-client', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    # subscribe
+    $transport.clear-sent;
+    my $sub-p = $client.subscribe-resource('file:///x');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].method, 'resources/subscribe', 'subscribe method';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {}));
+    await $sub-p;
+
+    # unsubscribe
+    $transport.clear-sent;
+    my $unsub-p = $client.unsubscribe-resource('file:///x');
+    $transport.await-sent;
+    @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].method, 'resources/unsubscribe', 'unsubscribe method';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {}));
+    await $unsub-p;
+    pass 'subscribe/unsubscribe complete';
+};
+
+subtest 'Client notifications supply via make-client', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    my @notifs;
+    $client.notifications.tap(-> $n { @notifs.push($n) });
+
+    $transport.emit(MCP::JSONRPC::Notification.new(
+        method => 'notifications/tools/list_changed',
+    ));
+    sleep 0.1;
+    ok @notifs.elems >= 1, 'notification forwarded to supply';
+    is @notifs[0].method, 'notifications/tools/list_changed', 'correct notification method';
+};
+
+subtest 'Client elicitation with handler returning accept', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+        elicitation-handler => -> %params {
+            MCP::Types::ElicitationResponse.new(action => MCP::Types::ElicitAccept, content => { name => 'test' })
+        },
+    );
+
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    ok @reqs[0].params<capabilities><elicitation>:exists, 'elicitation in init capabilities';
+
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    $transport.clear-sent;
+    $transport.emit(MCP::JSONRPC::Request.new(id => 50, method => 'elicitation/create',
+        params => { message => 'Enter name', requestedSchema => {} }));
+    sleep 0.2;
+
+    my @resps = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @resps.elems >= 1, 'elicitation response sent';
+    is @resps[0].result<action>, 'accept', 'accept action in response';
+};
+
+subtest 'Client roots handling via make-client', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => MCP::Types::Implementation.new(name => 'cli', version => '0.1'),
+        transport => $transport,
+        roots => [MCP::Types::Root.new(uri => 'file:///home', name => 'home')],
+    );
+
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    ok @reqs[0].params<capabilities><roots>:exists, 'roots in init capabilities';
+
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        protocolVersion => MCP::Types::LATEST_PROTOCOL_VERSION,
+        capabilities => {},
+        instructions => '',
+    }));
+    await $connect;
+
+    my @roots = $client.get-roots;
+    is @roots[0].uri, 'file:///home', 'get-roots returns roots';
+
+    $transport.clear-sent;
+    $client.set-roots([MCP::Types::Root.new(uri => 'file:///new')]);
+    sleep 0.1;
+    my @notifs = $transport.sent.grep(MCP::JSONRPC::Notification);
+    ok @notifs.grep({ .method eq 'notifications/roots/list_changed' }).elems >= 1,
+        'roots list changed notification sent';
 };
 
 done-testing;

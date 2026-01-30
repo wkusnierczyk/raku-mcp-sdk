@@ -1070,4 +1070,203 @@ subtest 'Progress token from _meta', {
     is @explicit[0].params<progressToken>, 'explicit-tok', 'explicit token used over _meta';
 };
 
+subtest 'Server create-message', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $transport.clear-sent;
+    my $msg-promise = $server.create-message(
+        messages => [
+            MCP::Types::SamplingMessage.new(role => 'user', content => MCP::Types::TextContent.new(text => 'Hello')),
+        ],
+        maxTokens => 100,
+        systemPrompt => 'Be concise',
+        modelPreferences => MCP::Types::ModelPreferences.new(
+            hints => [MCP::Types::ModelHint.new(name => 'fast')],
+            speedPriority => 0.9e0,
+        ),
+    );
+
+    my @requests = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @requests.elems, 1, 'create-message sends request';
+    is @requests[0].method, 'sampling/createMessage', 'method is sampling/createMessage';
+    is @requests[0].params<maxTokens>, 100, 'maxTokens passed';
+    is @requests[0].params<systemPrompt>, 'Be concise', 'systemPrompt passed';
+    ok @requests[0].params<modelPreferences>.defined, 'modelPreferences passed';
+    ok @requests[0].params<messages>.elems == 1, 'messages passed';
+
+    # Simulate response
+    $server.handle-response-public(MCP::JSONRPC::Response.success(@requests[0].id, {
+        role => 'assistant',
+        model => 'test-model',
+        content => { type => 'text', text => 'Hi there' },
+        stopReason => 'endTurn',
+    }));
+
+    my $result = await $msg-promise;
+    isa-ok $result, MCP::Types::CreateMessageResult, 'returns CreateMessageResult';
+    is $result.role, 'assistant', 'role correct';
+    is $result.model, 'test-model', 'model correct';
+};
+
+subtest 'Server create-message with tools and toolChoice', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $transport.clear-sent;
+    my $p = $server.create-message(
+        messages => [
+            MCP::Types::SamplingMessage.new(role => 'user', content => MCP::Types::TextContent.new(text => 'calc')),
+        ],
+        tools => [
+            MCP::Types::Tool.new(name => 'calc', inputSchema => { type => 'object' }),
+        ],
+        toolChoice => MCP::Types::ToolChoice.new(mode => 'tool', name => 'calc'),
+    );
+
+    my @requests = $transport.sent.grep(MCP::JSONRPC::Request);
+    ok @requests[0].params<tools>.elems == 1, 'tools passed';
+    is @requests[0].params<tools>[0]<name>, 'calc', 'tool name serialized';
+    is @requests[0].params<toolChoice><mode>, 'tool', 'toolChoice serialized';
+
+    $server.handle-response-public(MCP::JSONRPC::Response.success(@requests[0].id, {
+        role => 'assistant', model => 'm', stopReason => 'endTurn', content => { type => 'text', text => 'ok' },
+    }));
+    await $p;
+    pass 'create-message with tools completes';
+};
+
+subtest 'Logging with logger field', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $transport.clear-sent;
+    $server.log(MCP::Types::Info, 'test data', logger => 'myapp');
+
+    my @notifs = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifs.elems, 1, 'log notification sent';
+    is @notifs[0].params<level>, 'info', 'level correct';
+    is @notifs[0].params<data>, 'test data', 'data correct';
+    is @notifs[0].params<logger>, 'myapp', 'logger field present';
+
+    # Without logger
+    $transport.clear-sent;
+    $server.log(MCP::Types::Warning, 'warn msg');
+    @notifs = $transport.sent.grep(MCP::JSONRPC::Notification);
+    nok @notifs[0].params<logger>:exists, 'no logger when not provided';
+};
+
+subtest 'logging/setLevel missing level param', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $transport.clear-sent;
+    $server.handle-message-public(MCP::JSONRPC::Request.new(
+        id => 'log-1',
+        method => 'logging/setLevel',
+        params => {}
+    ));
+
+    my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @responses[0].error.defined, 'missing level returns error';
+    is @responses[0].error.code, MCP::JSONRPC::InvalidParams.value, 'InvalidParams error';
+};
+
+subtest 'Server tool handler exception types', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $server.add-tool(
+        name => 'mcp-error',
+        handler => -> {
+            die X::MCP::JSONRPC.new(
+                error => MCP::JSONRPC::Error.from-code(
+                    MCP::JSONRPC::InvalidParams,
+                    "Bad input: missing field"
+                )
+            );
+        }
+    );
+
+    $transport.clear-sent;
+    $server.handle-message-public(MCP::JSONRPC::Request.new(
+        id => 'err-mcp',
+        method => 'tools/call',
+        params => { name => 'mcp-error', arguments => {} }
+    ));
+
+    my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @responses[0].error.defined, 'MCP error propagated';
+    is @responses[0].error.code, MCP::JSONRPC::InvalidParams.value, 'InvalidParams code preserved';
+    ok @responses[0].error.message.contains('Bad input'), 'custom message preserved';
+};
+
+subtest 'Server is-cancelled and cancel-request edge cases', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    nok $server.is-cancelled('nonexistent'), 'is-cancelled returns False for nonexistent ID';
+
+    $transport.clear-sent;
+    $server.cancel-request('unknown-req');
+    my @notifs = $transport.sent.grep(MCP::JSONRPC::Notification);
+    is @notifs.elems, 1, 'cancel-request sends notification even for unknown ID';
+};
+
+subtest 'Server resources/read unknown resource', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $transport.clear-sent;
+    $server.handle-message-public(MCP::JSONRPC::Request.new(
+        id => 'read-1',
+        method => 'resources/read',
+        params => { uri => 'file://nonexistent' }
+    ));
+
+    my @responses = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @responses[0].error.defined, 'unknown resource returns error';
+    ok @responses[0].error.message.contains('Unknown resource'), 'error message mentions unknown';
+};
+
+subtest 'Server handles error response from client', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $transport.clear-sent;
+    my $p = $server.request('sampling/createMessage', { messages => [] });
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    my $req-id = @reqs[0].id;
+
+    $server.handle-response-public(MCP::JSONRPC::Response.error($req-id,
+        MCP::JSONRPC::Error.from-code(MCP::JSONRPC::MethodNotFound, 'Not supported')
+    ));
+
+    dies-ok { await $p }, 'error response breaks promise';
+};
+
 done-testing;

@@ -24,7 +24,7 @@ template URI matching, and client list-resource-templates.
 
 =end pod
 
-plan 7;
+plan *;
 
 subtest 'ResourceTemplate type — construct, Hash roundtrip, from-hash', {
     my $rt = MCP::Types::ResourceTemplate.new(
@@ -234,6 +234,68 @@ subtest 'Pagination of templates list', {
     ));
     is $page3<resourceTemplates>.elems, 1, 'last page has 1';
     nok $page3<nextCursor>:exists, 'no next cursor';
+};
+
+
+subtest 'Resource template URI matching edge cases', {
+    my $template = resource-template()
+        .uri-template('https://api.example.com/users/{userId}/posts/{postId}')
+        .name('user-posts')
+        .reader(-> %p { "user=%p<userId> post=%p<postId>" })
+        .build;
+
+    my $match = $template.match-uri('https://api.example.com/users/123/posts/456');
+    ok $match.defined, 'multi-variable match';
+    is $match<userId>, '123', 'first variable extracted';
+    is $match<postId>, '456', 'second variable extracted';
+
+    my $no-match = $template.match-uri('https://other.com/users/1/posts/2');
+    nok $no-match.defined, 'different host does not match';
+
+    nok $template.match-uri('https://api.example.com/users/123').defined, 'incomplete URI no match';
+
+    my @contents = $template.read({ userId => 'u1', postId => 'p1' });
+    is @contents[0].text, 'user=u1 post=p1', 'template reader receives params';
+};
+
+subtest 'RegisteredResourceTemplate read with Blob', {
+    my $rrt = RegisteredResourceTemplate.new(
+        uri-template => 'bin:///{file}',
+        name => 'binary',
+        reader => -> %p { Buf.new(65, 66) },
+    );
+    my @contents = $rrt.read(%( file => 'test' ), uri => 'bin:///test');
+    is @contents[0].mimeType, 'application/octet-stream', 'Blob mimeType';
+};
+
+subtest 'RegisteredResourceTemplate read with default type', {
+    my $rrt = RegisteredResourceTemplate.new(
+        uri-template => 'num:///{n}',
+        name => 'number',
+        reader => -> %p { 42 },
+    );
+    my @contents = $rrt.read(%( n => '1' ), uri => 'num:///1');
+    ok @contents[0].text.contains('42'), 'default coerced to text';
+};
+
+subtest 'RegisteredResourceTemplate read with ResourceContents', {
+    my $rrt = RegisteredResourceTemplate.new(
+        uri-template => 'rc:///{id}',
+        name => 'rc',
+        reader => -> %p { ResourceContents.new(uri => "rc:///%p<id>", text => 'direct') },
+    );
+    my @contents = $rrt.read(%( id => '1' ));
+    is @contents[0].text, 'direct', 'ResourceContents passthrough';
+};
+
+subtest 'RegisteredResourceTemplate read with Positional', {
+    my $rrt = RegisteredResourceTemplate.new(
+        uri-template => 'list:///{x}',
+        name => 'list',
+        reader => -> %p { [ResourceContents.new(uri => 'list:///1', text => 'a')] },
+    );
+    my @contents = $rrt.read(%( x => '1' ));
+    is @contents[0].text, 'a', 'Positional passthrough';
 };
 
 done-testing;

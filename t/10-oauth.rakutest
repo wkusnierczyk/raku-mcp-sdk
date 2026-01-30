@@ -4,8 +4,10 @@ use lib 'lib';
 
 use MCP::OAuth;
 use MCP::OAuth::Server;
+use MCP::OAuth::Client;
+use JSON::Fast;
 
-plan 16;
+plan *;
 
 # === 1. PKCE ===
 subtest 'PKCE', {
@@ -338,6 +340,201 @@ subtest 'OAuthEnterpriseClient construction and token caching', {
     );
     my $token = await $ent.get-token;
     is $token.access-token, 'enterprise-token-xyz', 'get-token returns cached token';
+};
+
+
+subtest 'OAuth exception messages', {
+    my $e1 = X::MCP::OAuth::Unauthorized.new(message => 'No token');
+    is $e1.message, 'No token', 'Unauthorized message';
+
+    my $e2 = X::MCP::OAuth::Forbidden.new(message => 'No scope', scopes => ['read']);
+    ok $e2.scopes.elems == 1, 'Forbidden scopes';
+
+    my $e3 = X::MCP::OAuth::Discovery.new(message => 'Not found');
+    is $e3.message, 'Not found', 'Discovery message';
+
+    my $e4 = X::MCP::OAuth::Registration.new(
+        message => 'Failed', error => 'invalid_client', error-description => 'Bad client',
+    );
+    ok $e4.message.contains('Failed'), 'Registration message';
+
+    my $e5 = X::MCP::OAuth::TokenExchange.new(
+        message => 'Failed', error => 'bad_grant', error-description => 'Bad grant',
+    );
+    ok $e5.message.contains('Failed'), 'TokenExchange message';
+};
+
+subtest 'TokenResponse is-expired extended', {
+    my $tr = TokenResponse.new(access-token => 'tok', expires-in => 3600);
+    nok $tr.is-expired, 'not expired';
+
+    my $tr2 = TokenResponse.new(access-token => 'tok', expires-in => 0);
+    ok $tr2.is-expired, 'expired';
+
+    my $tr3 = TokenResponse.new(access-token => 'tok');
+    nok $tr3.is-expired, 'no expires-in = not expired';
+};
+
+subtest 'OAuthClientHandler get-token with cached valid token', {
+    my $handler = OAuthClientHandler.new(
+        resource-url => 'https://api.example.com',
+        client-id => 'test',
+        authorization-callback => -> Str $url { 'code' },
+    );
+
+    $handler.token = TokenResponse.new(
+        access-token => 'cached-abc',
+        expires-in => 3600,
+    );
+    my $token = await $handler.get-token;
+    is $token.access-token, 'cached-abc', 'get-token returns cached token';
+
+    my $header = await $handler.authorization-header;
+    is $header, 'Bearer cached-abc', 'authorization-header correct';
+};
+
+subtest 'OAuthClientHandler handle-unauthorized resets state', {
+    my $handler = OAuthClientHandler.new(
+        resource-url => 'https://api.example.com',
+        client-id => 'test',
+        authorization-callback => -> Str $url { 'code' },
+    );
+
+    $handler.token = TokenResponse.new(access-token => 'old', expires-in => 3600);
+    $handler.pkce-verifier = 'old-verifier';
+
+    try { await $handler.handle-unauthorized }
+    nok $handler.pkce-verifier.defined, 'pkce-verifier reset after handle-unauthorized';
+};
+
+subtest 'OAuthM2MClient error paths', {
+    my $m2m = OAuthM2MClient.new(
+        resource-url => 'https://api.example.com',
+        client-id => 'test',
+        client-secret => 'secret',
+    );
+
+    dies-ok { await $m2m.request-token }, 'request-token without discover dies';
+};
+
+subtest 'OAuthEnterpriseClient error paths', {
+    my $ent = OAuthEnterpriseClient.new(
+        resource-url => 'https://mcp.example.com',
+        client-id => 'client-1',
+        idp-token-endpoint => 'https://idp.example.com/token',
+        idp-client-id => 'idp-1',
+    );
+
+    dies-ok { await $ent.exchange-token }, 'exchange-token without subject dies';
+    dies-ok { await $ent.request-token }, 'request-token without id-jag dies';
+
+    $ent.subject-token = 'some-token';
+    dies-ok { await $ent.exchange-token }, 'exchange-token without metadata dies';
+};
+
+subtest 'OAuthEnterpriseClient authorization-header with cached token', {
+    my $ent = OAuthEnterpriseClient.new(
+        resource-url => 'https://mcp.example.com',
+        client-id => 'client-1',
+        idp-token-endpoint => 'https://idp.example.com/token',
+        idp-client-id => 'idp-1',
+    );
+    $ent.token = TokenResponse.new(access-token => 'ent-token', expires-in => 3600);
+    my $header = await $ent.authorization-header;
+    is $header, 'Bearer ent-token', 'enterprise authorization-header';
+};
+
+subtest 'ClientRegistrationRequest Hash extended', {
+    my $req = ClientRegistrationRequest.new(
+        redirect-uris => ['http://localhost/cb'],
+        grant-types => ['authorization_code'],
+        response-types => ['code'],
+        token-endpoint-auth-method => 'none',
+        software-version => '1.0',
+    );
+    my %h = $req.Hash;
+    ok %h<redirect_uris>.elems == 1, 'redirect_uris';
+    is %h<software_version>, '1.0', 'software_version';
+};
+
+subtest 'ClientRegistrationResponse Hash extended', {
+    my $resp = ClientRegistrationResponse.new(
+        client-id => 'cid', client-secret => 'sec', scope => 'read write',
+    );
+    my %h = $resp.Hash;
+    is %h<client_id>, 'cid', 'client_id';
+    is %h<client_secret>, 'sec', 'client_secret';
+    is %h<scope>, 'read write', 'scope';
+};
+
+subtest 'AuthServerMetadata with all fields Hash', {
+    my $asm = AuthServerMetadata.new(
+        issuer => 'https://auth.example.com',
+        authorization-endpoint => 'https://auth.example.com/auth',
+        token-endpoint => 'https://auth.example.com/token',
+        registration-endpoint => 'https://auth.example.com/register',
+        grant-types-supported => ['authorization_code'],
+        response-types-supported => ['code'],
+        scopes-supported => ['read', 'write'],
+        code-challenge-methods-supported => ['S256'],
+    );
+    my %h = $asm.Hash;
+    ok %h<code_challenge_methods_supported>.elems == 1, 'code challenge methods';
+    ok %h<scopes_supported>.elems == 2, 'scopes supported';
+};
+
+subtest 'ProtectedResourceMetadata with scopes extended', {
+    my $prm = ProtectedResourceMetadata.new(
+        resource => 'https://mcp.example.com',
+        authorization-servers => ['https://auth.example.com'],
+        scopes-supported => ['read', 'write'],
+    );
+    my %h = $prm.Hash;
+    ok %h<scopes_supported>.elems == 2, 'scopes_supported';
+};
+
+subtest 'OAuthClientHandler refresh without token dies', {
+    my $handler = OAuthClientHandler.new(
+        resource-url => 'https://api.example.com',
+        client-id => 'test',
+        authorization-callback => -> Str $url { 'code' },
+    );
+    dies-ok { await $handler.refresh }, 'refresh without token dies';
+};
+
+subtest 'OAuthClientHandler register without discover dies', {
+    my $handler = OAuthClientHandler.new(
+        resource-url => 'https://mcp.example.com',
+        client-id => 'my-app',
+        authorization-callback => -> $url { 'code' },
+    );
+    dies-ok { await $handler.register }, 'register without discover dies';
+};
+
+subtest 'OAuthClientHandler register without registration-endpoint dies', {
+    my $handler = OAuthClientHandler.new(
+        resource-url => 'https://mcp.example.com',
+        client-id => 'my-app',
+        authorization-callback => -> $url { 'code' },
+    );
+    $handler.auth-metadata = AuthServerMetadata.new(
+        issuer => 'https://auth.example.com',
+        token-endpoint => 'https://auth.example.com/token',
+    );
+    dies-ok { await $handler.register }, 'register without registration endpoint dies';
+};
+
+subtest 'TokenExchangeResponse from-hash extended', {
+    my $ter = TokenExchangeResponse.from-hash(%(
+        issued_token_type => 'urn:ietf:params:oauth:token-type:id-jag',
+        access_token => 'jag-tok',
+        token_type => 'N_A',
+        scope => 'read',
+        expires_in => 300,
+    ));
+    is $ter.access-token, 'jag-tok', 'access-token';
+    is $ter.scope, 'read', 'scope';
+    is $ter.expires-in, 300, 'expires-in';
 };
 
 done-testing;
