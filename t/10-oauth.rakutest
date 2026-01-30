@@ -537,4 +537,601 @@ subtest 'TokenExchangeResponse from-hash extended', {
     is $ter.expires-in, 300, 'expires-in';
 };
 
+# === PKCE SHA256 correctness ===
+subtest 'PKCE SHA256 correctness', {
+    my $pkce = PKCE.new;
+
+    # Deterministic: same verifier → same challenge
+    my $verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+    my $c1 = $pkce.generate-challenge($verifier);
+    my $c2 = $pkce.generate-challenge($verifier);
+    is $c1, $c2, 'generate-challenge is deterministic';
+
+    # challenge-method returns S256
+    is $pkce.challenge-method, 'S256', 'challenge-method returns S256';
+
+    # Known vector: SHA256("") = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    # base64url of that = 47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU
+    my $empty-challenge = $pkce.generate-challenge('');
+    # SHA256 of empty string is well-known; verify base64url output
+    ok $empty-challenge.chars > 0, 'challenge of empty string is non-empty';
+    nok $empty-challenge ~~ /<[+=\/]>/, 'challenge is base64url encoded';
+
+    # Known vector: RFC 7636 Appendix B uses verifier "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+    # Expected challenge: E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
+    is $c1, 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
+        'matches RFC 7636 Appendix B known vector';
+};
+
+# === Mock Cro HTTP server for OAuth client flow tests ===
+subtest 'OAuthClientHandler flows via mock server', {
+    use Cro::HTTP::Router;
+    use Cro::HTTP::Server;
+
+    my $PORT = 54399;
+    my $BASE = "http://localhost:$PORT";
+
+    my $app = route {
+        get -> '.well-known', 'oauth-protected-resource' {
+            content 'application/json', to-json({
+                resource => $BASE,
+                authorization_servers => [$BASE],
+                scopes_supported => ['read', 'write'],
+            });
+        }
+        get -> '.well-known', 'oauth-authorization-server' {
+            content 'application/json', to-json({
+                issuer => $BASE,
+                authorization_endpoint => "$BASE/authorize",
+                token_endpoint => "$BASE/token",
+                registration_endpoint => "$BASE/register",
+                grant_types_supported => ['authorization_code', 'refresh_token'],
+                code_challenge_methods_supported => ['S256'],
+            });
+        }
+        post -> 'token' {
+            request-body -> %body {
+                if %body<grant_type> eq 'refresh_token' {
+                    content 'application/json', to-json({
+                        access_token => 'refreshed-token',
+                        token_type => 'Bearer',
+                        expires_in => 7200,
+                        scope => 'read write',
+                    });
+                } else {
+                    content 'application/json', to-json({
+                        access_token => 'new-access-token',
+                        token_type => 'Bearer',
+                        expires_in => 3600,
+                        refresh_token => 'new-refresh-token',
+                        scope => 'read write',
+                    });
+                }
+            }
+        }
+        post -> 'register' {
+            request-body -> %body {
+                content 'application/json', to-json({
+                    client_id => 'registered-client-id',
+                    client_secret => 'registered-secret',
+                    client_secret_expires_at => 0,
+                    redirect_uris => %body<redirect_uris> // ['http://localhost:8080/callback'],
+                    grant_types => ['authorization_code'],
+                    response_types => ['code'],
+                    token_endpoint_auth_method => 'none',
+                    scope => 'read write',
+                });
+            }
+        }
+    };
+
+    my $server = Cro::HTTP::Server.new(:host<localhost>, :port($PORT), application => $app);
+    $server.start;
+    LEAVE $server.stop;
+
+    # --- discover ---
+    subtest 'discover sets metadata', {
+        my $handler = OAuthClientHandler.new(
+            resource-url => $BASE,
+            client-id => 'test-client',
+            authorization-callback => -> Str $url { 'code' },
+        );
+        await $handler.discover;
+        ok $handler.resource-metadata.defined, 'resource-metadata set';
+        is $handler.resource-metadata.resource, $BASE, 'resource matches';
+        ok $handler.auth-metadata.defined, 'auth-metadata set';
+        is $handler.auth-metadata.issuer, $BASE, 'issuer matches';
+        is $handler.auth-metadata.token-endpoint, "$BASE/token", 'token endpoint set';
+    };
+
+    # --- exchange-code ---
+    subtest 'exchange-code returns token and clears pkce-verifier', {
+        my $handler = OAuthClientHandler.new(
+            resource-url => $BASE,
+            client-id => 'test-client',
+            authorization-callback => -> Str $url { 'code' },
+        );
+        $handler.auth-metadata = AuthServerMetadata.new(
+            issuer => $BASE,
+            authorization-endpoint => "$BASE/authorize",
+            token-endpoint => "$BASE/token",
+        );
+        # Set up pkce-verifier as authorization-url would
+        $handler.pkce-verifier = 'test-verifier';
+        my $token = await $handler.exchange-code('test-code');
+        is $token.access-token, 'new-access-token', 'got access token';
+        is $token.refresh-token, 'new-refresh-token', 'got refresh token';
+        nok $handler.pkce-verifier.defined, 'pkce-verifier cleared';
+    };
+
+    # --- refresh ---
+    subtest 'refresh returns new token', {
+        my $handler = OAuthClientHandler.new(
+            resource-url => $BASE,
+            client-id => 'test-client',
+            authorization-callback => -> Str $url { 'code' },
+        );
+        $handler.auth-metadata = AuthServerMetadata.new(
+            issuer => $BASE,
+            token-endpoint => "$BASE/token",
+        );
+        $handler.token = TokenResponse.new(
+            access-token => 'old-token',
+            expires-in => 1,
+            created-at => now - 100,
+            refresh-token => 'old-refresh',
+        );
+        my $new-token = await $handler.refresh;
+        is $new-token.access-token, 'refreshed-token', 'refreshed access token';
+    };
+
+    # --- register ---
+    subtest 'register sets client-id and client-secret', {
+        my $handler = OAuthClientHandler.new(
+            resource-url => $BASE,
+            client-id => 'pre-register',
+            authorization-callback => -> Str $url { 'code' },
+        );
+        $handler.auth-metadata = AuthServerMetadata.new(
+            issuer => $BASE,
+            token-endpoint => "$BASE/token",
+            registration-endpoint => "$BASE/register",
+        );
+        my $reg = await $handler.register;
+        is $handler.client-id, 'registered-client-id', 'client-id updated from registration';
+        is $handler.client-secret, 'registered-secret', 'client-secret set from registration';
+    };
+
+    # --- authorization-url with scopes ---
+    subtest 'authorization-url includes scope param', {
+        my $handler = OAuthClientHandler.new(
+            resource-url => $BASE,
+            client-id => 'test-client',
+            scopes => ['read', 'write'],
+            authorization-callback => -> Str $url { 'code' },
+        );
+        $handler.auth-metadata = AuthServerMetadata.new(
+            issuer => $BASE,
+            authorization-endpoint => "$BASE/authorize",
+            token-endpoint => "$BASE/token",
+        );
+        my $url = $handler.authorization-url;
+        ok $url.contains('scope='), 'URL contains scope param';
+    };
+
+    # --- get-token with expired + refresh ---
+    subtest 'get-token refreshes expired token', {
+        my $handler = OAuthClientHandler.new(
+            resource-url => $BASE,
+            client-id => 'test-client',
+            authorization-callback => -> Str $url { 'code' },
+        );
+        $handler.auth-metadata = AuthServerMetadata.new(
+            issuer => $BASE,
+            token-endpoint => "$BASE/token",
+        );
+        $handler.token = TokenResponse.new(
+            access-token => 'expired-tok',
+            expires-in => 1,
+            created-at => now - 100,
+            refresh-token => 'refresh-tok',
+        );
+        my $token = await $handler.get-token;
+        is $token.access-token, 'refreshed-token', 'get-token triggered refresh';
+    };
+
+    # --- authenticate full flow ---
+    subtest 'authenticate full flow', {
+        my $handler = OAuthClientHandler.new(
+            resource-url => $BASE,
+            client-id => 'test-client',
+            authorization-callback => -> Str $url { 'auth-code-from-callback' },
+        );
+        my $result = await $handler.authenticate;
+        ok $result, 'authenticate completed';
+        ok $handler.token.defined, 'token set after authenticate';
+        is $handler.token.access-token, 'new-access-token', 'got expected token';
+    };
+};
+
+# === OAuthM2MClient flows via mock server ===
+subtest 'OAuthM2MClient flows via mock server', {
+    use Cro::HTTP::Router;
+    use Cro::HTTP::Server;
+
+    my $PORT = 54400;
+    my $BASE = "http://localhost:$PORT";
+
+    my $app = route {
+        get -> '.well-known', 'oauth-protected-resource' {
+            content 'application/json', to-json({
+                resource => $BASE,
+                authorization_servers => [$BASE],
+            });
+        }
+        get -> '.well-known', 'oauth-authorization-server' {
+            content 'application/json', to-json({
+                issuer => $BASE,
+                token_endpoint => "$BASE/token",
+            });
+        }
+        post -> 'token' {
+            request-body -> %body {
+                content 'application/json', to-json({
+                    access_token => 'm2m-new-token',
+                    token_type => 'Bearer',
+                    expires_in => 3600,
+                });
+            }
+        }
+    };
+
+    my $server = Cro::HTTP::Server.new(:host<localhost>, :port($PORT), application => $app);
+    $server.start;
+    LEAVE $server.stop;
+
+    # --- request-token with pre-set metadata ---
+    subtest 'request-token with client_credentials', {
+        my $m2m = OAuthM2MClient.new(
+            resource-url => $BASE,
+            client-id => 'm2m-client',
+            client-secret => 'm2m-secret',
+            scopes => ['read'],
+        );
+        $m2m.auth-metadata = AuthServerMetadata.new(
+            issuer => $BASE,
+            token-endpoint => "$BASE/token",
+        );
+        my $token = await $m2m.request-token;
+        is $token.access-token, 'm2m-new-token', 'got m2m token';
+    };
+
+    # --- authenticate full flow ---
+    subtest 'authenticate discovers and requests token', {
+        my $m2m = OAuthM2MClient.new(
+            resource-url => $BASE,
+            client-id => 'm2m-client',
+            client-secret => 'm2m-secret',
+        );
+        my $result = await $m2m.authenticate;
+        ok $result, 'authenticate completed';
+        is $m2m.token.access-token, 'm2m-new-token', 'token set after authenticate';
+    };
+
+    # --- get-token with expired token re-requests ---
+    subtest 'get-token re-requests when expired', {
+        my $m2m = OAuthM2MClient.new(
+            resource-url => $BASE,
+            client-id => 'm2m-client',
+            client-secret => 'm2m-secret',
+        );
+        $m2m.auth-metadata = AuthServerMetadata.new(
+            issuer => $BASE,
+            token-endpoint => "$BASE/token",
+        );
+        $m2m.token = TokenResponse.new(
+            access-token => 'old-m2m',
+            expires-in => 1,
+            created-at => now - 100,
+        );
+        my $token = await $m2m.get-token;
+        is $token.access-token, 'm2m-new-token', 'get-token re-requested after expiry';
+    };
+};
+
+# === OAuthEnterpriseClient flows via mock server ===
+subtest 'OAuthEnterpriseClient flows via mock server', {
+    use Cro::HTTP::Router;
+    use Cro::HTTP::Server;
+
+    my $PORT = 54401;
+    my $BASE = "http://localhost:$PORT";
+
+    my $app = route {
+        get -> '.well-known', 'oauth-protected-resource' {
+            content 'application/json', to-json({
+                resource => $BASE,
+                authorization_servers => [$BASE],
+            });
+        }
+        get -> '.well-known', 'oauth-authorization-server' {
+            content 'application/json', to-json({
+                issuer => $BASE,
+                token_endpoint => "$BASE/token",
+            });
+        }
+        post -> 'idp', 'token' {
+            request-body -> %body {
+                if (%body<subject_token> // '') eq 'bad-token' {
+                    content 'application/json', to-json({
+                        error => 'invalid_grant',
+                        error_description => 'Subject token rejected',
+                    });
+                } else {
+                    content 'application/json', to-json({
+                        issued_token_type => 'urn:ietf:params:oauth:token-type:id-jag',
+                        access_token => 'id-jag-jwt-token',
+                        token_type => 'N_A',
+                        scope => 'chat.read',
+                        expires_in => 300,
+                    });
+                }
+            }
+        }
+        post -> 'token' {
+            request-body -> %body {
+                content 'application/json', to-json({
+                    access_token => 'enterprise-access-token',
+                    token_type => 'Bearer',
+                    expires_in => 3600,
+                });
+            }
+        }
+    };
+
+    my $server = Cro::HTTP::Server.new(:host<localhost>, :port($PORT), application => $app);
+    $server.start;
+    LEAVE $server.stop;
+
+    # --- exchange-token success ---
+    subtest 'exchange-token returns TokenExchangeResponse', {
+        my $ent = OAuthEnterpriseClient.new(
+            resource-url => $BASE,
+            client-id => 'ent-client',
+            idp-token-endpoint => "$BASE/idp/token",
+            idp-client-id => 'idp-client',
+            subject-token => 'valid-id-token',
+            scopes => ['chat.read'],
+        );
+        $ent.auth-metadata = AuthServerMetadata.new(
+            issuer => $BASE,
+            token-endpoint => "$BASE/token",
+        );
+        my $jag = await $ent.exchange-token;
+        is $jag.access-token, 'id-jag-jwt-token', 'got ID-JAG token';
+        is $jag.issued-token-type, 'urn:ietf:params:oauth:token-type:id-jag', 'correct issued-token-type';
+    };
+
+    # --- exchange-token error ---
+    subtest 'exchange-token error throws X::MCP::OAuth::TokenExchange', {
+        my $ent = OAuthEnterpriseClient.new(
+            resource-url => $BASE,
+            client-id => 'ent-client',
+            idp-token-endpoint => "$BASE/idp/token",
+            idp-client-id => 'idp-client',
+            subject-token => 'bad-token',
+        );
+        $ent.auth-metadata = AuthServerMetadata.new(
+            issuer => $BASE,
+            token-endpoint => "$BASE/token",
+        );
+        try {
+            await $ent.exchange-token;
+            flunk 'should have thrown';
+            CATCH {
+                when X::MCP::OAuth::TokenExchange {
+                    ok .message.contains('invalid_grant'), 'error contains invalid_grant';
+                }
+                default { flunk "wrong exception: {.^name}" }
+            }
+        }
+    };
+
+    # --- request-token with ID-JAG ---
+    subtest 'request-token with jwt-bearer grant', {
+        my $ent = OAuthEnterpriseClient.new(
+            resource-url => $BASE,
+            client-id => 'ent-client',
+            idp-token-endpoint => "$BASE/idp/token",
+            idp-client-id => 'idp-client',
+            subject-token => 'valid-id-token',
+        );
+        $ent.auth-metadata = AuthServerMetadata.new(
+            issuer => $BASE,
+            token-endpoint => "$BASE/token",
+        );
+        $ent.id-jag = TokenExchangeResponse.from-hash({
+            issued_token_type => 'urn:ietf:params:oauth:token-type:id-jag',
+            access_token => 'id-jag-jwt-token',
+            token_type => 'N_A',
+        });
+        my $token = await $ent.request-token;
+        is $token.access-token, 'enterprise-access-token', 'got enterprise access token';
+    };
+
+    # --- authenticate full 3-step flow ---
+    subtest 'authenticate full enterprise flow', {
+        my $ent = OAuthEnterpriseClient.new(
+            resource-url => $BASE,
+            client-id => 'ent-client',
+            idp-token-endpoint => "$BASE/idp/token",
+            idp-client-id => 'idp-client',
+            subject-token => 'valid-id-token',
+            scopes => ['chat.read'],
+        );
+        my $result = await $ent.authenticate;
+        ok $result, 'authenticate completed';
+        is $ent.token.access-token, 'enterprise-access-token', 'token set after full flow';
+    };
+
+    # --- get-token with expired token re-authenticates ---
+    subtest 'get-token re-authenticates when expired', {
+        my $ent = OAuthEnterpriseClient.new(
+            resource-url => $BASE,
+            client-id => 'ent-client',
+            idp-token-endpoint => "$BASE/idp/token",
+            idp-client-id => 'idp-client',
+            subject-token => 'valid-id-token',
+        );
+        $ent.token = TokenResponse.new(
+            access-token => 'old-ent-token',
+            expires-in => 1,
+            created-at => now - 100,
+        );
+        my $token = await $ent.get-token;
+        is $token.access-token, 'enterprise-access-token', 'get-token re-authenticated';
+    };
+};
+
+# === OAuthServerHandler edge cases ===
+subtest 'OAuthServerHandler edge cases', {
+    my $handler = OAuthServerHandler.new(
+        resource-identifier => 'https://api.example.com',
+        authorization-servers => ['https://auth.example.com'],
+        token-validator => -> Str $token {
+            { valid => False, message => 'Custom invalid message' }
+        },
+    );
+
+    # Missing Authorization header
+    subtest 'missing Authorization header', {
+        my $req = class { method header($n) { Nil } }.new;
+        try {
+            $handler.validate-request($req);
+            flunk 'should have thrown';
+            CATCH {
+                when X::MCP::OAuth::Unauthorized {
+                    ok .message.contains('Missing'), 'Unauthorized for missing header';
+                }
+                default { flunk "wrong exception: {.^name}" }
+            }
+        }
+    };
+
+    # Malformed header (no Bearer prefix)
+    subtest 'malformed Authorization header', {
+        my $req = class { method header($n) { 'Basic abc123' } }.new;
+        try {
+            $handler.validate-request($req);
+            flunk 'should have thrown';
+            CATCH {
+                when X::MCP::OAuth::Unauthorized {
+                    ok .message.contains('Missing') || .message.contains('invalid'), 'Unauthorized for non-Bearer';
+                }
+                default { flunk "wrong exception: {.^name}" }
+            }
+        }
+    };
+
+    # Invalid token with custom message, no scopes
+    subtest 'invalid token with custom message', {
+        my $req = class { method header($n) { 'Bearer some-token' } }.new;
+        try {
+            $handler.validate-request($req);
+            flunk 'should have thrown';
+            CATCH {
+                when X::MCP::OAuth::Unauthorized {
+                    is .message, 'Custom invalid message', 'custom message passed through';
+                }
+                default { flunk "wrong exception: {.^name}" }
+            }
+        }
+    };
+};
+
+# === Type edge cases ===
+subtest 'Type edge cases', {
+    # ProtectedResourceMetadata minimal (resource only)
+    subtest 'ProtectedResourceMetadata minimal', {
+        my $prm = ProtectedResourceMetadata.new(resource => 'https://r.example.com');
+        is $prm.resource, 'https://r.example.com', 'resource set';
+        my %h = $prm.Hash;
+        nok %h<authorization_servers>:exists, 'no auth servers key when empty';
+        nok %h<scopes_supported>:exists, 'no scopes key when empty';
+
+        my $from = ProtectedResourceMetadata.from-hash({ resource => 'https://r.example.com' });
+        is $from.resource, 'https://r.example.com', 'from-hash with minimal fields';
+    };
+
+    # AuthServerMetadata with issuer only
+    subtest 'AuthServerMetadata issuer only', {
+        my $asm = AuthServerMetadata.new(issuer => 'https://auth.example.com');
+        my %h = $asm.Hash;
+        is %h<issuer>, 'https://auth.example.com', 'issuer in Hash';
+        nok %h<authorization_endpoint>:exists, 'no auth endpoint when not set';
+        nok %h<token_endpoint>:exists, 'no token endpoint when not set';
+
+        my $from = AuthServerMetadata.from-hash({ issuer => 'https://auth.example.com' });
+        is $from.issuer, 'https://auth.example.com', 'from-hash with issuer only';
+    };
+
+    # TokenResponse with access_token only
+    subtest 'TokenResponse minimal from-hash', {
+        my $tr = TokenResponse.from-hash({ access_token => 'tok' });
+        is $tr.access-token, 'tok', 'access-token set';
+        is $tr.token-type, 'Bearer', 'default token-type';
+        nok $tr.is-expired, 'no expires-in means not expired';
+    };
+
+    # ClientRegistrationRequest with all optional fields
+    subtest 'ClientRegistrationRequest all optional fields', {
+        my $req = ClientRegistrationRequest.new(
+            redirect-uris => ['http://localhost/cb'],
+            client-name => 'My App',
+            client-uri => 'https://myapp.example.com',
+            logo-uri => 'https://myapp.example.com/logo.png',
+            contacts => ['admin@example.com'],
+            tos-uri => 'https://myapp.example.com/tos',
+            policy-uri => 'https://myapp.example.com/policy',
+            grant-types => ['authorization_code'],
+            response-types => ['code'],
+            token-endpoint-auth-method => 'none',
+            scope => 'read write',
+            software-id => 'my-software',
+            software-version => '2.0',
+        );
+        my %h = $req.Hash;
+        is %h<client_uri>, 'https://myapp.example.com', 'client_uri';
+        is %h<logo_uri>, 'https://myapp.example.com/logo.png', 'logo_uri';
+        is %h<contacts>[0], 'admin@example.com', 'contacts';
+        is %h<tos_uri>, 'https://myapp.example.com/tos', 'tos_uri';
+        is %h<policy_uri>, 'https://myapp.example.com/policy', 'policy_uri';
+        is %h<software_id>, 'my-software', 'software_id';
+    };
+
+    # ClientRegistrationResponse from-hash minimal (client_id only)
+    subtest 'ClientRegistrationResponse minimal', {
+        my $resp = ClientRegistrationResponse.from-hash({ client_id => 'cid-only' });
+        is $resp.client-id, 'cid-only', 'client-id set';
+        nok $resp.client-secret.defined, 'no client-secret';
+    };
+
+    # X::MCP::OAuth::Registration with error but no description
+    subtest 'Registration error without description', {
+        my $ex = X::MCP::OAuth::Registration.new(error => 'invalid_client');
+        # No error-description → message should not contain colon
+        nok $ex.message.contains(':'), 'no colon when no description';
+        ok $ex.message.contains('registration') || $ex.message.contains('Registration') || $ex.message eq 'Dynamic client registration failed',
+            'default message used';
+    };
+
+    # X::MCP::OAuth::TokenExchange with error but no description
+    subtest 'TokenExchange error without description', {
+        my $ex = X::MCP::OAuth::TokenExchange.new(error => 'bad_grant');
+        nok $ex.message.contains(':'), 'no colon when no description';
+        ok $ex.message.contains('exchange') || $ex.message.contains('Exchange') || $ex.message eq 'Token exchange failed',
+            'default message used';
+    };
+};
+
 done-testing;
