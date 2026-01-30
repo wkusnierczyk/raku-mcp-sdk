@@ -13,7 +13,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 env:
   # Raku version to use
@@ -160,17 +159,3 @@ jobs:
           fi
           echo "✓ Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%" >&2
 
-  # ----------------------------------------------------------------------------
-  # Rerun Failed Jobs - Automatically retry flaky test failures
-  # ----------------------------------------------------------------------------
-  rerun-failed:
-    name: Rerun failed jobs
-    needs: [test, coverage]
-    if: failure() && github.run_attempt < 3
-    runs-on: ubuntu-latest
-    steps:
-      - name: Rerun failed jobs
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh run rerun ${{ github.run_id }} --failed --repo ${{ github.repository }}
