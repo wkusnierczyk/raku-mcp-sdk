@@ -132,14 +132,14 @@ class RegisteredResource is export {
 
 #| Builder for creating resource definitions
 class ResourceBuilder is export {
-    has Str $!uri;
-    has Str $!name;
-    has Str $!description;
-    has Str $!title;
-    has @!icons;
-    has Str $!mimeType;
-    has MCP::Types::Annotations $!annotations;
-    has &!reader;
+    has Str $.uri;
+    has Str $.name;
+    has Str $.description;
+    has Str $.title;
+    has @.icons;
+    has Str $.mimeType;
+    has MCP::Types::Annotations $.annotations;
+    has &.reader;
 
     method uri(Str $uri --> ResourceBuilder) {
         $!uri = $uri;
@@ -353,14 +353,14 @@ class RegisteredResourceTemplate is export {
 
 #| Builder for creating resource template definitions
 class ResourceTemplateBuilder is export {
-    has Str $!uri-template;
-    has Str $!name;
-    has Str $!description;
-    has Str $!title;
-    has @!icons;
-    has Str $!mimeType;
-    has MCP::Types::Annotations $!annotations;
-    has &!reader;
+    has Str $.uri-template;
+    has Str $.name;
+    has Str $.description;
+    has Str $.title;
+    has @.icons;
+    has Str $.mimeType;
+    has MCP::Types::Annotations $.annotations;
+    has &.reader;
 
     method uri-template(Str $t --> ResourceTemplateBuilder) {
         $!uri-template = $t;
