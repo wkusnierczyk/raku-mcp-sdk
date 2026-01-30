@@ -1,0 +1,223 @@
+use v6.d;
+use Test;
+use lib 'lib';
+use lib 't/lib';
+use MCP::Types;
+use MCP::Server::Tool;
+use MCP::Server::Resource;
+use MCP::Server::Prompt;
+
+# =============================================================================
+# ToolBuilder: exercise every setter method via chaining
+# =============================================================================
+
+subtest 'ToolBuilder full chain', {
+    my $tool = tool()
+        .name('calc')
+        .description('Calculate')
+        .title('Calculator')
+        .icon('https://x/icon.png', mimeType => 'image/png', sizes => ['16x16'])
+        .string-param('expr', description => 'Expression', :required)
+        .number-param('precision', description => 'Decimal places', :required)
+        .integer-param('base', description => 'Number base')
+        .boolean-param('verbose', description => 'Verbose output')
+        .array-param('inputs', description => 'Input list', items => %( type => 'string' ), :required)
+        .output-schema(%( type => 'object' ))
+        .annotations(title => 'Calc', :readOnly, :!destructive, :idempotent, :openWorld)
+        .task-support('required')
+        .handler(-> :%params { 'result' })
+        .build;
+
+    is $tool.name, 'calc', 'name';
+    is $tool.description, 'Calculate', 'description';
+    is $tool.title, 'Calculator', 'title';
+    ok $tool.icons.elems == 1, 'icons';
+    ok $tool.inputSchema<properties><expr><type> eq 'string', 'string-param';
+    ok $tool.inputSchema<properties><precision><type> eq 'number', 'number-param';
+    ok $tool.inputSchema<properties><base><type> eq 'integer', 'integer-param';
+    ok $tool.inputSchema<properties><verbose><type> eq 'boolean', 'boolean-param';
+    ok $tool.inputSchema<properties><inputs><type> eq 'array', 'array-param';
+    ok $tool.inputSchema<properties><inputs><items><type> eq 'string', 'array items';
+    ok $tool.outputSchema<type> eq 'object', 'output-schema';
+    ok $tool.annotations.readOnlyHint, 'readOnly annotation';
+    ok $tool.annotations.idempotentHint, 'idempotent annotation';
+    ok $tool.annotations.openWorldHint, 'openWorld annotation';
+    ok $tool.execution.Hash<taskSupport> eq 'required', 'task-support';
+};
+
+subtest 'ToolBuilder task-support default', {
+    my $tool = tool().name('t').task-support('bogus').handler(-> { 'x' }).build;
+    is $tool.execution.Hash<taskSupport>, 'optional', 'default task-support';
+};
+
+subtest 'ToolBuilder schema method', {
+    my $tool = tool().name('t').schema(%( type => 'object', properties => %( x => %( type => 'string' ) ) )).handler(-> { 'x' }).build;
+    ok $tool.inputSchema<properties><x><type> eq 'string', 'schema sets inputSchema';
+};
+
+subtest 'ToolBuilder input-schema method', {
+    my $tool = tool().name('t').input-schema(%( type => 'object' )).handler(-> { 'x' }).build;
+    ok $tool.inputSchema<type> eq 'object', 'input-schema';
+};
+
+# =============================================================================
+# ResourceBuilder: exercise every setter method via chaining
+# =============================================================================
+
+subtest 'ResourceBuilder full chain', {
+    my $res = resource()
+        .uri('file:///test')
+        .name('test')
+        .description('Test resource')
+        .title('Test')
+        .icon('https://x/icon.png', mimeType => 'image/png')
+        .mimeType('text/plain')
+        .annotations(['user'], priority => 0.5)
+        .reader(-> { 'content' })
+        .build;
+
+    is $res.uri, 'file:///test', 'uri';
+    is $res.name, 'test', 'name';
+    is $res.description, 'Test resource', 'description';
+    is $res.title, 'Test', 'title';
+    ok $res.icons.elems == 1, 'icons';
+    is $res.mimeType, 'text/plain', 'mimeType';
+    ok $res.annotations.priority == 0.5, 'annotations priority';
+};
+
+subtest 'ResourceBuilder from-file', {
+    # Create a temp file
+    my $path = $*TMPDIR.add("test-resource-{$*PID}.txt");
+    $path.spurt('hello');
+    LEAVE $path.unlink if $path.e;
+
+    my $res = resource().from-file($path).build;
+    is $res.name, $path.basename, 'name from file';
+    ok $res.uri.contains($path.absolute), 'uri from file';
+    is $res.mimeType, 'text/plain', 'mime from extension';
+};
+
+# =============================================================================
+# ResourceTemplateBuilder: exercise every setter method via chaining
+# =============================================================================
+
+subtest 'ResourceTemplateBuilder full chain', {
+    my $tmpl = resource-template()
+        .uri-template('file:///{path}')
+        .name('files')
+        .description('File access')
+        .title('Files')
+        .icon('https://x/icon.png')
+        .mimeType('text/plain')
+        .annotations(['assistant'], priority => 0.8)
+        .reader(-> :$path { "content of $path" })
+        .build;
+
+    is $tmpl.uri-template, 'file:///{path}', 'uri-template';
+    is $tmpl.name, 'files', 'name';
+    is $tmpl.description, 'File access', 'description';
+    is $tmpl.title, 'Files', 'title';
+    ok $tmpl.icons.elems == 1, 'icons';
+    is $tmpl.mimeType, 'text/plain', 'mimeType';
+    ok $tmpl.annotations.priority == 0.8, 'annotations';
+};
+
+# =============================================================================
+# PromptBuilder: exercise every setter method via chaining
+# =============================================================================
+
+subtest 'PromptBuilder full chain', {
+    my $p = prompt()
+        .name('search')
+        .description('Search for things')
+        .title('Search')
+        .icon('https://x/icon.png')
+        .argument('query', description => 'Search query', :required)
+        .required-argument('scope', description => 'Search scope')
+        .optional-argument('limit', description => 'Max results')
+        .generator(-> :%params { user-message("Searching for {%params<query>}") })
+        .build;
+
+    is $p.name, 'search', 'name';
+    is $p.description, 'Search for things', 'description';
+    is $p.title, 'Search', 'title';
+    ok $p.icons.elems == 1, 'icons';
+    ok $p.arguments.elems == 3, 'arguments';
+    ok $p.arguments[0].required, 'first required';
+    ok $p.arguments[1].required, 'second required';
+    nok $p.arguments[2].required, 'third optional';
+};
+
+# =============================================================================
+# RegisteredTool: handler and call
+# =============================================================================
+
+subtest 'RegisteredTool call with Positional return', {
+    my $tool = tool()
+        .name('multi')
+        .handler(-> { [TextContent.new(text => 'a'), TextContent.new(text => 'b')] })
+        .build;
+
+    my $result = $tool.call(%());
+    is $result.content.elems, 2, 'Positional result';
+};
+
+subtest 'RegisteredTool call with default return', {
+    my $tool = tool()
+        .name('num')
+        .handler(-> { 42 })
+        .build;
+
+    my $result = $tool.call(%());
+    is $result.content[0].text, '42', 'default coercion to Str';
+};
+
+subtest 'RegisteredTool call with Blob return', {
+    my $tool = tool()
+        .name('blob')
+        .handler(-> { Buf.new(1,2,3) })
+        .build;
+
+    my $result = $tool.call(%());
+    ok $result.content[0] ~~ ImageContent || $result.content.elems >= 1, 'Blob handled';
+};
+
+# =============================================================================
+# RegisteredResource: reader method
+# =============================================================================
+
+subtest 'RegisteredResource read returns text', {
+    my $res = resource()
+        .uri('test://x')
+        .name('x')
+        .reader(-> { 'text content' })
+        .build;
+
+    my @contents = $res.read;
+    ok @contents[0] ~~ ResourceContents, 'returns ResourceContents';
+    is @contents[0].text, 'text content', 'text';
+};
+
+# =============================================================================
+# RegisteredResourceTemplate: to-resource-template
+# =============================================================================
+
+subtest 'RegisteredResourceTemplate to-resource-template', {
+    my $tmpl = resource-template()
+        .uri-template('file:///{path}')
+        .name('files')
+        .description('desc')
+        .title('T')
+        .mimeType('text/plain')
+        .reader(-> :$path { 'ok' })
+        .build;
+
+    my $rt = $tmpl.to-resource-template;
+    ok $rt ~~ ResourceTemplate, 'returns ResourceTemplate';
+    is $rt.uriTemplate, 'file:///{path}', 'uriTemplate';
+    is $rt.name, 'files', 'name';
+    is $rt.description, 'desc', 'description';
+    is $rt.title, 'T', 'title';
+};
+
+done-testing;

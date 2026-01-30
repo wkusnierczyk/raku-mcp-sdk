@@ -1,0 +1,621 @@
+use v6.d;
+use Test;
+use lib 'lib';
+use lib 't/lib';
+
+use MCP::Server;
+use MCP::Client;
+use MCP::Types;
+need MCP::JSONRPC;
+use MCP::Server::Tool;
+use MCP::Server::Resource;
+use MCP::Server::Prompt;
+need TestTransport;
+use JSON::Fast;
+
+plan *;
+
+# Helper: round-trip through JSON to ensure proper Hash structures
+sub j(%h) { $(from-json(to-json(%h))) }
+
+# Helper: create connected client
+sub make-client(:$transport = TestTransport::TestTransport.new, :@roots, :&sampling-handler, :&elicitation-handler) {
+    my %opts = info => Implementation.new(name => 'cli', version => '0.1'), :$transport;
+    %opts<roots> = @roots if @roots;
+    %opts<sampling-handler> = &sampling-handler if &sampling-handler;
+    %opts<elicitation-handler> = &elicitation-handler if &elicitation-handler;
+    my $client = Client.new(|%opts);
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, {
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => %(),
+        instructions => '',
+    }));
+    await $connect;
+    $client
+}
+
+# =============================================================================
+# Client: get-task-result, complete-resource, close
+# =============================================================================
+
+subtest 'Client get-task-result', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.get-task-result('task-42');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].method, 'tasks/result', 'tasks/result method';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        content => [j(%( type => 'text', text => 'done' ))],
+    }));
+    my $result = await $p;
+    ok $result<content>.elems >= 1, 'result has content';
+};
+
+subtest 'Client complete-resource', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.complete-resource('file:///x', argument-name => 'path', value => '/ho');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].method, 'completion/complete', 'completion/complete method';
+    is @reqs[0].params<ref><type>, 'ref/resource', 'ref type is resource';
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        completion => j(%( values => ['/home', '/host'] )),
+    }));
+    my $result = await $p;
+    is $result.values.elems, 2, 'completion values';
+};
+
+subtest 'Client close', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+    await $client.close;
+    pass 'client close completes';
+};
+
+# =============================================================================
+# Client: error response for pending request
+# =============================================================================
+
+subtest 'Client request error response', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.request('tools/list');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+
+    # Server returns error
+    $transport.emit(MCP::JSONRPC::Response.new(
+        id => @reqs[0].id,
+        error => MCP::JSONRPC::Error.new(code => -32601, message => 'not found'),
+    ));
+    dies-ok { await $p }, 'error response breaks promise';
+};
+
+# =============================================================================
+# Client: list methods with cursor (nextCursor path)
+# =============================================================================
+
+subtest 'Client list-tools with cursor and nextCursor', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.list-tools(cursor => 'page2');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    is @reqs[0].params<cursor>, 'page2', 'cursor passed';
+
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        tools => [j(%( name => 'x', inputSchema => %( type => 'object' ) ))],
+        nextCursor => 'page3',
+    }));
+    my $result = await $p;
+    is $result<nextCursor>, 'page3', 'nextCursor returned';
+};
+
+subtest 'Client list-resources with nextCursor', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.list-resources(cursor => 'c1');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        resources => [j(%( uri => 'file:///a', name => 'a' ))],
+        nextCursor => 'c2',
+    }));
+    my $result = await $p;
+    is $result<nextCursor>, 'c2', 'nextCursor returned';
+};
+
+subtest 'Client list-prompts with nextCursor', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.list-prompts(cursor => 'p1');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        prompts => [j(%( name => 'sum' ))],
+        nextCursor => 'p2',
+    }));
+    my $result = await $p;
+    is $result<nextCursor>, 'p2', 'nextCursor returned';
+};
+
+subtest 'Client list-resource-templates with nextCursor', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.list-resource-templates(cursor => 't1');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        resourceTemplates => [j(%( uriTemplate => 'x:///{y}', name => 'y' ))],
+        nextCursor => 't2',
+    }));
+    my $result = await $p;
+    is $result<nextCursor>, 't2', 'nextCursor returned';
+};
+
+subtest 'Client list-tasks with nextCursor', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = make-client(:$transport);
+
+    $transport.clear-sent;
+    my $p = $client.list-tasks(cursor => 'tk1');
+    $transport.await-sent;
+    my @reqs = $transport.sent.grep(MCP::JSONRPC::Request);
+    $transport.emit(MCP::JSONRPC::Response.success(@reqs[0].id, {
+        tasks => [j(%( taskId => 't1', status => 'working' ))],
+        nextCursor => 'tk2',
+    }));
+    my $result = await $p;
+    is $result<nextCursor>, 'tk2', 'nextCursor returned';
+};
+
+# =============================================================================
+# Client: sampling handler with tool validation
+# =============================================================================
+
+subtest 'Client sampling handler success with result coercion', {
+    my $transport = TestTransport::TestTransport.new;
+    my $client = Client.new(
+        info => Implementation.new(name => 'cli', version => '0.1'),
+        :$transport,
+        sampling-handler => -> %params {
+            %(
+                role => 'assistant',
+                model => 'test-model',
+                content => %( type => 'text', text => 'response' ),
+                stopReason => 'endTurn',
+            )
+        },
+    );
+    my $connect = $client.connect;
+    $transport.await-sent-and-settle;
+    $transport.emit(MCP::JSONRPC::Response.success($transport.sent[0].id, %(
+        protocolVersion => LATEST_PROTOCOL_VERSION,
+        capabilities => %(),
+        instructions => '',
+    )));
+    await $connect;
+
+    $transport.clear-sent;
+    $transport.emit(MCP::JSONRPC::Request.new(
+        id => 100,
+        method => 'sampling/createMessage',
+        params => %(
+            messages => [%( role => 'user', content => %( type => 'text', text => 'hi' ) )],
+            maxTokens => 100,
+        ),
+    ));
+    sleep 0.3;
+
+    my @resps = $transport.sent.grep(MCP::JSONRPC::Response);
+    ok @resps.elems >= 1, 'sampling response sent';
+    ok @resps[0].result.defined, 'result present (not error)';
+};
+
+# =============================================================================
+# Types: TextContent from-hash, annotations on content types
+# =============================================================================
+
+subtest 'TextContent from-hash', {
+    my $tc = TextContent.from-hash(%(text => 'hello'));
+    is $tc.text, 'hello', 'text from plain hash';
+
+    my $tc2 = TextContent.from-hash(%(
+        text => 'annotated',
+        annotations => %( priority => 0.5e0, audience => ['user'] ),
+    ));
+    is $tc2.text, 'annotated', 'text with annotations';
+    ok $tc2.annotations.defined, 'annotations present';
+};
+
+subtest 'Content types with annotations', {
+    my $ann = Annotations.new(audience => ['user', 'assistant'], priority => 0.7e0);
+
+    my $img = ImageContent.new(data => 'x', mimeType => 'image/png', annotations => $ann);
+    my %ih = $img.Hash;
+    ok %ih<annotations><priority> == 0.7, 'image annotations in Hash';
+
+    my $aud = AudioContent.new(data => 'y', mimeType => 'audio/wav', annotations => $ann);
+    my %ah = $aud.Hash;
+    ok %ah<annotations><audience>.elems == 2, 'audio annotations audience';
+
+    my $rc = ResourceContents.new(uri => 'x://y', text => 'z');
+    my $er = EmbeddedResource.new(resource => $rc, annotations => $ann);
+    my %eh = $er.Hash;
+    ok %eh<annotations>:exists, 'embedded resource annotations';
+
+    my $rl = ResourceLink.new(name => 'n', uri => 'u://x', annotations => $ann);
+    my %rh = $rl.Hash;
+    ok %rh<annotations>:exists, 'resource link annotations';
+};
+
+subtest 'PromptMessage Hash with Positional content', {
+    my @content = (TextContent.new(text => 'a'), TextContent.new(text => 'b'));
+    my $pm = PromptMessage.new(role => 'user', content => @content);
+    my %h = $pm.Hash;
+    is %h<content>.elems, 2, 'positional content in Hash';
+};
+
+subtest 'SamplingMessage Hash with Positional content', {
+    my @content = (TextContent.new(text => 'x'),);
+    my $sm = SamplingMessage.new(role => 'user', content => @content);
+    my %h = $sm.Hash;
+    ok %h<content>.elems >= 1, 'sampling message content in Hash';
+};
+
+subtest 'CreateMessageResult Hash with Positional content', {
+    my @content = (TextContent.new(text => 'x'),);
+    my $cmr = CreateMessageResult.new(
+        content => @content, model => 'm', role => 'assistant',
+    );
+    my %h = $cmr.Hash;
+    ok %h<content>.elems >= 1, 'result positional content';
+};
+
+# =============================================================================
+# Types: Capability sub-type Hash methods
+# =============================================================================
+
+subtest 'LoggingCapability Hash', {
+    my $lc = LoggingCapability.new;
+    my %h = $lc.Hash;
+    isa-ok %h, Hash, 'logging capability returns Hash';
+};
+
+subtest 'CompletionsCapability Hash', {
+    my $cc = CompletionsCapability.new;
+    my %h = $cc.Hash;
+    isa-ok %h, Hash, 'completions capability returns Hash';
+};
+
+subtest 'PromptsCapability Hash', {
+    my $pc = PromptsCapability.new(listChanged => True);
+    my %h = $pc.Hash;
+    ok %h<listChanged>, 'prompts listChanged in Hash';
+};
+
+subtest 'ResourcesCapability Hash', {
+    my $rc = ResourcesCapability.new(subscribe => True, listChanged => True);
+    my %h = $rc.Hash;
+    ok %h<subscribe>, 'subscribe in Hash';
+    ok %h<listChanged>, 'listChanged in Hash';
+};
+
+subtest 'ToolsCapability Hash', {
+    my $tc = ToolsCapability.new(listChanged => True);
+    my %h = $tc.Hash;
+    ok %h<listChanged>, 'tools listChanged in Hash';
+};
+
+subtest 'RootsCapability Hash', {
+    my $rc = RootsCapability.new(listChanged => True);
+    my %h = $rc.Hash;
+    ok %h<listChanged>, 'roots listChanged in Hash';
+};
+
+subtest 'SamplingCapability Hash', {
+    my $sc = SamplingCapability.new(tools => True, context => True);
+    my %h = $sc.Hash;
+    ok %h<tools>:exists, 'tools in Hash';
+    ok %h<context>:exists, 'context in Hash';
+};
+
+# =============================================================================
+# Resource template reader: Blob and default return types
+# =============================================================================
+
+subtest 'RegisteredResourceTemplate read with Blob', {
+    my $rrt = RegisteredResourceTemplate.new(
+        uri-template => 'bin:///{file}',
+        name => 'binary',
+        reader => -> %p { Buf.new(65, 66) },
+    );
+    my @contents = $rrt.read(%( file => 'test' ), uri => 'bin:///test');
+    is @contents[0].mimeType, 'application/octet-stream', 'Blob mimeType';
+};
+
+subtest 'RegisteredResourceTemplate read with default type', {
+    my $rrt = RegisteredResourceTemplate.new(
+        uri-template => 'num:///{n}',
+        name => 'number',
+        reader => -> %p { 42 },
+    );
+    my @contents = $rrt.read(%( n => '1' ), uri => 'num:///1');
+    ok @contents[0].text.contains('42'), 'default coerced to text';
+};
+
+subtest 'RegisteredResourceTemplate read with ResourceContents', {
+    my $rrt = RegisteredResourceTemplate.new(
+        uri-template => 'rc:///{id}',
+        name => 'rc',
+        reader => -> %p { ResourceContents.new(uri => "rc:///%p<id>", text => 'direct') },
+    );
+    my @contents = $rrt.read(%( id => '1' ));
+    is @contents[0].text, 'direct', 'ResourceContents passthrough';
+};
+
+subtest 'RegisteredResourceTemplate read with Positional', {
+    my $rrt = RegisteredResourceTemplate.new(
+        uri-template => 'list:///{x}',
+        name => 'list',
+        reader => -> %p { [ResourceContents.new(uri => 'list:///1', text => 'a')] },
+    );
+    my @contents = $rrt.read(%( x => '1' ));
+    is @contents[0].text, 'a', 'Positional passthrough';
+};
+
+# =============================================================================
+# Resource read with ResourceContents return
+# =============================================================================
+
+subtest 'RegisteredResource read with ResourceContents return', {
+    my $r = RegisteredResource.new(
+        uri => 'test://x', name => 'x',
+        reader => -> { ResourceContents.new(uri => 'test://x', text => 'direct') },
+    );
+    my @c = $r.read;
+    is @c[0].text, 'direct', 'ResourceContents passthrough';
+};
+
+# =============================================================================
+# Tool builder: output-schema and schema methods
+# =============================================================================
+
+subtest 'ToolBuilder schema and output-schema', {
+    my $t = tool()
+        .name('t1')
+        .schema(%( type => 'object', properties => %( x => %( type => 'string' ) ) ))
+        .output-schema(%( type => 'object', properties => %( result => %( type => 'number' ) ) ))
+        .handler(-> { 42 })
+        .build;
+
+    ok $t.to-tool.inputSchema<properties><x><type> eq 'string', 'schema sets inputSchema';
+    ok $t.to-tool.outputSchema<properties><result><type> eq 'number', 'output-schema set';
+};
+
+subtest 'ToolBuilder input-schema method', {
+    my $t = tool()
+        .name('t2')
+        .input-schema(%( type => 'object' ))
+        .handler(-> { 'ok' })
+        .build;
+
+    is $t.to-tool.inputSchema<type>, 'object', 'input-schema sets schema';
+};
+
+# =============================================================================
+# Tool builder validation errors
+# =============================================================================
+
+subtest 'ToolBuilder build validation', {
+    dies-ok { tool().handler(-> { }).build }, 'build without name dies';
+    dies-ok { tool().name('good').build }, 'build without handler dies';
+    dies-ok { tool().name('!!!').handler(-> { }).build }, 'invalid name dies';
+};
+
+subtest 'ResourceBuilder build validation', {
+    dies-ok { resource().name('x').reader({ }).build }, 'build without URI dies';
+    dies-ok { resource().uri('x://y').reader({ }).build }, 'build without name dies';
+    dies-ok { resource().uri('x://y').name('x').build }, 'build without reader dies';
+};
+
+subtest 'PromptBuilder build validation', {
+    dies-ok { prompt().generator(-> { }).build }, 'build without name dies';
+    dies-ok { prompt().name('x').build }, 'build without generator dies';
+};
+
+subtest 'ResourceTemplateBuilder build validation', {
+    dies-ok { resource-template().name('x').reader(-> %p { }).build }, 'build without uri-template dies';
+    dies-ok { resource-template().uri-template('x').reader(-> %p { }).build }, 'build without name dies';
+    dies-ok { resource-template().uri-template('x').name('x').build }, 'build without reader dies';
+};
+
+# =============================================================================
+# File resource helper
+# =============================================================================
+
+subtest 'file-resource helper', {
+    my $path = $*TMPDIR.add('mcp-test-file-resource.txt');
+    $path.spurt('test content');
+
+    my $r = file-resource($path);
+    is $r.to-resource.name, $path.basename, 'name from file';
+    ok $r.to-resource.uri.contains('file://'), 'file URI';
+    my @contents = $r.read;
+    is @contents[0].text, 'test content', 'reads file content';
+
+    # With custom uri and name
+    my $r2 = file-resource($path, uri => 'custom://test', name => 'custom');
+    is $r2.to-resource.uri, 'custom://test', 'custom uri';
+    is $r2.to-resource.name, 'custom', 'custom name';
+
+    $path.unlink;
+};
+
+# =============================================================================
+# ResourceBuilder from-file with various extensions
+# =============================================================================
+
+subtest 'ResourceBuilder from-file mime types', {
+    for <txt html css js json xml png jpg gif svg pdf md unknown> -> $ext {
+        my $path = $*TMPDIR.add("test-mime.$ext");
+        $path.spurt('x');
+        my $r = resource().from-file($path).build;
+        ok $r.to-resource.mimeType.chars > 0, "$ext has mimeType";
+        $path.unlink;
+    }
+};
+
+# =============================================================================
+# Prompt: user-message and assistant-message helpers
+# =============================================================================
+
+subtest 'user-message and assistant-message helpers', {
+    my $um = user-message('hello');
+    is $um.role, 'user', 'user role';
+    is $um.content.text, 'hello', 'user text';
+
+    my $am = assistant-message('world');
+    is $am.role, 'assistant', 'assistant role';
+    is $am.content.text, 'world', 'assistant text';
+};
+
+# =============================================================================
+# RegisteredPrompt get with various return types
+# =============================================================================
+
+subtest 'RegisteredPrompt get with Str return', {
+    my $p = RegisteredPrompt.new(
+        name => 'test',
+        generator => -> { 'plain string' },
+    );
+    my @msgs = $p.get({});
+    is @msgs[0].role, 'user', 'default role is user';
+    is @msgs[0].content.text, 'plain string', 'string coerced to message';
+};
+
+subtest 'RegisteredPrompt get with non-string return', {
+    my $p = RegisteredPrompt.new(
+        name => 'test',
+        generator => -> { 42 },
+    );
+    my @msgs = $p.get({});
+    ok @msgs[0].content.text.contains('42'), 'non-string coerced';
+};
+
+# =============================================================================
+# Types: ServerCapabilities Hash with all filled
+# =============================================================================
+
+subtest 'ServerCapabilities Hash with filled sub-capabilities', {
+    my $caps = ServerCapabilities.new(
+        logging => LoggingCapability.new,
+        prompts => PromptsCapability.new(listChanged => True),
+        resources => ResourcesCapability.new(subscribe => True),
+        tools => ToolsCapability.new(listChanged => True),
+        completions => CompletionsCapability.new,
+        experimental => %( 'test/ext' => %( v => '1' ) ),
+        tasks => %( supported => True ),
+    );
+    my %h = $caps.Hash;
+    ok %h<logging>:exists, 'logging in Hash';
+    ok %h<prompts>:exists, 'prompts in Hash';
+    ok %h<resources>:exists, 'resources in Hash';
+    ok %h<tools>:exists, 'tools in Hash';
+    ok %h<completions>:exists, 'completions in Hash';
+    ok %h<experimental>:exists, 'experimental in Hash';
+    ok %h<tasks>:exists, 'tasks in Hash';
+};
+
+# =============================================================================
+# Types: ResourceTemplate with icons and annotations
+# =============================================================================
+
+subtest 'ResourceTemplate Hash with all fields', {
+    my $rt = ResourceTemplate.new(
+        uriTemplate => 'file:///{path}',
+        name => 'files',
+        description => 'Access files',
+        title => 'Files',
+        mimeType => 'text/plain',
+        annotations => Annotations.new(audience => ['user'], priority => 0.5e0),
+        icons => [IconDefinition.new(src => 'file.png')],
+    );
+    my %h = $rt.Hash;
+    ok %h<title> eq 'Files', 'title in Hash';
+    ok %h<annotations><priority> == 0.5, 'annotations in Hash';
+    ok %h<icons>.elems == 1, 'icons in Hash';
+};
+
+subtest 'Resource Hash with annotations', {
+    my $r = Resource.new(
+        uri => 'x://y', name => 'y',
+        annotations => Annotations.new(audience => ['user']),
+        icons => [IconDefinition.new(src => 'icon.png')],
+    );
+    my %h = $r.Hash;
+    ok %h<annotations><audience>.elems == 1, 'annotations in Hash';
+    ok %h<icons>.elems == 1, 'icons in Hash';
+};
+
+# =============================================================================
+# Types: CallToolResult Hash
+# =============================================================================
+
+subtest 'CallToolResult Hash with structuredContent', {
+    my $ctr = CallToolResult.new(
+        content => [TextContent.new(text => 'x')],
+        isError => False,
+        structuredContent => %( value => 42 ),
+    );
+    my %h = $ctr.Hash;
+    ok %h<structuredContent><value> == 42, 'structuredContent in Hash';
+};
+
+# =============================================================================
+# validate-tool-name
+# =============================================================================
+
+subtest 'validate-tool-name', {
+    lives-ok { validate-tool-name('valid-name_123') }, 'valid name';
+    lives-ok { validate-tool-name('a') }, 'single char';
+    dies-ok { validate-tool-name('') }, 'empty name dies';
+    dies-ok { validate-tool-name('has space') }, 'space dies';
+    dies-ok { validate-tool-name('a' x 65) }, 'too long dies';
+};
+
+# =============================================================================
+# Server: tool handler that returns CallToolResult directly
+# =============================================================================
+
+subtest 'RegisteredTool call returning CallToolResult', {
+    my $t = RegisteredTool.new(
+        name => 'direct',
+        handler => -> {
+            CallToolResult.new(content => [TextContent.new(text => 'direct')], isError => False)
+        },
+    );
+    my $r = $t.call({});
+    is $r.content[0].text, 'direct', 'CallToolResult passthrough';
+    nok $r.isError, 'isError preserved';
+};
+
+done-testing;
