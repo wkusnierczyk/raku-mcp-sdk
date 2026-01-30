@@ -93,16 +93,14 @@ class StdioTransport does MCP::Transport::Base::Transport is export {
     }
 
     method !read-chunk(--> Str) {
-        try {
-            # Read line by line for header parsing
-            my $line = $!input.get;
-            return Str unless $line.defined;
-            return $line ~ "\n";
+        # Read line by line for header parsing
+        my $line = $!input.get;
+        return Str unless $line.defined;
+        return $line ~ "\n";
 
-            CATCH {
-                default {
-                    return Str;
-                }
+        CATCH {
+            default {
+                return Str;
             }
         }
     }
@@ -122,14 +120,12 @@ class StdioTransport does MCP::Transport::Base::Transport is export {
         my $json = $body.substr(0, $length);
         my $rest = $body.substr($length);
 
-        try {
-            my $msg = parse-message($json);
-            return ($msg, $rest);
+        my $msg = parse-message($json);
+        return ($msg, $rest);
 
-            CATCH {
-                default {
-                    return (Nil, $rest);
-                }
+        CATCH {
+            default {
+                return (Nil, $rest);
             }
         }
     }

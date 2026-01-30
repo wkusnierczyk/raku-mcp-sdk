@@ -73,7 +73,7 @@ class RegisteredPrompt is export {
     method get(%arguments --> Array) {
         my $result;
         my $called = False;
-        try {
+        {
             $result = &!generator(:params(%arguments));
             $called = True;
             CATCH {
@@ -82,7 +82,7 @@ class RegisteredPrompt is export {
             }
         }
         if !$called {
-            try {
+            {
                 $result = &!generator(|%arguments);
                 $called = True;
                 CATCH {
@@ -92,7 +92,7 @@ class RegisteredPrompt is export {
             }
         }
         if !$called {
-            try {
+            {
                 $result = &!generator(%arguments);
                 $called = True;
                 CATCH {

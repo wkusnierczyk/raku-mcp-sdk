@@ -100,7 +100,7 @@ class RegisteredTool is export {
     method call(%arguments --> MCP::Types::CallToolResult) {
         my $result;
         my $called = False;
-        try {
+        {
             $result = &!handler(:params(%arguments));
             $called = True;
             CATCH {
@@ -109,7 +109,7 @@ class RegisteredTool is export {
             }
         }
         if !$called {
-            try {
+            {
                 $result = &!handler(|%arguments);
                 $called = True;
                 CATCH {
@@ -119,7 +119,7 @@ class RegisteredTool is export {
             }
         }
         if !$called {
-            try {
+            {
                 $result = &!handler(%arguments);
                 $called = True;
                 CATCH {
