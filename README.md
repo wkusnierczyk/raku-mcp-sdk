@@ -52,7 +52,7 @@ See [Gap Analysis](https://github.com/wkusnierczyk/raku-mcp-sdk/blob/main/GAP_AN
 
 ### Roadmap
 
-The Raku MCP SDK is current in review by the community.  
+The Raku MCP SDK is currently **in review by the community**.  
 Planned and currently ongoing efforts:
 
 * [Increased test coverage](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/143)  
