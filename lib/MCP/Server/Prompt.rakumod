@@ -81,27 +81,23 @@ class RegisteredPrompt is export {
                 default { .rethrow }
             }
         }
-        if !$called {
-            {
-                $result = &!generator(|%arguments);
-                $called = True;
-                CATCH {
-                    when X::AdHoc | X::Multi::NoMatch { }
-                    default { .rethrow }
-                }
+        unless $called {
+            $result = &!generator(|%arguments);
+            $called = True;
+            CATCH {
+                when X::AdHoc | X::Multi::NoMatch { }
+                default { .rethrow }
             }
         }
-        if !$called {
-            {
-                $result = &!generator(%arguments);
-                $called = True;
-                CATCH {
-                    when X::AdHoc | X::Multi::NoMatch { }
-                    default { .rethrow }
-                }
+        unless $called {
+            $result = &!generator(%arguments);
+            $called = True;
+            CATCH {
+                when X::AdHoc | X::Multi::NoMatch { }
+                default { .rethrow }
             }
         }
-        if !$called {
+        unless $called {
             $result = &!generator();
         }
 

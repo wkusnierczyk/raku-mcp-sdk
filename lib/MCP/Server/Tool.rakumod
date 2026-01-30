@@ -108,27 +108,23 @@ class RegisteredTool is export {
                 default { .rethrow }
             }
         }
-        if !$called {
-            {
-                $result = &!handler(|%arguments);
-                $called = True;
-                CATCH {
-                    when X::AdHoc | X::Multi::NoMatch { }
-                    default { .rethrow }
-                }
+        unless $called {
+            $result = &!handler(|%arguments);
+            $called = True;
+            CATCH {
+                when X::AdHoc | X::Multi::NoMatch { }
+                default { .rethrow }
             }
         }
-        if !$called {
-            {
-                $result = &!handler(%arguments);
-                $called = True;
-                CATCH {
-                    when X::AdHoc | X::Multi::NoMatch { }
-                    default { .rethrow }
-                }
+        unless $called {
+            $result = &!handler(%arguments);
+            $called = True;
+            CATCH {
+                when X::AdHoc | X::Multi::NoMatch { }
+                default { .rethrow }
             }
         }
-        if !$called {
+        unless $called {
             $result = &!handler();
         }
 
