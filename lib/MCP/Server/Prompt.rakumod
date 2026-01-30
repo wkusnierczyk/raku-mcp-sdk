@@ -110,20 +110,11 @@ class PromptBuilder is export {
     has @.arguments;
     has &.generator;
 
-    method name(Str $name --> PromptBuilder) {
-        $!name = $name;
-        self
-    }
+    method name(Str $!name --> PromptBuilder) { self }
 
-    method description(Str $desc --> PromptBuilder) {
-        $!description = $desc;
-        self
-    }
+    method description(Str $!description --> PromptBuilder) { self }
 
-    method title(Str $t --> PromptBuilder) {
-        $!title = $t;
-        self
-    }
+    method title(Str $!title --> PromptBuilder) { self }
 
     method icon(Str $src, Str :$mimeType, :@sizes --> PromptBuilder) {
         @!icons.push(MCP::Types::IconDefinition.new(:$src, :$mimeType, :@sizes));
@@ -148,10 +139,7 @@ class PromptBuilder is export {
         self.argument($name, :$description, :!required)
     }
 
-    method generator(&generator --> PromptBuilder) {
-        &!generator = &generator;
-        self
-    }
+    method generator(&!generator --> PromptBuilder) { self }
 
 
     method build(--> RegisteredPrompt) {
