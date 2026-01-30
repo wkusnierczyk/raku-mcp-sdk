@@ -61,11 +61,11 @@ class RegisteredPrompt is export {
     #| Get the Prompt definition for listing
     method to-prompt(--> MCP::Types::Prompt) {
         MCP::Types::Prompt.new(
-            name => $!name,
-            description => $!description,
-            title => $!title,
-            icons => @!icons,
-            arguments => @!arguments,
+            :$!name,
+            :$!description,
+            :$!title,
+            :@!icons,
+            :@!arguments,
         )
     }
 
@@ -186,12 +186,12 @@ class PromptBuilder is export {
         die "Prompt generator is required" unless &!generator;
 
         RegisteredPrompt.new(
-            name => $!name,
-            description => $!description,
-            title => $!title,
-            icons => @!icons,
-            arguments => @!arguments,
-            generator => &!generator,
+            :$!name,
+            :$!description,
+            :$!title,
+            :@!icons,
+            :@!arguments,
+            :&!generator,
         )
     }
 }

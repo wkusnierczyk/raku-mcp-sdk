@@ -41,8 +41,8 @@ class OAuthServerHandler is export {
     method resource-metadata(--> Hash) {
         ProtectedResourceMetadata.new(
             resource => $!resource-identifier,
-            authorization-servers => @!authorization-servers,
-            scopes-supported => @!scopes-supported,
+            :@!authorization-servers,
+            :@!scopes-supported,
         ).Hash
     }
 
