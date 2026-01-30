@@ -142,7 +142,7 @@ class OAuthClientHandler is export {
             my $resp = await $client.post(
                 $!auth-metadata.token-endpoint,
                 content-type => 'application/x-www-form-urlencoded',
-                body => self!form-encode(%body),
+                body => %body,
             );
             my $body = await $resp.body;
             my %token-data = $body ~~ Hash ?? $body !! from-json($body);
@@ -168,7 +168,7 @@ class OAuthClientHandler is export {
             my $resp = await $client.post(
                 $!auth-metadata.token-endpoint,
                 content-type => 'application/x-www-form-urlencoded',
-                body => self!form-encode(%body),
+                body => %body,
             );
             my $body = await $resp.body;
             my %token-data = $body ~~ Hash ?? $body !! from-json($body);
@@ -235,10 +235,6 @@ class OAuthClientHandler is export {
             await self.authenticate;
             True
         }
-    }
-
-    method !form-encode(%data --> Str) {
-        %data.kv.map(-> $k, $v { "{uri-encode($k)}={uri-encode($v)}" }).join('&')
     }
 
     method !cro-client() {
@@ -327,7 +323,7 @@ class OAuthM2MClient is export {
             my $resp = await $client.post(
                 $!auth-metadata.token-endpoint,
                 content-type => 'application/x-www-form-urlencoded',
-                body => self!form-encode(%body),
+                body => %body,
             );
             my $body = await $resp.body;
             my %token-data = $body ~~ Hash ?? $body !! from-json($body);
@@ -353,10 +349,6 @@ class OAuthM2MClient is export {
         }
     }
 
-    method !form-encode(%data --> Str) {
-        %data.kv.map(-> $k, $v { "{uri-encode($k)}={uri-encode($v)}" }).join('&')
-    }
-
     method !cro-client() {
         require ::('Cro::HTTP::Client');
         return ::('Cro::HTTP::Client').new;
@@ -367,10 +359,6 @@ class OAuthM2MClient is export {
                 );
             }
         }
-    }
-
-    sub uri-encode(Str $s --> Str) {
-        $s.subst(/<-[A..Za..z0..9\-._~]>/, { .Str.encode('utf-8').list.map({ '%' ~ .fmt('%02X') }).join }, :g)
     }
 }
 
@@ -453,7 +441,7 @@ class OAuthEnterpriseClient is export {
             my $resp = await $client.post(
                 $!idp-token-endpoint,
                 content-type => 'application/x-www-form-urlencoded',
-                body => self!form-encode(%body),
+                body => %body,
             );
             my $body = await $resp.body;
             my %data = $body ~~ Hash ?? $body !! from-json($body);
@@ -487,7 +475,7 @@ class OAuthEnterpriseClient is export {
             my $resp = await $client.post(
                 $!auth-metadata.token-endpoint,
                 content-type => 'application/x-www-form-urlencoded',
-                body => self!form-encode(%body),
+                body => %body,
             );
             my $body = await $resp.body;
             my %token-data = $body ~~ Hash ?? $body !! from-json($body);
@@ -524,10 +512,6 @@ class OAuthEnterpriseClient is export {
         }
     }
 
-    method !form-encode(%data --> Str) {
-        %data.kv.map(-> $k, $v { "{uri-encode($k)}={uri-encode($v)}" }).join('&')
-    }
-
     method !cro-client() {
         require ::('Cro::HTTP::Client');
         return ::('Cro::HTTP::Client').new;
@@ -538,9 +522,5 @@ class OAuthEnterpriseClient is export {
                 );
             }
         }
-    }
-
-    sub uri-encode(Str $s --> Str) {
-        $s.subst(/<-[A..Za..z0..9\-._~]>/, { .Str.encode('utf-8').list.map({ '%' ~ .fmt('%02X') }).join }, :g)
     }
 }
