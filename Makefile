@@ -334,7 +334,7 @@ dependencies-dev: dependencies
 dependencies-update:
 	$(call log-info,Updating dependencies...)
 	$(Q)$(ZEF) update
-	$(Q)$(ZEF) upgrade
+	$(Q)$(ZEF) install --deps-only . --force-install
 	$(call log-success,Dependencies updated)
 
 # ------------------------------------------------------------------------------

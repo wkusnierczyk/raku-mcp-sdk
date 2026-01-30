@@ -420,7 +420,7 @@ make test        # Run test suite
     <tr><th colspan="3" align="left">Dependencies</th></tr>
     <tr><td><code>dependencies</code></td><td>Install runtime dependencies</td><td><code>zef install --deps-only .</code></td></tr>
     <tr><td><code>dependencies-dev</code></td><td>Install dev dependencies</td><td>Includes Prove6, Test::META, Mi6, Racoco</td></tr>
-    <tr><td><code>dependencies-update</code></td><td>Update dependencies</td><td>Runs <code>zef update</code> and <code>zef upgrade</code></td></tr>
+    <tr><td><code>dependencies-update</code></td><td>Update dependencies</td><td>Runs <code>zef update</code> and reinstalls project deps</td></tr>
     <tr><th colspan="3" align="left">Lint and formatting</th></tr>
     <tr><td><code>lint</code></td><td>Run syntax + META checks</td><td>Runs <code>lint-syntax</code> and <code>lint-meta</code></td></tr>
     <tr><td><code>lint-syntax</code></td><td>Compile-check source files</td><td>Uses <code>raku -Ilib -c</code></td></tr>
