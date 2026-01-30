@@ -50,6 +50,15 @@ See [Gap Analysis](https://github.com/wkusnierczyk/raku-mcp-sdk/blob/main/GAP_AN
 | Tool metadata | ✅ Done | Tool name validation (SEP-986), icons and title on Tool/Resource/Prompt/Implementation (SEP-973) |
 | OAuth 2.1 | ✅ Done | PKCE, token management, server validation, metadata discovery, dynamic client registration, M2M client credentials, enterprise IdP (SEP-990) |
 
+### Roadmap
+
+The Raku MCP SDK is current in review by the community.  
+Planned and currently ongoing efforts:
+
+* [Increased test coverage](https://github.com/wkusnierczyk/raku-mcp-sdk/issues/143)  
+  Current test coverage is slightly above 70% (~74%). The target is to achieve at least 90% coverage.  
+  For the current coverage, use `make coverage` (see [Makefile targets](#makefile-targets) below).
+
 ## Table of contents
 
 - [Status](#status)
