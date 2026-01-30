@@ -81,7 +81,7 @@ class RegisteredPrompt is export {
                 default { .rethrow }
             }
         }
-        if !$called {
+        unless $called {
             try {
                 $result = &!generator(|%arguments);
                 $called = True;
@@ -91,7 +91,7 @@ class RegisteredPrompt is export {
                 }
             }
         }
-        if !$called {
+        unless $called {
             try {
                 $result = &!generator(%arguments);
                 $called = True;
@@ -101,7 +101,7 @@ class RegisteredPrompt is export {
                 }
             }
         }
-        if !$called {
+        unless $called {
             $result = &!generator();
         }
 

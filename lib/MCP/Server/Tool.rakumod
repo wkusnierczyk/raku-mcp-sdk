@@ -108,7 +108,7 @@ class RegisteredTool is export {
                 default { .rethrow }
             }
         }
-        if !$called {
+        unless $called {
             try {
                 $result = &!handler(|%arguments);
                 $called = True;
@@ -118,7 +118,7 @@ class RegisteredTool is export {
                 }
             }
         }
-        if !$called {
+        unless $called {
             try {
                 $result = &!handler(%arguments);
                 $called = True;
@@ -128,7 +128,7 @@ class RegisteredTool is export {
                 }
             }
         }
-        if !$called {
+        unless $called {
             $result = &!handler();
         }
 
