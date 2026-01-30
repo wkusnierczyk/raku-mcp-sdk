@@ -141,6 +141,7 @@ class PromptBuilder is export {
 
     method generator(&!generator --> PromptBuilder) { self }
 
+
     method build(--> RegisteredPrompt) {
         die "Prompt name is required" unless $!name;
         die "Prompt generator is required" unless &!generator;

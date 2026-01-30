@@ -7,6 +7,9 @@ use MCP::Types;
 use MCP::Server::Tool;
 use MCP::Server::Resource;
 use MCP::Server::Prompt;
+use JSON::Fast;
+
+sub j(%h) { $(from-json(to-json(%h))) }
 
 =begin pod
 =head1 NAME
@@ -357,6 +360,279 @@ subtest 'Tool name validation', {
     dies-ok { tool().name('my tool').handler(-> { 'ok' }).build }, 'invalid: space';
     dies-ok { tool().name('tool!').handler(-> { 'ok' }).build }, 'invalid: exclamation';
     dies-ok { tool().name('tool.name').handler(-> { 'ok' }).build }, 'invalid: dot';
+};
+
+
+subtest 'Handler dispatch fallback signatures', {
+    my $no-args = RegisteredTool.new(
+        name => 'no-args',
+        handler => -> { 'no-args-result' }
+    );
+    is $no-args.call({}).content[0].text, 'no-args-result', 'no-args handler works';
+
+    my $hash-arg = RegisteredTool.new(
+        name => 'hash-arg',
+        handler => -> %h { "got: %h<x>" }
+    );
+    is $hash-arg.call({ x => 42 }).content[0].text, 'got: 42', 'Hash positional handler works';
+
+    my $named = RegisteredTool.new(
+        name => 'named',
+        handler => -> :%params { "named: %params<y>" }
+    );
+    is $named.call({ y => 7 }).content[0].text, 'named: 7', ':params named handler works';
+};
+
+subtest 'Prompt generator dispatch fallback', {
+    my $no-args = RegisteredPrompt.new(
+        name => 'no-args',
+        generator => -> { 'static message' }
+    );
+    is $no-args.get({})[0].content.text, 'static message', 'no-args generator';
+
+    my $hash-gen = RegisteredPrompt.new(
+        name => 'hash-gen',
+        generator => -> %h { "topic: %h<topic>" }
+    );
+    is $hash-gen.get({ topic => 'raku' })[0].content.text, 'topic: raku', 'Hash positional generator';
+};
+
+subtest 'RegisteredTool call with various return types', {
+    my $t1 = RegisteredTool.new(name => 'a',
+        handler => -> { TextContent.new(text => 'direct') });
+    my $r1 = $t1.call({});
+    is $r1.content[0].text, 'direct', 'Content return type';
+
+    my $t2 = RegisteredTool.new(name => 'b',
+        handler => -> { [TextContent.new(text => 'a'), TextContent.new(text => 'b')] });
+    my $r2 = $t2.call({});
+    is $r2.content.elems, 2, 'Array return type';
+
+    my $t3 = RegisteredTool.new(name => 'c',
+        outputSchema => { type => 'object' },
+        handler => -> { { result => 42 } });
+    my $r3 = $t3.call({});
+    ok $r3.structuredContent.defined, 'structuredContent set for Hash+outputSchema';
+
+    my $t4 = RegisteredTool.new(name => 'd',
+        handler => -> { { result => 42 } });
+    my $r4 = $t4.call({});
+    nok $r4.structuredContent.defined, 'no structuredContent without outputSchema';
+
+    my $t5 = RegisteredTool.new(name => 'e',
+        handler => -> { 42 });
+    my $r5 = $t5.call({});
+    ok $r5.content[0].text.contains('42'), 'non-string coerced to text';
+};
+
+subtest 'RegisteredResource read with various return types', {
+    my $r1 = RegisteredResource.new(uri => 'test://x', name => 'x',
+        reader => -> { Buf.new(65, 66) });
+    my @c1 = $r1.read;
+    ok @c1[0].mimeType eq 'application/octet-stream', 'Blob default mimeType';
+
+    my $r2 = RegisteredResource.new(uri => 'test://x', name => 'x',
+        reader => -> { [ResourceContents.new(uri => 'test://x', text => 'a')] });
+    my @c2 = $r2.read;
+    is @c2[0].text, 'a', 'Positional return';
+
+    my $r3 = RegisteredResource.new(uri => 'test://x', name => 'x',
+        reader => -> { 42 });
+    my @c3 = $r3.read;
+    ok @c3[0].text.contains('42'), 'non-string coerced';
+};
+
+subtest 'RegisteredTool call returning CallToolResult', {
+    my $t = RegisteredTool.new(
+        name => 'direct',
+        handler => -> {
+            CallToolResult.new(content => [TextContent.new(text => 'direct')], isError => False)
+        },
+    );
+    my $r = $t.call({});
+    is $r.content[0].text, 'direct', 'CallToolResult passthrough';
+    nok $r.isError, 'isError preserved';
+};
+
+subtest 'RegisteredPrompt get with Str return', {
+    my $p = RegisteredPrompt.new(
+        name => 'test',
+        generator => -> { 'plain string' },
+    );
+    my @msgs = $p.get({});
+    is @msgs[0].role, 'user', 'default role is user';
+    is @msgs[0].content.text, 'plain string', 'string coerced to message';
+};
+
+subtest 'RegisteredPrompt get with non-string return', {
+    my $p = RegisteredPrompt.new(
+        name => 'test',
+        generator => -> { 42 },
+    );
+    my @msgs = $p.get({});
+    ok @msgs[0].content.text.contains('42'), 'non-string coerced';
+};
+
+subtest 'ToolBuilder schema and output-schema', {
+    my $t = tool()
+        .name('t1')
+        .schema(%( type => 'object', properties => %( x => %( type => 'string' ) ) ))
+        .output-schema(%( type => 'object', properties => %( result => %( type => 'number' ) ) ))
+        .handler(-> { 42 })
+        .build;
+
+    ok $t.to-tool.inputSchema<properties><x><type> eq 'string', 'schema sets inputSchema';
+    ok $t.to-tool.outputSchema<properties><result><type> eq 'number', 'output-schema set';
+};
+
+subtest 'ResourceBuilder build validation', {
+    dies-ok { resource().name('x').reader({ }).build }, 'build without URI dies';
+    dies-ok { resource().uri('x://y').reader({ }).build }, 'build without name dies';
+    dies-ok { resource().uri('x://y').name('x').build }, 'build without reader dies';
+};
+
+subtest 'PromptBuilder build validation', {
+    dies-ok { prompt().generator(-> { }).build }, 'build without name dies';
+    dies-ok { prompt().name('x').build }, 'build without generator dies';
+};
+
+subtest 'ResourceTemplateBuilder build validation', {
+    dies-ok { resource-template().name('x').reader(-> %p { }).build }, 'build without uri-template dies';
+    dies-ok { resource-template().uri-template('x').reader(-> %p { }).build }, 'build without name dies';
+    dies-ok { resource-template().uri-template('x').name('x').build }, 'build without reader dies';
+};
+
+subtest 'file-resource helper', {
+    my $path = $*TMPDIR.add('mcp-test-file-resource.txt');
+    $path.spurt('test content');
+
+    my $r = file-resource($path);
+    is $r.to-resource.name, $path.basename, 'name from file';
+    ok $r.to-resource.uri.contains('file://'), 'file URI';
+    my @contents = $r.read;
+    is @contents[0].text, 'test content', 'reads file content';
+
+    my $r2 = file-resource($path, uri => 'custom://test', name => 'custom');
+    is $r2.to-resource.uri, 'custom://test', 'custom uri';
+    is $r2.to-resource.name, 'custom', 'custom name';
+
+    $path.unlink;
+};
+
+subtest 'ResourceBuilder from-file mime types', {
+    for <txt html css js json xml png jpg gif svg pdf md unknown> -> $ext {
+        my $path = $*TMPDIR.add("test-mime.$ext");
+        $path.spurt('x');
+        my $r = resource().from-file($path).build;
+        ok $r.to-resource.mimeType.chars > 0, "$ext has mimeType";
+        $path.unlink;
+    }
+};
+
+subtest 'ToolBuilder all param types extended', {
+    my $t = tool()
+        .name('test')
+        .string-param('s', description => 'str', :required)
+        .number-param('n', description => 'num', :required)
+        .integer-param('i', description => 'int', :required)
+        .boolean-param('b', description => 'bool', :required)
+        .array-param('a', description => 'arr', items => { type => 'string' }, :required)
+        .handler(-> { 'ok' })
+        .build;
+
+    my $schema = $t.to-tool.inputSchema;
+    is $schema<properties><s><type>, 'string', 'string param';
+    is $schema<properties><n><type>, 'number', 'number param';
+    is $schema<properties><i><type>, 'integer', 'integer param';
+    is $schema<properties><b><type>, 'boolean', 'boolean param';
+    is $schema<properties><a><type>, 'array', 'array param';
+    ok $schema<properties><a><items><type> eq 'string', 'array items';
+    is $schema<required>.elems, 5, 'all required';
+};
+
+subtest 'ToolBuilder annotations all fields', {
+    my $t = tool()
+        .name('test')
+        .title('Test Tool')
+        .icon('tool.png', mimeType => 'image/png', sizes => ['16x16'])
+        .annotations(title => 'T', :readOnlyHint, :destructiveHint, :idempotentHint, :openWorldHint)
+        .handler(-> { 'ok' })
+        .build;
+
+    my $tool = $t.to-tool;
+    is $tool.title, 'Test Tool', 'title on tool';
+    ok $tool.icons.elems == 1, 'icon on tool';
+    ok $tool.annotations.readOnlyHint, 'readOnlyHint';
+    ok $tool.annotations.destructiveHint, 'destructiveHint';
+    ok $tool.annotations.idempotentHint, 'idempotentHint';
+    ok $tool.annotations.openWorldHint, 'openWorldHint';
+};
+
+subtest 'ResourceBuilder all fields', {
+    my $r = resource()
+        .uri('config://app')
+        .name('App Config')
+        .description('Application configuration')
+        .title('Config')
+        .icon('config.png')
+        .mimeType('application/json')
+        .annotations(<user assistant>, priority => 0.5)
+        .reader({ '{"key":"value"}' })
+        .build;
+
+    my $res = $r.to-resource;
+    is $res.title, 'Config', 'title';
+    ok $res.icons.elems == 1, 'icon';
+    is $res.mimeType, 'application/json', 'mimeType';
+    ok $res.annotations.defined, 'annotations';
+
+    my @contents = $r.read;
+    is @contents[0].text, '{"key":"value"}', 'read returns text';
+};
+
+subtest 'PromptBuilder all fields', {
+    my $p = prompt()
+        .name('summarize')
+        .description('Summarize text')
+        .title('Summarizer')
+        .icon('prompt.png')
+        .required-argument('text', description => 'Input text')
+        .optional-argument('style', description => 'Summary style')
+        .generator(-> :%params { user-message(%params<text> // 'default') })
+        .build;
+
+    my $prompt = $p.to-prompt;
+    is $prompt.title, 'Summarizer', 'title';
+    ok $prompt.icons.elems == 1, 'icon';
+    is $prompt.arguments.elems, 2, 'two arguments';
+    ok $prompt.arguments[0].required, 'first arg required';
+    nok $prompt.arguments[1].required, 'second arg optional';
+};
+
+subtest 'ResourceTemplateBuilder all fields', {
+    my $rt = resource-template()
+        .uri-template('file:///{path}')
+        .name('files')
+        .description('Access files')
+        .title('File Access')
+        .icon('file.png')
+        .mimeType('text/plain')
+        .annotations(['user'], priority => 0.8)
+        .reader(-> %p { "content of %p<path>" })
+        .build;
+
+    my $tmpl = $rt.to-resource-template;
+    is $tmpl.title, 'File Access', 'title';
+    ok $tmpl.icons.elems == 1, 'icon';
+};
+
+subtest 'RegisteredResource read with ResourceContents return', {
+    my $r = RegisteredResource.new(
+        uri => 'test://x', name => 'x',
+        reader => -> { ResourceContents.new(uri => 'test://x', text => 'direct') },
+    );
+    my @c = $r.read;
+    is @c[0].text, 'direct', 'ResourceContents passthrough';
 };
 
 done-testing;

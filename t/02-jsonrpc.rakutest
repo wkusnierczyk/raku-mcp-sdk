@@ -17,7 +17,7 @@ use lib 'lib';
 use MCP::JSONRPC;
 use JSON::Fast;
 
-plan 14;
+plan *;
 
 # Test Error codes
 subtest 'Error codes', {
@@ -186,6 +186,93 @@ subtest 'X::JSONRPC exception', {
     ok $ex ~~ Exception, 'is an Exception';
     is $ex.message, 'JSON-RPC Error -32600: Invalid', 'message is formatted';
     is $ex.error.code, -32600, 'error is accessible';
+};
+
+
+subtest 'JSONRPC Error Hash with and without data', {
+    my $with-data = Error.new(
+        code => -32600,
+        message => 'Bad request',
+        data => { detail => 'missing field' },
+    );
+    my %h1 = $with-data.Hash;
+    is %h1<code>, -32600, 'code in Hash';
+    is %h1<data><detail>, 'missing field', 'data in Hash';
+
+    my $no-data = Error.new(code => -32601, message => 'Not found');
+    my %h2 = $no-data.Hash;
+    nok %h2<data>:exists, 'no data when not set';
+};
+
+subtest 'JSONRPC parse-message all types', {
+    # Request
+    my $req-json = '{"jsonrpc":"2.0","id":1,"method":"ping"}';
+    my $req = parse-message($req-json);
+    isa-ok $req, Request, 'parsed as Request';
+    is $req.method, 'ping', 'method correct';
+
+    # Notification (no id)
+    my $notif-json = '{"jsonrpc":"2.0","method":"notify","params":{"x":1}}';
+    my $notif = parse-message($notif-json);
+    isa-ok $notif, Notification, 'parsed as Notification';
+    is $notif.params<x>, 1, 'notification params';
+
+    # Response with result
+    my $resp-json = '{"jsonrpc":"2.0","id":2,"result":{"ok":true}}';
+    my $resp = parse-message($resp-json);
+    isa-ok $resp, Response, 'parsed as Response';
+    ok $resp.result<ok>, 'result present';
+
+    # Response with error
+    my $err-json = '{"jsonrpc":"2.0","id":3,"error":{"code":-32600,"message":"bad"}}';
+    my $err-resp = parse-message($err-json);
+    isa-ok $err-resp, Response, 'error response parsed';
+    ok $err-resp.error.defined, 'error field present';
+    is $err-resp.error.code, -32600, 'error code';
+
+    # Invalid JSON-RPC version
+    dies-ok { parse-message('{"jsonrpc":"1.0","method":"x"}') }, 'invalid version dies';
+
+    # Invalid structure
+    dies-ok { parse-message('{"jsonrpc":"2.0"}') }, 'invalid structure dies';
+};
+
+subtest 'JSONRPC Error.from-code all codes', {
+    for (ParseError, InvalidRequest, MethodNotFound, InvalidParams, InternalError, URLElicitationRequired) -> $code {
+        my $err = Error.from-code($code);
+        is $err.code, $code.value, "code {$code.key} value correct";
+        ok $err.message.chars > 0, "code {$code.key} has default message";
+    }
+
+    # Custom message
+    my $custom = Error.from-code(ParseError, 'custom msg');
+    is $custom.message, 'custom msg', 'custom message override';
+
+    # With data
+    my $with-data = Error.from-code(InternalError, data => { details => 'x' });
+    ok $with-data.data<details> eq 'x', 'data passed through';
+};
+
+subtest 'JSONRPC Message serialization extended', {
+    my $req = Request.new(id => 1, method => 'test', params => { x => 1 });
+    my $json = $req.to-json;
+    ok $json.contains('"method"'), 'request serializes to JSON';
+
+    my $notif = Notification.new(method => 'ping', params => { y => 2 });
+    my %h = $notif.Hash;
+    is %h<method>, 'ping', 'notification Hash method';
+    is %h<params><y>, 2, 'notification Hash params';
+
+    my $resp = Response.new(id => 1, result => 'ok');
+    my %rh = $resp.Hash;
+    is %rh<result>, 'ok', 'success response Hash';
+    nok %rh<error>:exists, 'no error in success response Hash';
+
+    my $err-resp = Response.new(id => 2,
+        error => Error.new(code => -1, message => 'fail'));
+    my %eh = $err-resp.Hash;
+    ok %eh<error>:exists, 'error in error response Hash';
+    nok %eh<result>:exists, 'no result in error response Hash';
 };
 
 done-testing;

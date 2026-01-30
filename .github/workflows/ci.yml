@@ -150,7 +150,7 @@ jobs:
           THRESHOLD=70
           OUTPUT=$(make coverage 2>&1)
           echo "$OUTPUT"
-          COVERAGE=$(echo "$OUTPUT" | grep -oP 'Coverage: \K[0-9.]+' || echo "0")
+          COVERAGE=$(echo "$OUTPUT" | grep -oP 'Coverage: \K[0-9.]+' | head -1 || echo "0")
           echo "Coverage: ${COVERAGE}%" >&2
           echo "Threshold: ${THRESHOLD}%" >&2
           if [ "$(echo "$COVERAGE < $THRESHOLD" | bc -l)" -eq 1 ]; then

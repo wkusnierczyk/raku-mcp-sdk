@@ -5,6 +5,7 @@ use lib 'lib';
 use MCP::JSONRPC;
 use MCP::Transport::Stdio;
 use MCP::Transport::Base;
+use MCP::Transport::StreamableHTTP;
 use JSON::Fast;
 
 use MONKEY-TYPING;
@@ -94,6 +95,66 @@ subtest 'Transport error types', {
     ok $conn ~~ MCP::Transport::Base::X::Transport, 'Connection is-a Transport error';
     ok $send ~~ MCP::Transport::Base::X::Transport, 'Send is-a Transport error';
     ok $conn ~~ Exception, 'Connection is-a Exception';
+};
+
+
+subtest 'StreamableHTTP Stream emit and replay', {
+    my $supplier = Supplier.new;
+    my @received;
+    $supplier.Supply.tap(-> $v { @received.push($v) });
+
+    my $stream = MCP::Transport::StreamableHTTP::Stream.new(
+        id => 'test-stream',
+        supplier => $supplier,
+        history-size => 5,
+    );
+
+    # Emit priming event
+    my $prime-id = $stream.emit-priming;
+    ok $prime-id.starts-with('test-stream:'), 'priming event ID has stream prefix';
+    ok @received[0].contains('data:'), 'priming event has data line';
+
+    # Emit message
+    my $msg-id = $stream.emit-message('{"jsonrpc":"2.0","method":"ping"}');
+    ok $msg-id.starts-with('test-stream:'), 'message event ID has stream prefix';
+    ok @received[1].contains('data:'), 'message has data lines';
+    ok @received[1].contains('"ping"'), 'message contains JSON payload';
+    ok @received[1].contains("id: $msg-id"), 'message contains event ID';
+
+    # Emit several messages to test history truncation
+    for ^6 -> $i { $stream.emit-message('{"n":' ~ $i ~ '}') }
+    pass 'history truncation did not error';
+};
+
+subtest 'StreamableHTTP Stream replay', {
+    my $supplier = Supplier.new;
+    my @received;
+    $supplier.Supply.tap(-> $v { @received.push($v) });
+
+    my $stream = MCP::Transport::StreamableHTTP::Stream.new(
+        id => 'replay-test',
+        supplier => $supplier,
+    );
+
+    # Emit 3 messages
+    $stream.emit-priming;
+    $stream.emit-message('{"a":1}');
+    $stream.emit-message('{"a":2}');
+
+    @received = [];
+    $stream.replay-from(1);
+    ok @received.elems >= 1, 'replay emitted events after given seq';
+};
+
+subtest 'StreamableHTTP exception classes', {
+    my $base = X::MCP::Transport::StreamableHTTP.new(message => 'generic');
+    is $base.message, 'generic', 'base message';
+
+    my $proto = X::MCP::Transport::StreamableHTTP::Protocol.new(message => 'bad version');
+    ok $proto.message.contains('Protocol error'), 'Protocol prefix';
+
+    my $http = X::MCP::Transport::StreamableHTTP::HTTP.new(message => '404');
+    ok $http.message.contains('HTTP error'), 'HTTP prefix';
 };
 
 done-testing;

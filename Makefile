@@ -18,7 +18,7 @@
 PROJECT_NAME    := MCP
 PROJECT_TITLE   := Raku MCP SDK
 PROJECT_DESC    := Raku Implementation of the Model Context Protocol
-VERSION         := 0.32.5
+VERSION         := 0.33.0
 DEVELOPER_NAME  := Waclaw Kusnierczyk
 DEVELOPER_EMAIL := waclaw.kusnierczyk@gmail.com
 SOURCE_URL      := https://github.com/wkusnierczyk/raku-mcp-sdk
@@ -447,7 +447,8 @@ coverage: dependencies-dev build
 	fi; \
 	"$$RACOCO_CMD" $(RACOCO_COVERAGE_FLAGS) --html --cache-dir=$(COVERAGE_REPORT) \
 		--exec="$(PROVE) $(PROVE_FLAGS) $(TEST_DIR)"
-	$(call log-success,Coverage report generated: $(COVERAGE_REPORT)/report.html)
+	@python3 tools/coverage-report.py --coverage-dir $(COVERAGE_REPORT)
+	$(call log-success,Coverage reports generated in $(COVERAGE_REPORT)/)
 
 # ------------------------------------------------------------------------------
 # Validation

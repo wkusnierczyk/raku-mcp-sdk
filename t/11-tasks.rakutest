@@ -313,4 +313,33 @@ subtest 'ServerCapabilities tasks roundtrip', {
     ok $caps2.tasks<list>:exists, 'tasks.list restored';
 };
 
+
+subtest 'Server tasks/list via dispatch', {
+    my $transport = TestTransport::TestTransport.new;
+    my $server = Server.new(
+        info => MCP::Types::Implementation.new(name => 'srv', version => '0.1'),
+        transport => $transport
+    );
+
+    $server.add-tool(
+        name => 'slow',
+        handler => -> { sleep 0.5; 'done' }
+    );
+
+    my $create = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 1,
+        method => 'tools/call',
+        params => { name => 'slow', arguments => {}, task => { ttl => 5000 } }
+    ));
+    ok $create<task>.defined, 'task created';
+    my $task-id = $create<task><taskId>;
+    ok $task-id.defined, 'task has ID';
+
+    my $list = $server.dispatch-request(MCP::JSONRPC::Request.new(
+        id => 2, method => 'tasks/list'
+    ));
+    ok $list<tasks>.elems >= 1, 'tasks/list returns at least 1 task';
+    ok $list<tasks>.grep(*<taskId> eq $task-id).elems == 1, 'created task in list';
+};
+
 done-testing;
