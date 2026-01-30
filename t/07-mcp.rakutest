@@ -63,6 +63,32 @@ subtest 'MCP exports', {
     is Task.^name, 'MCP::Types::Task', 'Task export';
     is CreateTaskResult.^name, 'MCP::Types::CreateTaskResult', 'CreateTaskResult export';
     ok StdioTransport.^name.contains('Stdio'), 'StdioTransport export';
+
+    # resource-template builder
+    my $rt = resource-template()
+        .uri-template('info://items/{id}')
+        .name('Item')
+        .reader(-> :$id { "item $id" })
+        .build;
+    is $rt.name, 'Item', 'resource-template builder available';
+
+    # Additional type exports
+    is Extension.^name, 'MCP::Types::Extension', 'Extension export';
+    is ResourceTemplate.^name, 'MCP::Types::ResourceTemplate', 'ResourceTemplate export';
+    is TaskStatus.^name, 'TaskStatus', 'TaskStatus enum export';
+
+    # Log-level constants
+    ok Debug.defined, 'Debug log level exported';
+    ok Info.defined, 'Info log level exported';
+    ok Warning.defined, 'Warning log level exported';
+    ok Error.defined, 'Error log level exported';
+
+    # Transport role export
+    ok Transport.^name.contains('Transport'), 'Transport role export';
+
+    # StreamableHTTP exports
+    ok StreamableHTTPClientTransport.^name.contains('StreamableHTTP'), 'StreamableHTTPClientTransport export';
+    ok StreamableHTTPServerTransport.^name.contains('StreamableHTTP'), 'StreamableHTTPServerTransport export';
 };
 
 done-testing;
