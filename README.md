@@ -245,20 +245,16 @@ $server.add-tool($calculator);
 
 ```raku
 use MCP;
-use MCP::Client;
-use MCP::Transport::Stdio;
-use MCP::Types;
+use MCP::Transport::StreamableHTTP;
 
-# Connect to an MCP server process
-my $proc = Proc::Async.new('path/to/mcp-server');
-my $client = MCP::Client::Client.new(
-    info => MCP::Types::Implementation.new(
+# Connect to a remote MCP server over HTTP
+my $client = Client.new(
+    info => Implementation.new(
         name => 'my-client',
         version => '1.0.0'
     ),
-    transport => MCP::Transport::Stdio::StdioTransport.new(
-        input => $proc.stdout,
-        output => $proc.stdin,
+    transport => StreamableHTTPClientTransport.new(
+        endpoint => 'http://localhost:8080/mcp'
     ),
 );
 
