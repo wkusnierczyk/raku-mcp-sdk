@@ -447,7 +447,8 @@ coverage: dependencies-dev build
 	fi; \
 	"$$RACOCO_CMD" $(RACOCO_COVERAGE_FLAGS) --html --cache-dir=$(COVERAGE_REPORT) \
 		--exec="$(PROVE) $(PROVE_FLAGS) $(TEST_DIR)"
-	$(call log-success,Coverage report generated: $(COVERAGE_REPORT)/report.html)
+	@python3 tools/coverage-report.py --coverage-dir $(COVERAGE_REPORT)
+	$(call log-success,Coverage reports generated in $(COVERAGE_REPORT)/)
 
 # ------------------------------------------------------------------------------
 # Validation
