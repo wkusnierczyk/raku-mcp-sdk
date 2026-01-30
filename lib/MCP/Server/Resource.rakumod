@@ -141,45 +141,27 @@ class ResourceBuilder is export {
     has MCP::Types::Annotations $!annotations;
     has &!reader;
 
-    method uri(Str $uri --> ResourceBuilder) {
-        $!uri = $uri;
-        self
-    }
+    method uri(Str $!uri --> ResourceBuilder) { self }
 
-    method name(Str $name --> ResourceBuilder) {
-        $!name = $name;
-        self
-    }
+    method name(Str $!name --> ResourceBuilder) { self }
 
-    method description(Str $desc --> ResourceBuilder) {
-        $!description = $desc;
-        self
-    }
+    method description(Str $!description --> ResourceBuilder) { self }
 
-    method title(Str $t --> ResourceBuilder) {
-        $!title = $t;
-        self
-    }
+    method title(Str $!title --> ResourceBuilder) { self }
 
     method icon(Str $src, Str :$mimeType, :@sizes --> ResourceBuilder) {
         @!icons.push(MCP::Types::IconDefinition.new(:$src, :$mimeType, :@sizes));
         self
     }
 
-    method mimeType(Str $mime --> ResourceBuilder) {
-        $!mimeType = $mime;
-        self
-    }
+    method mimeType(Str $!mimeType --> ResourceBuilder) { self }
 
     method annotations(@audience, Real :$priority --> ResourceBuilder) {
         $!annotations = MCP::Types::Annotations.new(:@audience, priority => $priority.Num);
         self
     }
 
-    method reader(&reader --> ResourceBuilder) {
-        &!reader = &reader;
-        self
-    }
+    method reader(&!reader --> ResourceBuilder) { self }
 
     #| Helper for file-based resources
     method from-file(IO::Path $path --> ResourceBuilder) {
@@ -362,45 +344,27 @@ class ResourceTemplateBuilder is export {
     has MCP::Types::Annotations $!annotations;
     has &!reader;
 
-    method uri-template(Str $t --> ResourceTemplateBuilder) {
-        $!uri-template = $t;
-        self
-    }
+    method uri-template(Str $!uri-template --> ResourceTemplateBuilder) { self }
 
-    method name(Str $name --> ResourceTemplateBuilder) {
-        $!name = $name;
-        self
-    }
+    method name(Str $!name --> ResourceTemplateBuilder) { self }
 
-    method description(Str $desc --> ResourceTemplateBuilder) {
-        $!description = $desc;
-        self
-    }
+    method description(Str $!description --> ResourceTemplateBuilder) { self }
 
-    method title(Str $t --> ResourceTemplateBuilder) {
-        $!title = $t;
-        self
-    }
+    method title(Str $!title --> ResourceTemplateBuilder) { self }
 
     method icon(Str $src, Str :$mimeType, :@sizes --> ResourceTemplateBuilder) {
         @!icons.push(MCP::Types::IconDefinition.new(:$src, :$mimeType, :@sizes));
         self
     }
 
-    method mimeType(Str $mime --> ResourceTemplateBuilder) {
-        $!mimeType = $mime;
-        self
-    }
+    method mimeType(Str $!mimeType --> ResourceTemplateBuilder) { self }
 
     method annotations(@audience, Real :$priority --> ResourceTemplateBuilder) {
         $!annotations = MCP::Types::Annotations.new(:@audience, priority => $priority.Num);
         self
     }
 
-    method reader(&reader --> ResourceTemplateBuilder) {
-        &!reader = &reader;
-        self
-    }
+    method reader(&!reader --> ResourceTemplateBuilder) { self }
 
     method build(--> RegisteredResourceTemplate) {
         die "Resource template URI template is required" unless $!uri-template;

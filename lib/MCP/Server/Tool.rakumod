@@ -153,40 +153,22 @@ class ToolBuilder is export {
     has MCP::Types::TaskExecution $!execution;
     has &!handler;
 
-    method name(Str $name --> ToolBuilder) {
-        $!name = $name;
-        self
-    }
+    method name(Str $!name --> ToolBuilder) { self }
 
-    method description(Str $desc --> ToolBuilder) {
-        $!description = $desc;
-        self
-    }
+    method description(Str $!description --> ToolBuilder) { self }
 
-    method title(Str $t --> ToolBuilder) {
-        $!title = $t;
-        self
-    }
+    method title(Str $!title --> ToolBuilder) { self }
 
     method icon(Str $src, Str :$mimeType, :@sizes --> ToolBuilder) {
         @!icons.push(MCP::Types::IconDefinition.new(:$src, :$mimeType, :@sizes));
         self
     }
 
-    method schema(Hash $schema --> ToolBuilder) {
-        $!inputSchema = $schema;
-        self
-    }
+    method schema(Hash $!inputSchema --> ToolBuilder) { self }
 
-    method input-schema(Hash $schema --> ToolBuilder) {
-        $!inputSchema = $schema;
-        self
-    }
+    method input-schema(Hash $!inputSchema --> ToolBuilder) { self }
 
-    method output-schema(Hash $schema --> ToolBuilder) {
-        $!outputSchema = $schema;
-        self
-    }
+    method output-schema(Hash $!outputSchema --> ToolBuilder) { self }
 
     #| Add a string parameter
     method string-param(Str $name, Str :$description, Bool :$required --> ToolBuilder) {
@@ -273,10 +255,7 @@ class ToolBuilder is export {
         self
     }
 
-    method handler(&handler --> ToolBuilder) {
-        &!handler = &handler;
-        self
-    }
+    method handler(&!handler --> ToolBuilder) { self }
 
     method build(--> RegisteredTool) {
         die "Tool name is required" unless $!name;
