@@ -83,13 +83,13 @@ class RegisteredResource is export {
     #| Get the Resource definition for listing
     method to-resource(--> MCP::Types::Resource) {
         MCP::Types::Resource.new(
-            uri => $!uri,
-            name => $!name,
-            description => $!description,
-            title => $!title,
-            icons => @!icons,
-            mimeType => $!mimeType,
-            annotations => $!annotations,
+            :$!uri,
+            :$!name,
+            :$!description,
+            :$!title,
+            :@!icons,
+            :$!mimeType,
+            :$!annotations,
         )
     }
 
@@ -214,14 +214,14 @@ class ResourceBuilder is export {
         die "Resource reader is required" unless &!reader;
 
         RegisteredResource.new(
-            uri => $!uri,
-            name => $!name,
-            description => $!description,
-            title => $!title,
-            icons => @!icons,
-            mimeType => $!mimeType,
-            annotations => $!annotations,
-            reader => &!reader,
+            :$!uri,
+            :$!name,
+            :$!description,
+            :$!title,
+            :@!icons,
+            :$!mimeType,
+            :$!annotations,
+            :&!reader,
         )
     }
 }
@@ -254,12 +254,12 @@ class RegisteredResourceTemplate is export {
     method to-resource-template(--> MCP::Types::ResourceTemplate) {
         MCP::Types::ResourceTemplate.new(
             uriTemplate => $!uri-template,
-            name => $!name,
-            description => $!description,
-            title => $!title,
-            icons => @!icons,
-            mimeType => $!mimeType,
-            annotations => $!annotations,
+            :$!name,
+            :$!description,
+            :$!title,
+            :@!icons,
+            :$!mimeType,
+            :$!annotations,
         )
     }
 
@@ -409,13 +409,13 @@ class ResourceTemplateBuilder is export {
 
         RegisteredResourceTemplate.new(
             uri-template => $!uri-template,
-            name => $!name,
-            description => $!description,
-            title => $!title,
-            icons => @!icons,
-            mimeType => $!mimeType,
-            annotations => $!annotations,
-            reader => &!reader,
+            :$!name,
+            :$!description,
+            :$!title,
+            :@!icons,
+            :$!mimeType,
+            :$!annotations,
+            :&!reader,
         )
     }
 }

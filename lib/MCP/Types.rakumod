@@ -121,7 +121,7 @@ class IconDefinition is export {
     has @.sizes;
 
     method Hash(--> Hash) {
-        my %h = src => $!src;
+        my %h = :$!src;
         %h<mimeType> = $_ with $!mimeType;
         %h<sizes> = @!sizes.Array if @!sizes;
         %h
@@ -144,7 +144,7 @@ class Implementation is export {
     has @.icons;
 
     method Hash(--> Hash) {
-        my %h = name => $!name, version => $!version;
+        my %h = :$!name, :$!version;
         %h<title> = $_ with $!title;
         %h<icons> = @!icons.map(*.Hash).Array if @!icons;
         %h
@@ -204,7 +204,7 @@ class TextContent does Content is export {
     method type(--> Str) { 'text' }
 
     method Hash(--> Hash) {
-        my %h = type => 'text', text => $!text;
+        my %h = type => 'text', :$!text;
         %h<annotations> = $!annotations.Hash if $!annotations;
         %h
     }
@@ -226,7 +226,7 @@ class ImageContent does Content is export {
     method type(--> Str) { 'image' }
 
     method Hash(--> Hash) {
-        my %h = type => 'image', data => $!data, mimeType => $!mimeType;
+        my %h = type => 'image', :$!data, :$!mimeType;
         %h<annotations> = $!annotations.Hash if $!annotations;
         %h
     }
@@ -241,7 +241,7 @@ class AudioContent does Content is export {
     method type(--> Str) { 'audio' }
 
     method Hash(--> Hash) {
-        my %h = type => 'audio', data => $!data, mimeType => $!mimeType;
+        my %h = type => 'audio', :$!data, :$!mimeType;
         %h<annotations> = $!annotations.Hash if $!annotations;
         %h
     }
@@ -274,7 +274,7 @@ class ResourceLink does Content is export {
     method type(--> Str) { 'resource_link' }
 
     method Hash(--> Hash) {
-        my %h = type => 'resource_link', name => $!name, uri => $!uri;
+        my %h = type => 'resource_link', :$!name, :$!uri;
         %h<title> = $_ with $!title;
         %h<description> = $_ with $!description;
         %h<mimeType> = $_ with $!mimeType;
@@ -295,9 +295,9 @@ class ToolUseContent does Content is export {
     method Hash(--> Hash) {
         {
             type => 'tool_use',
-            id => $!id,
-            name => $!name,
-            input => $!input
+            :$!id,
+            :$!name,
+            :$!input
         }
     }
 }
@@ -313,7 +313,7 @@ class ToolResultContent does Content is export {
     method type(--> Str) { 'tool_result' }
 
     method Hash(--> Hash) {
-        my %h = type => 'tool_result', toolUseId => $!toolUseId;
+        my %h = type => 'tool_result', :$!toolUseId;
         %h<content> = @!content.map(*.Hash).Array;
         %h<isError> = $!isError if $!isError.defined;
         %h<structuredContent> = $_ with $!structuredContent;
@@ -368,7 +368,7 @@ class Task is export {
     has Int $.pollInterval;
 
     method Hash(--> Hash) {
-        my %h = taskId => $!taskId, status => $!status.value;
+        my %h = :$!taskId, status => $!status.value;
         %h<statusMessage> = $_ with $!statusMessage;
         %h<createdAt> = $_ with $!createdAt;
         %h<lastUpdatedAt> = $_ with $!lastUpdatedAt;
@@ -421,7 +421,7 @@ class Tool is export {
     has TaskExecution $.execution;
 
     method Hash(--> Hash) {
-        my %h = name => $!name;
+        my %h = :$!name;
         %h<description> = $_ with $!description;
         %h<title> = $_ with $!title;
         %h<icons> = @!icons.map(*.Hash).Array if @!icons;
@@ -452,7 +452,7 @@ class CallToolResult is export {
     has $.structuredContent;  # Optional structured output matching outputSchema
 
     method Hash(--> Hash) {
-        my %h = content => @!content.map(*.Hash).Array, isError => $!isError;
+        my %h = content => @!content.map(*.Hash).Array, :$!isError;
         %h<structuredContent> = $_ with $!structuredContent;
         %h
     }
@@ -469,7 +469,7 @@ class Resource is export {
     has Annotations $.annotations;
 
     method Hash(--> Hash) {
-        my %h = uri => $!uri, name => $!name;
+        my %h = :$!uri, :$!name;
         %h<description> = $_ with $!description;
         %h<title> = $_ with $!title;
         %h<icons> = @!icons.map(*.Hash).Array if @!icons;
@@ -499,7 +499,7 @@ class ResourceTemplate is export {
     has Annotations $.annotations;
 
     method Hash(--> Hash) {
-        my %h = uriTemplate => $!uriTemplate, name => $!name;
+        my %h = :$!uriTemplate, :$!name;
         %h<description> = $_ with $!description;
         %h<title> = $_ with $!title;
         %h<icons> = @!icons.map(*.Hash).Array if @!icons;
@@ -526,7 +526,7 @@ class ResourceContents is export {
     has Blob $.blob;
 
     method Hash(--> Hash) {
-        my %h = uri => $!uri;
+        my %h = :$!uri;
         %h<mimeType> = $_ with $!mimeType;
         %h<text> = $_ with $!text;
         %h<blob> = $!blob.decode('latin-1') if $!blob;  # base64 in real impl
@@ -541,7 +541,7 @@ class PromptArgument is export {
     has Bool $.required = False;
 
     method Hash(--> Hash) {
-        my %h = name => $!name;
+        my %h = :$!name;
         %h<description> = $_ with $!description;
         %h<required> = $!required;
         %h
@@ -557,7 +557,7 @@ class Prompt is export {
     has @.arguments;  # Array of PromptArgument
 
     method Hash(--> Hash) {
-        my %h = name => $!name;
+        my %h = :$!name;
         %h<description> = $_ with $!description;
         %h<title> = $_ with $!title;
         %h<icons> = @!icons.map(*.Hash).Array if @!icons;
@@ -582,7 +582,7 @@ class PromptMessage is export {
 
     method Hash(--> Hash) {
         {
-            role => $!role,
+            :$!role,
             content => $!content ~~ Positional
                 ?? $!content.map(*.Hash).Array
                 !! $!content.Hash
@@ -597,7 +597,7 @@ class SamplingMessage is export {
 
     method Hash(--> Hash) {
         {
-            role => $!role,
+            :$!role,
             content => $!content ~~ Positional
                 ?? $!content.map(*.Hash).Array
                 !! $!content.Hash
@@ -609,7 +609,7 @@ class SamplingMessage is export {
 class ModelHint is export {
     has Str $.name is required;
 
-    method Hash(--> Hash) { { name => $!name } }
+    method Hash(--> Hash) { { :$!name } }
 }
 
 #| Model preferences for sampling
@@ -635,7 +635,7 @@ class ToolChoice is export {
     has Str $.name;
 
     method Hash(--> Hash) {
-        my %h = mode => $!mode;
+        my %h = :$!mode;
         %h<name> = $_ with $!name;
         %h
     }
@@ -650,7 +650,7 @@ class CreateMessageResult is export {
     has $.meta;
 
     method Hash(--> Hash) {
-        my %h = model => $!model, role => $!role,
+        my %h = :$!model, :$!role,
             content => $!content ~~ Positional
                 ?? $!content.map(*.Hash).Array
                 !! $!content.Hash;
@@ -730,7 +730,7 @@ class Extension is export {
     has Hash $.settings;
 
     method Hash(--> Hash) {
-        my %h = name => $!name;
+        my %h = :$!name;
         %h<version> = $_ with $!version;
         %h<settings> = $_ with $!settings;
         %h
@@ -785,7 +785,7 @@ class Root is export {
     has Str $.name;
 
     method Hash(--> Hash) {
-        my %h = uri => $!uri;
+        my %h = :$!uri;
         %h<name> = $_ with $!name;
         %h
     }
@@ -902,7 +902,7 @@ class Progress is export {
     has Str $.message;
 
     method Hash(--> Hash) {
-        my %h = progressToken => $!progressToken, progress => $!progress;
+        my %h = :$!progressToken, :$!progress;
         %h<total> = $_ with $!total;
         %h<message> = $_ with $!message;
         %h
@@ -943,7 +943,7 @@ class LogEntry is export {
     has $.data is required;  # Any JSON-serializable data
 
     method Hash(--> Hash) {
-        my %h = level => $!level.value, data => $!data;
+        my %h = level => $!level.value, :$!data;
         %h<logger> = $_ with $!logger;
         %h
     }

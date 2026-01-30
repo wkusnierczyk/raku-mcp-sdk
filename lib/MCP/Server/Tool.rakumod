@@ -85,14 +85,14 @@ class RegisteredTool is export {
     #| Get the Tool definition for listing
     method to-tool(--> MCP::Types::Tool) {
         MCP::Types::Tool.new(
-            name => $!name,
-            description => $!description,
-            title => $!title,
-            icons => @!icons,
-            inputSchema => $!inputSchema,
-            outputSchema => $!outputSchema,
-            annotations => $!annotations,
-            execution => $!execution,
+            :$!name,
+            :$!description,
+            :$!title,
+            :@!icons,
+            :$!inputSchema,
+            :$!outputSchema,
+            :$!annotations,
+            :$!execution,
         )
     }
 
@@ -312,15 +312,15 @@ class ToolBuilder is export {
         die "Tool handler is required" unless &!handler;
 
         RegisteredTool.new(
-            name => $!name,
-            description => $!description,
-            title => $!title,
-            icons => @!icons,
-            inputSchema => $!inputSchema,
-            outputSchema => $!outputSchema,
-            annotations => $!annotations,
-            execution => $!execution,
-            handler => &!handler,
+            :$!name,
+            :$!description,
+            :$!title,
+            :@!icons,
+            :$!inputSchema,
+            :$!outputSchema,
+            :$!annotations,
+            :$!execution,
+            :&!handler,
         )
     }
 }

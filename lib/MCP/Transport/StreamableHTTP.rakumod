@@ -154,8 +154,8 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
         my $application = self!build-router;
         my $server-class = self!cro-class('Cro::HTTP::Server');
         $!server = $server-class.new(
-            host => $!host,
-            port => $!port,
+            :$!host,
+            :$!port,
             application => $application,
         );
         $!server.start;

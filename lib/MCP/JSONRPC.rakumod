@@ -105,7 +105,7 @@ class Error is export {
 
     #| Serialize the error into a Hash
     method Hash(--> Hash) {
-        my %h = code => $!code, message => $!message;
+        my %h = :$!code, :$!message;
         %h<data> = $_ with $!data;
         %h
     }
@@ -142,7 +142,7 @@ class Request does Message is export {
 
     #| Serialize the request into a Hash
     method Hash(--> Hash) {
-        my %h = jsonrpc => $!jsonrpc, id => $!id, method => $!method;
+        my %h = :$!jsonrpc, :$!id, :$!method;
         %h<params> = $_ with $!params;
         %h
     }
@@ -165,7 +165,7 @@ class Response does Message is export {
 
     #| Serialize the response into a Hash
     method Hash(--> Hash) {
-        my %h = jsonrpc => $!jsonrpc, id => $!id;
+        my %h = :$!jsonrpc, :$!id;
         if $!error.defined {
             %h<error> = $!error.Hash;
         } else {
@@ -206,7 +206,7 @@ class Notification does Message is export {
 
     #| Serialize the notification into a Hash
     method Hash(--> Hash) {
-        my %h = jsonrpc => $!jsonrpc, method => $!method;
+        my %h = :$!jsonrpc, :$!method;
         %h<params> = $_ with $!params;
         %h
     }
