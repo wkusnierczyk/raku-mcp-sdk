@@ -268,7 +268,7 @@ class ClientRegistrationResponse is export {
 class PKCE is export {
     method generate-verifier(--> Str) {
         my @chars = flat('A'..'Z', 'a'..'z', '0'..'9', '-', '.', '_', '~');
-        (^64).map({ @chars.pick }).join
+        @chars.roll(64).join
     }
 
     method generate-challenge(Str $verifier --> Str) {
