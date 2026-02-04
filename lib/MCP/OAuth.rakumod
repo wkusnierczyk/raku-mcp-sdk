@@ -145,7 +145,7 @@ class TokenResponse is export {
     has Instant $.created-at = now;
 
     method is-expired(--> Bool) {
-        return False unless $!expires-in.defined;
+        return False without $!expires-in;
         my $expiry = $!created-at + $!expires-in - 30; # 30s buffer
         now > $expiry
     }
@@ -282,8 +282,8 @@ class PKCE is export {
         try {
             my $mod = (require ::('Digest::SHA256::Native'));
             my &sha256-func = ::('Digest::SHA256::Native').WHO<&sha256>;
-            if &sha256-func.defined {
-                return sha256-func($data);
+            with &sha256-func {
+                return $_($data);
             }
         }
         # Pure Raku fallback to avoid platform-specific native toolchains.

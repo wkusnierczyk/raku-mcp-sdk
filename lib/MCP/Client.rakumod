@@ -297,7 +297,7 @@ class Client is export {
             %capabilities<roots> = { listChanged => True };
         }
         # Add elicitation capability if handler is configured
-        if &!elicitation-handler.defined {
+        with &!elicitation-handler {
             %capabilities<elicitation> //= {};
             %capabilities<elicitation><form> = {};
         }
@@ -747,7 +747,7 @@ class Client is export {
     }
 
     method !handle-sampling-request(MCP::JSONRPC::Request $req) {
-        unless &!sampling-handler.defined {
+        without &!sampling-handler {
             my $error = MCP::JSONRPC::Error.from-code(
                 MCP::JSONRPC::MethodNotFound,
                 "Client does not support method: {$req.method}"
@@ -785,8 +785,8 @@ class Client is export {
 
         my $failure = $!;
         my $response;
-        if $failure.defined {
-            my $ex = $failure ~~ Failure ?? $failure.exception !! $failure;
+        with $failure {
+            my $ex = $_ ~~ Failure ?? .exception !! $_;
             if $ex ~~ X::MCP::Client::Error {
                 $response = MCP::JSONRPC::Response.error($req.id, $ex.error);
             } else {
@@ -923,7 +923,7 @@ class Client is export {
 
     #| Handle elicitation/create request from server
     method !handle-elicitation-request(MCP::JSONRPC::Request $req) {
-        unless &!elicitation-handler.defined {
+        without &!elicitation-handler {
             my $error = MCP::JSONRPC::Error.from-code(
                 MCP::JSONRPC::MethodNotFound,
                 "Client does not support elicitation"
@@ -959,8 +959,8 @@ class Client is export {
 
         my $failure = $!;
         my $response;
-        if $failure.defined {
-            my $ex = $failure ~~ Failure ?? $failure.exception !! $failure;
+        with $failure {
+            my $ex = $_ ~~ Failure ?? .exception !! $_;
             if $ex ~~ X::MCP::Client::Error {
                 $response = MCP::JSONRPC::Response.error($req.id, $ex.error);
             } else {

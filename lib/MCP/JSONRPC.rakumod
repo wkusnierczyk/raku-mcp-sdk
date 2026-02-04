@@ -166,8 +166,8 @@ class Response does Message is export {
     #| Serialize the response into a Hash
     method Hash(--> Hash) {
         my %h = :$!jsonrpc, :$!id;
-        if $!error.defined {
-            %h<error> = $!error.Hash;
+        with $!error {
+            %h<error> = .Hash;
         } else {
             %h<result> = $!result;
         }

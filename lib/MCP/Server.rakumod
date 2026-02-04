@@ -354,11 +354,11 @@ class Server is export {
         for @args -> $arg {
             my %a = $arg ~~ Pair ?? { $arg.key => $arg.value } !! $arg;
             my $arg-name = %a<name>;
-            die "Prompt argument name is required" unless $arg-name.defined;
+            die "Prompt argument name is required" without $arg-name;
             my $req = %a<required> // False;
             my $desc = %a<description>;
-            if $desc.defined {
-                $builder.argument($arg-name, description => $desc, required => $req);
+            with $desc {
+                $builder.argument($arg-name, description => $_, required => $req);
             } else {
                 $builder.argument($arg-name, required => $req);
             }
@@ -650,10 +650,10 @@ class Server is export {
             when 'notifications/cancelled' | 'cancelled' {
                 # Request was cancelled - mark it so we don't send a response
                 my $id = $notif.params<requestId>;
-                if $id.defined {
+                with $id {
                     $!flight-lock.protect: {
-                        if %!in-flight-requests{$id}:exists {
-                            %!in-flight-requests{$id}<cancelled> = True;
+                        if %!in-flight-requests{$_}:exists {
+                            %!in-flight-requests{$_}<cancelled> = True;
                         }
                     }
                 }
@@ -909,10 +909,10 @@ class Server is export {
         # Try matching against resource templates
         for %!resource-templates.values -> $template {
             my $match = $template.match-uri($uri);
-            if $match.defined {
-                return {
-                    contents => $template.read($match, uri => $uri).map(*.Hash).Array
-                };
+            with $match {
+                return %(
+                    contents => $template.read($_, uri => $uri).map(*.Hash).Array
+                );
             }
         }
 
@@ -1022,7 +1022,7 @@ class Server is export {
     #| If no token is provided, uses the progress token from the current request's _meta
     method progress(Num $progress, Num :$total, Str :$message, :$token is copy) {
         $token //= $*MCP-PROGRESS-TOKEN // Nil;
-        return unless $token.defined;
+        return without $token;
         self.notify('notifications/progress', {
             progressToken => $token,
             progress => $progress,

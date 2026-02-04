@@ -91,7 +91,7 @@ class OAuthClientHandler is export {
 
     method authorization-url(--> Str) {
         die X::MCP::OAuth::Discovery.new(message => 'Must call discover() first')
-            unless $!auth-metadata.defined;
+            without $!auth-metadata;
 
         my $pkce = PKCE.new;
         $!pkce-verifier = $pkce.generate-verifier;

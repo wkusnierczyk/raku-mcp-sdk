@@ -271,7 +271,7 @@ class RegisteredResourceTemplate is export {
                 # Find the next literal to know where this variable ends
                 if $literal.chars {
                     my $pos = $remaining.index($literal);
-                    return Nil unless $pos.defined;
+                    return Nil without $pos;
                     my $val = $remaining.substr(0, $pos);
                     return Nil unless $val.chars;  # empty variable
                     @values.push: $val;
