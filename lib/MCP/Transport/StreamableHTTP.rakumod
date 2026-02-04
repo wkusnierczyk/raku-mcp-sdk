@@ -477,12 +477,12 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
     }
 
     method !new-stream-id(--> Str) {
-        my $rand = (0..^16).map({ <a b c d e f 0 1 2 3 4 5 6 7 8 9>.pick }).join;
+        my $rand = <a b c d e f 0 1 2 3 4 5 6 7 8 9>.roll(16).join;
         "s{$rand}"
     }
 
     method !new-session-id(--> Str) {
-        my $rand = (0..^31).map({ <a b c d e f 0 1 2 3 4 5 6 7 8 9>.pick }).join;
+        my $rand = <a b c d e f 0 1 2 3 4 5 6 7 8 9>.roll(31).join;
         "session-$rand"
     }
 

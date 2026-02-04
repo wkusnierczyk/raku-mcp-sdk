@@ -97,7 +97,7 @@ class OAuthClientHandler is export {
         $!pkce-verifier = $pkce.generate-verifier;
         my $challenge = $pkce.generate-challenge($!pkce-verifier);
 
-        my $state = (^32).map({ <a b c d e f 0 1 2 3 4 5 6 7 8 9>.pick }).join;
+        my $state = <a b c d e f 0 1 2 3 4 5 6 7 8 9>.roll(32).join;
 
         my $endpoint = $!auth-metadata.authorization-endpoint;
         my @params;
