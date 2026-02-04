@@ -783,10 +783,9 @@ class Client is export {
             $out
         };
 
-        my $failure = $!;
         my $response;
-        with $failure {
-            my $ex = $_ ~~ Failure ?? .exception !! $_;
+        with $! -> $failure {
+            my $ex = $failure ~~ Failure ?? $failure.exception !! $failure;
             if $ex ~~ X::MCP::Client::Error {
                 $response = MCP::JSONRPC::Response.error($req.id, $ex.error);
             } else {
@@ -957,10 +956,9 @@ class Client is export {
             $out
         };
 
-        my $failure = $!;
         my $response;
-        with $failure {
-            my $ex = $_ ~~ Failure ?? .exception !! $_;
+        with $! -> $failure {
+            my $ex = $failure ~~ Failure ?? $failure.exception !! $failure;
             if $ex ~~ X::MCP::Client::Error {
                 $response = MCP::JSONRPC::Response.error($req.id, $ex.error);
             } else {
