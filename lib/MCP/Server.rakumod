@@ -473,9 +473,7 @@ class Server is export {
 
         # Check if request was cancelled - don't send response if so
         my $cancelled = $!flight-lock.protect: {
-            my $c = %!in-flight-requests{$req.id}<cancelled>;
-            %!in-flight-requests{$req.id}:delete;
-            $c
+            (%!in-flight-requests{$req.id}:delete)<cancelled>
         };
         return if $cancelled;
 
@@ -689,7 +687,7 @@ class Server is export {
 
     #| List tools
     method !list-tools($params?) {
-        my @tools = %!tools.values.map(*.to-tool.Hash).Array;
+        my @tools = %!tools.values.map(*.to-tool.Hash);
         self!paginate(@tools, $params, key => 'tools')
     }
 
@@ -880,13 +878,13 @@ class Server is export {
 
     #| List resources
     method !list-resources($params?) {
-        my @resources = %!resources.values.map(*.to-resource.Hash).Array;
+        my @resources = %!resources.values.map(*.to-resource.Hash);
         self!paginate(@resources, $params, key => 'resources')
     }
 
     #| List resource templates
     method !list-resource-templates($params?) {
-        my @templates = %!resource-templates.values.map(*.to-resource-template.Hash).Array;
+        my @templates = %!resource-templates.values.map(*.to-resource-template.Hash);
         self!paginate(@templates, $params, key => 'resourceTemplates')
     }
 
@@ -902,7 +900,7 @@ class Server is export {
         # Try exact match first
         if %!resources{$uri}:exists {
             return {
-                contents => %!resources{$uri}.read.map(*.Hash).Array
+                contents => %!resources{$uri}.read».Hash
             };
         }
 
@@ -911,7 +909,7 @@ class Server is export {
             my $match = $template.match-uri($uri);
             with $match {
                 return %(
-                    contents => $template.read($_, uri => $uri).map(*.Hash).Array
+                    contents => $template.read($_, uri => $uri)».Hash
                 );
             }
         }
@@ -962,7 +960,7 @@ class Server is export {
 
     #| List prompts
     method !list-prompts($params?) {
-        my @prompts = %!prompts.values.map(*.to-prompt.Hash).Array;
+        my @prompts = %!prompts.values.map(*.to-prompt.Hash);
         self!paginate(@prompts, $params, key => 'prompts')
     }
 
@@ -986,7 +984,7 @@ class Server is export {
 
         {
             description => $prompt.description,
-            messages => $prompt.get(%arguments).map(*.Hash).Array
+            messages => $prompt.get(%arguments)».Hash
         }
     }
 
