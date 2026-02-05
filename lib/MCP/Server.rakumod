@@ -1150,19 +1150,15 @@ class Server is export {
         :$toolChoice,
         :$meta,
     --> Promise) {
-        my %params = messages => @messages.map({
-            $_ ~~ MCP::Types::SamplingMessage ?? $_.Hash !! $_
-        }).Array;
+        my %params = messages => @messages.map(&to-hash).Array;
         %params<maxTokens> = $_ with $maxTokens;
-        %params<modelPreferences> = $_ ~~ MCP::Types::ModelPreferences ?? $_.Hash !! $_ with $modelPreferences;
+        %params<modelPreferences> = to-hash($_) with $modelPreferences;
         %params<systemPrompt> = $_ with $systemPrompt;
         %params<includeContext> = $_ with $includeContext;
         if @tools {
-            %params<tools> = @tools.map({
-                $_ ~~ MCP::Types::Tool ?? $_.Hash !! $_
-            }).Array;
+            %params<tools> = @tools.map(&to-hash).Array;
         }
-        %params<toolChoice> = $_ ~~ MCP::Types::ToolChoice ?? $_.Hash !! $_ with $toolChoice;
+        %params<toolChoice> = to-hash($_) with $toolChoice;
         %params<_meta> = $_ with $meta;
 
         self.request('sampling/createMessage', %params).then(-> $p {

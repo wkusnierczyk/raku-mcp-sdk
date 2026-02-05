@@ -385,9 +385,7 @@ class Client is export {
 
     #| Handle roots/list request from server
     method !handle-roots-list-request(MCP::JSONRPC::Request $req) {
-        my @root-hashes = @!roots.map({
-            $_ ~~ MCP::Types::Root ?? $_.Hash !! $_
-        }).Array;
+        my @root-hashes = @!roots.map(&to-hash).Array;
 
         my $response = MCP::JSONRPC::Response.success($req.id, {
             roots => @root-hashes

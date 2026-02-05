@@ -114,6 +114,12 @@ Result of a sampling request: C<.role>, C<.content>, C<.model>, C<.stopReason>.
 our constant LATEST_PROTOCOL_VERSION is export = "2025-11-25";
 our constant SUPPORTED_PROTOCOL_VERSIONS is export = <2025-11-25 2025-03-26 2024-11-05>;
 
+#| Coerce typed objects to Hash, pass through Hashes and other values unchanged
+proto sub to-hash($) is export {*}
+multi sub to-hash(Hash $h) { $h }
+multi sub to-hash($x where *.can('Hash')) { $x.Hash }
+multi sub to-hash($x) { $x }
+
 #| Icon definition for tools, resources, prompts, and implementations
 class IconDefinition is export {
     has Str $.src is required;
