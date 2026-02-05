@@ -106,36 +106,31 @@ class RegisteredTool is export {
 
         # Normalize result to CallToolResult
         given $result {
-            when MCP::Types::CallToolResult {
-                return $result;
-            }
-            when MCP::Types::Content {
-                return MCP::Types::CallToolResult.new(content => [$result]);
-            }
+            when MCP::Types::CallToolResult { $result }
+            when MCP::Types::Content { MCP::Types::CallToolResult.new(content => [$result]) }
             when Hash {
                 # If tool has outputSchema, treat Hash as structuredContent
                 if $!outputSchema {
-                    return MCP::Types::CallToolResult.new(
+                    MCP::Types::CallToolResult.new(
                         structuredContent => $result,
                         content => [MCP::Types::TextContent.new(text => $result.raku)],
                     );
+                } else {
+                    MCP::Types::CallToolResult.new(
+                        content => [MCP::Types::TextContent.new(text => $result.Str)]
+                    );
                 }
-                return MCP::Types::CallToolResult.new(
-                    content => [MCP::Types::TextContent.new(text => $result.Str)]
-                );
             }
             when Str {
-                return MCP::Types::CallToolResult.new(
+                MCP::Types::CallToolResult.new(
                     content => [MCP::Types::TextContent.new(text => $result)]
-                );
+                )
             }
-            when Positional {
-                return MCP::Types::CallToolResult.new(content => $result.Array);
-            }
+            when Positional { MCP::Types::CallToolResult.new(content => $result.Array) }
             default {
-                return MCP::Types::CallToolResult.new(
+                MCP::Types::CallToolResult.new(
                     content => [MCP::Types::TextContent.new(text => $result.Str)]
-                );
+                )
             }
         }
     }
