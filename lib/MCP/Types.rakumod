@@ -114,6 +114,11 @@ Result of a sampling request: C<.role>, C<.content>, C<.model>, C<.stopReason>.
 our constant LATEST_PROTOCOL_VERSION is export = "2025-11-25";
 our constant SUPPORTED_PROTOCOL_VERSIONS is export = <2025-11-25 2025-03-26 2024-11-05>;
 
+#| Convert a string value to an enum member, returning default if not found
+sub enum-from-value(Mu \enum-type, Str $value, Mu \default) {
+    enum-type.enums.first(*.value eq $value).?key andthen enum-type::{$_} orelse default
+}
+
 #| Icon definition for tools, resources, prompts, and implementations
 class IconDefinition is export {
     has Str $.src is required;
@@ -347,13 +352,7 @@ class TaskExecution is export {
     }
 
     method from-hash(%h --> TaskExecution) {
-        my $ts = do given %h<taskSupport> {
-            when 'forbidden' { TaskForbidden }
-            when 'optional'  { TaskOptional }
-            when 'required'  { TaskRequired }
-            default          { TaskOptional }
-        };
-        self.new(taskSupport => $ts)
+        self.new(taskSupport => enum-from-value(TaskSupport, %h<taskSupport>, TaskOptional))
     }
 }
 
@@ -378,15 +377,7 @@ class Task is export {
     }
 
     method from-hash(%h --> Task) {
-        my $status = do given %h<status> {
-            when 'working'        { TaskWorking }
-            when 'input_required' { TaskInputRequired }
-            when 'completed'      { TaskCompleted }
-            when 'failed'         { TaskFailed }
-            when 'cancelled'      { TaskCancelled }
-            default               { TaskWorking }
-        };
-        my %args = taskId => %h<taskId>, status => $status;
+        my %args = taskId => %h<taskId>, status => enum-from-value(TaskStatus, %h<status>, TaskWorking);
         %args<statusMessage> = $_ with %h<statusMessage>;
         %args<createdAt> = $_ with %h<createdAt>;
         %args<lastUpdatedAt> = $_ with %h<lastUpdatedAt>;
@@ -862,14 +853,8 @@ class ElicitationResponse is export {
     }
 
     method from-hash(%h --> ElicitationResponse) {
-        my $action = do given %h<action> {
-            when 'accept'  { ElicitAccept }
-            when 'decline' { ElicitDecline }
-            when 'cancel'  { ElicitCancel }
-            default        { ElicitCancel }
-        };
         self.new(
-            action => $action,
+            action => enum-from-value(ElicitationAction, %h<action>, ElicitCancel),
             content => %h<content> // {}
         )
     }
