@@ -396,7 +396,7 @@ class Task is export {
     }
 
     method is-terminal(--> Bool) {
-        $!status === TaskCompleted || $!status === TaskFailed || $!status === TaskCancelled
+        so $!status === any(TaskCompleted, TaskFailed, TaskCancelled)
     }
 }
 
