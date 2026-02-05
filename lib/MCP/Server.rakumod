@@ -902,7 +902,7 @@ class Server is export {
         # Try exact match first
         if %!resources{$uri}:exists {
             return {
-                contents => %!resources{$uri}.read.map(*.Hash).Array
+                contents => %!resources{$uri}.read».Hash
             };
         }
 
@@ -911,7 +911,7 @@ class Server is export {
             my $match = $template.match-uri($uri);
             with $match {
                 return %(
-                    contents => $template.read($_, uri => $uri).map(*.Hash).Array
+                    contents => $template.read($_, uri => $uri)».Hash
                 );
             }
         }
@@ -986,7 +986,7 @@ class Server is export {
 
         {
             description => $prompt.description,
-            messages => $prompt.get(%arguments).map(*.Hash).Array
+            messages => $prompt.get(%arguments)».Hash
         }
     }
 
