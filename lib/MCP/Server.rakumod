@@ -606,7 +606,7 @@ class Server is export {
             %cap-args<experimental> = %caps<experimental> if %caps<experimental>.defined && %caps<experimental> ~~ Hash;
             %cap-args<roots> = MCP::Types::RootsCapability.new(|%caps<roots>) if %caps<roots>.defined && %caps<roots> ~~ Hash;
             %cap-args<sampling> = MCP::Types::SamplingCapability.new(|%caps<sampling>) if %caps<sampling>.defined && %caps<sampling> ~~ Hash;
-            %cap-args<tasks> = %caps<tasks> if %caps<tasks>.defined;
+            %cap-args<tasks> = $_ with %caps<tasks>;
         }
         $!client-capabilities = MCP::Types::ClientCapabilities.new(|%cap-args);
         $!initialized = True;
