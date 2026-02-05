@@ -385,9 +385,7 @@ class Client is export {
 
     #| Handle roots/list request from server
     method !handle-roots-list-request(MCP::JSONRPC::Request $req) {
-        my @root-hashes = @!roots.map({
-            $_ ~~ MCP::Types::Root ?? $_.Hash !! $_
-        }).Array;
+        my @root-hashes = @!roots.map(&to-hash).Array;
 
         my $response = MCP::JSONRPC::Response.success($req.id, {
             roots => @root-hashes
@@ -412,9 +410,7 @@ class Client is export {
 
     #| Supply of progress notifications (emits MCP::Types::Progress objects)
     method progress(--> Supply) {
-        self.notifications.grep({
-            $_.method eq 'notifications/progress'
-        }).map({
+        self.notifications.grep(*.method eq 'notifications/progress').map({
             MCP::Types::Progress.new(
                 progressToken => $_.params<progressToken>,
                 progress      => $_.params<progress>.Num,

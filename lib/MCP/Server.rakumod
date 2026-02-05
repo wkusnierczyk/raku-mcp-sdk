@@ -224,6 +224,13 @@ class Server is export {
         from-json($json)<offset>
     }
 
+    #| Throw InvalidParams error with given message
+    method !invalid-params(Str $msg) {
+        die X::MCP::JSONRPC.new(
+            error => MCP::JSONRPC::Error.from-code(MCP::JSONRPC::InvalidParams, $msg)
+        );
+    }
+
     #| Paginate a list of items
     method !paginate(@items, $params, Str :$key! --> Hash) {
         my Int $offset = 0;
@@ -232,14 +239,7 @@ class Server is export {
             {
                 $offset = self!decode-cursor($params<cursor>);
                 CATCH {
-                    default {
-                        die X::MCP::JSONRPC.new(
-                            error => MCP::JSONRPC::Error.from-code(
-                                MCP::JSONRPC::InvalidParams,
-                                "Invalid cursor"
-                            )
-                        );
-                    }
+                    default { self!invalid-params("Invalid cursor") }
                 }
             }
         }
@@ -473,9 +473,7 @@ class Server is export {
 
         # Check if request was cancelled - don't send response if so
         my $cancelled = $!flight-lock.protect: {
-            my $c = %!in-flight-requests{$req.id}<cancelled>;
-            %!in-flight-requests{$req.id}:delete;
-            $c
+            (%!in-flight-requests{$req.id}:delete)<cancelled>
         };
         return if $cancelled;
 
@@ -621,22 +619,10 @@ class Server is export {
 
     #| Handle logging/setLevel request
     method !handle-set-log-level(%params) {
-        my $level-str = %params<level> // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Missing required parameter: level"
-            )
-        );
+        my $level-str = %params<level> // self!invalid-params("Missing required parameter: level");
         $!log-level = parse-log-level($level-str);
         CATCH {
-            when X::AdHoc {
-                die X::MCP::JSONRPC.new(
-                    error => MCP::JSONRPC::Error.from-code(
-                        MCP::JSONRPC::InvalidParams,
-                        "Invalid log level: $level-str"
-                    )
-                );
-            }
+            when X::AdHoc { self!invalid-params("Invalid log level: $level-str") }
         }
         {}
     }
@@ -689,25 +675,14 @@ class Server is export {
 
     #| List tools
     method !list-tools($params?) {
-        my @tools = %!tools.values.map(*.to-tool.Hash).Array;
+        my @tools = %!tools.values.map(*.to-tool.Hash);
         self!paginate(@tools, $params, key => 'tools')
     }
 
     #| Call a tool
     method !call-tool(%params) {
-        my $name = %params<name> // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Missing required parameter: name"
-            )
-        );
-
-        my $tool = %!tools{$name} // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Unknown tool: $name"
-            )
-        );
+        my $name = %params<name> // self!invalid-params("Missing required parameter: name");
+        my $tool = %!tools{$name} // self!invalid-params("Unknown tool: $name");
 
         # If task hint is present, run as async task
         if %params<task> && %params<task><ttl> {
@@ -785,42 +760,19 @@ class Server is export {
 
     #| Get a task by ID
     method !get-task(%params --> Hash) {
-        my $task-id = %params<taskId> // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Missing required parameter: taskId"
-            )
-        );
-
+        my $task-id = %params<taskId> // self!invalid-params("Missing required parameter: taskId");
         $!task-lock.protect: {
-            my $entry = %!tasks{$task-id} // die X::MCP::JSONRPC.new(
-                error => MCP::JSONRPC::Error.from-code(
-                    MCP::JSONRPC::InvalidParams,
-                    "Unknown task: $task-id"
-                )
-            );
-
+            my $entry = %!tasks{$task-id} // self!invalid-params("Unknown task: $task-id");
             $entry<task>.Hash
         }
     }
 
     #| Get task result (blocks until terminal)
     method !get-task-result(%params --> Hash) {
-        my $task-id = %params<taskId> // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Missing required parameter: taskId"
-            )
-        );
-
+        my $task-id = %params<taskId> // self!invalid-params("Missing required parameter: taskId");
         my ($entry, $completion);
         $!task-lock.protect: {
-            $entry = %!tasks{$task-id} // die X::MCP::JSONRPC.new(
-                error => MCP::JSONRPC::Error.from-code(
-                    MCP::JSONRPC::InvalidParams,
-                    "Unknown task: $task-id"
-                )
-            );
+            $entry = %!tasks{$task-id} // self!invalid-params("Unknown task: $task-id");
             $completion = $entry<completion>;
         };
 
@@ -840,20 +792,9 @@ class Server is export {
 
     #| Cancel a task
     method !cancel-task(%params --> Hash) {
-        my $task-id = %params<taskId> // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Missing required parameter: taskId"
-            )
-        );
-
+        my $task-id = %params<taskId> // self!invalid-params("Missing required parameter: taskId");
         $!task-lock.protect: {
-            my $entry = %!tasks{$task-id} // die X::MCP::JSONRPC.new(
-                error => MCP::JSONRPC::Error.from-code(
-                    MCP::JSONRPC::InvalidParams,
-                    "Unknown task: $task-id"
-                )
-            );
+            my $entry = %!tasks{$task-id} // self!invalid-params("Unknown task: $task-id");
 
             unless $entry<task>.is-terminal {
                 my $now = self!iso-now;
@@ -880,29 +821,24 @@ class Server is export {
 
     #| List resources
     method !list-resources($params?) {
-        my @resources = %!resources.values.map(*.to-resource.Hash).Array;
+        my @resources = %!resources.values.map(*.to-resource.Hash);
         self!paginate(@resources, $params, key => 'resources')
     }
 
     #| List resource templates
     method !list-resource-templates($params?) {
-        my @templates = %!resource-templates.values.map(*.to-resource-template.Hash).Array;
+        my @templates = %!resource-templates.values.map(*.to-resource-template.Hash);
         self!paginate(@templates, $params, key => 'resourceTemplates')
     }
 
     #| Read a resource
     method !read-resource(%params) {
-        my $uri = %params<uri> // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Missing required parameter: uri"
-            )
-        );
+        my $uri = %params<uri> // self!invalid-params("Missing required parameter: uri");
 
         # Try exact match first
         if %!resources{$uri}:exists {
             return {
-                contents => %!resources{$uri}.read.map(*.Hash).Array
+                contents => %!resources{$uri}.read».Hash
             };
         }
 
@@ -911,37 +847,20 @@ class Server is export {
             my $match = $template.match-uri($uri);
             with $match {
                 return %(
-                    contents => $template.read($_, uri => $uri).map(*.Hash).Array
+                    contents => $template.read($_, uri => $uri)».Hash
                 );
             }
         }
 
-        die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Unknown resource: $uri"
-            )
-        );
+        self!invalid-params("Unknown resource: $uri");
     }
 
     #| Subscribe to a resource
     method !subscribe-resource(%params) {
-        my $uri = %params<uri> // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Missing required parameter: uri"
-            )
-        );
+        my $uri = %params<uri> // self!invalid-params("Missing required parameter: uri");
 
         # Verify resource exists
-        unless %!resources{$uri}:exists {
-            die X::MCP::JSONRPC.new(
-                error => MCP::JSONRPC::Error.from-code(
-                    MCP::JSONRPC::InvalidParams,
-                    "Unknown resource: $uri"
-                )
-            );
-        }
+        self!invalid-params("Unknown resource: $uri") unless %!resources{$uri}:exists;
 
         %!subscriptions{$uri} = True;
         {}  # Empty response on success
@@ -949,44 +868,27 @@ class Server is export {
 
     #| Unsubscribe from a resource
     method !unsubscribe-resource(%params) {
-        my $uri = %params<uri> // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Missing required parameter: uri"
-            )
-        );
-
+        my $uri = %params<uri> // self!invalid-params("Missing required parameter: uri");
         %!subscriptions{$uri}:delete;
         {}  # Empty response on success
     }
 
     #| List prompts
     method !list-prompts($params?) {
-        my @prompts = %!prompts.values.map(*.to-prompt.Hash).Array;
+        my @prompts = %!prompts.values.map(*.to-prompt.Hash);
         self!paginate(@prompts, $params, key => 'prompts')
     }
 
     #| Get a prompt
     method !get-prompt(%params) {
-        my $name = %params<name> // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Missing required parameter: name"
-            )
-        );
-
-        my $prompt = %!prompts{$name} // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Unknown prompt: $name"
-            )
-        );
+        my $name = %params<name> // self!invalid-params("Missing required parameter: name");
+        my $prompt = %!prompts{$name} // self!invalid-params("Unknown prompt: $name");
 
         my %arguments = %params<arguments> // {};
 
         {
             description => $prompt.description,
-            messages => $prompt.get(%arguments).map(*.Hash).Array
+            messages => $prompt.get(%arguments)».Hash
         }
     }
 
@@ -1062,32 +964,14 @@ class Server is export {
 
     #| Handle completion/complete request
     method !handle-completion(%params) {
-        my $ref = %params<ref> // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Missing required parameter: ref"
-            )
-        );
-
-        my $argument = %params<argument> // die X::MCP::JSONRPC.new(
-            error => MCP::JSONRPC::Error.from-code(
-                MCP::JSONRPC::InvalidParams,
-                "Missing required parameter: argument"
-            )
-        );
+        my $ref = %params<ref> // self!invalid-params("Missing required parameter: ref");
+        my $argument = %params<argument> // self!invalid-params("Missing required parameter: argument");
 
         my $ref-type = $ref<type> // '';
         my $key = do given $ref-type {
             when 'ref/prompt'   { "prompt:{$ref<name> // ''}" }
             when 'ref/resource' { "resource:{$ref<uri> // ''}" }
-            default {
-                die X::MCP::JSONRPC.new(
-                    error => MCP::JSONRPC::Error.from-code(
-                        MCP::JSONRPC::InvalidParams,
-                        "Unknown ref type: $ref-type"
-                    )
-                );
-            }
+            default             { self!invalid-params("Unknown ref type: $ref-type") }
         };
 
         unless %!completers{$key}:exists {
@@ -1150,19 +1034,15 @@ class Server is export {
         :$toolChoice,
         :$meta,
     --> Promise) {
-        my %params = messages => @messages.map({
-            $_ ~~ MCP::Types::SamplingMessage ?? $_.Hash !! $_
-        }).Array;
+        my %params = messages => @messages.map(&to-hash).Array;
         %params<maxTokens> = $_ with $maxTokens;
-        %params<modelPreferences> = $_ ~~ MCP::Types::ModelPreferences ?? $_.Hash !! $_ with $modelPreferences;
+        %params<modelPreferences> = to-hash($_) with $modelPreferences;
         %params<systemPrompt> = $_ with $systemPrompt;
         %params<includeContext> = $_ with $includeContext;
         if @tools {
-            %params<tools> = @tools.map({
-                $_ ~~ MCP::Types::Tool ?? $_.Hash !! $_
-            }).Array;
+            %params<tools> = @tools.map(&to-hash).Array;
         }
-        %params<toolChoice> = $_ ~~ MCP::Types::ToolChoice ?? $_.Hash !! $_ with $toolChoice;
+        %params<toolChoice> = to-hash($_) with $toolChoice;
         %params<_meta> = $_ with $meta;
 
         self.request('sampling/createMessage', %params).then(-> $p {
