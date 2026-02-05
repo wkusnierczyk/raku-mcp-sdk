@@ -473,9 +473,7 @@ class Server is export {
 
         # Check if request was cancelled - don't send response if so
         my $cancelled = $!flight-lock.protect: {
-            my $c = %!in-flight-requests{$req.id}<cancelled>;
-            %!in-flight-requests{$req.id}:delete;
-            $c
+            (%!in-flight-requests{$req.id}:delete)<cancelled>
         };
         return if $cancelled;
 
