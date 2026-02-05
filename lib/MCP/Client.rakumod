@@ -412,9 +412,7 @@ class Client is export {
 
     #| Supply of progress notifications (emits MCP::Types::Progress objects)
     method progress(--> Supply) {
-        self.notifications.grep({
-            $_.method eq 'notifications/progress'
-        }).map({
+        self.notifications.grep(*.method eq 'notifications/progress').map({
             MCP::Types::Progress.new(
                 progressToken => $_.params<progressToken>,
                 progress      => $_.params<progress>.Num,
