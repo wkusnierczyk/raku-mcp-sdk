@@ -337,7 +337,7 @@ class StreamableHTTPServerTransport does MCP::Transport::Base::Transport is expo
     method !validate-origin($req, $resp, &content --> Bool) {
         my $origin = $req.header('Origin');
         return True unless $origin.defined;
-        if @!allowed-origins.elems == 0 {
+        unless @!allowed-origins {
             $resp.status = 403;
             &content('application/json', self!jsonrpc-error("Invalid Origin"));
             return False;
