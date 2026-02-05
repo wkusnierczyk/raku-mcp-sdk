@@ -38,25 +38,17 @@ Key methods:
 use MCP::OAuth;
 use JSON::Fast;
 
-class OAuthClientHandler is export {
+#| Shared OAuth discovery, client, and authorization header logic
+role OAuthDiscoverable {
     has Str $.resource-url is required;
-    has Str $.client-id is rw;
-    has Str $.client-secret is rw;
-    has @.scopes;
-    has &.authorization-callback is required; # Str $url --> Str $code
-    has Str $.redirect-uri = 'http://localhost:8080/callback';
-
     has TokenResponse $.token is rw;
     has AuthServerMetadata $.auth-metadata is rw;
     has ProtectedResourceMetadata $.resource-metadata is rw;
-    has ClientRegistrationResponse $.registration is rw;
-    has Str $.pkce-verifier is rw;
 
     method discover(--> Promise) {
         start {
             my $client = self!cro-client;
 
-            # Fetch protected resource metadata
             my $resource-url = $!resource-url.subst(/ '/' $ /, '');
             my $rm-url = "$resource-url/.well-known/oauth-protected-resource";
             my $rm-resp = await $client.get($rm-url);
@@ -65,7 +57,6 @@ class OAuthClientHandler is export {
                 $rm-body ~~ Hash ?? $rm-body !! from-json($rm-body)
             );
 
-            # Fetch auth server metadata
             my $issuer = $!resource-metadata.authorization-servers[0]
                 // die X::MCP::OAuth::Discovery.new(message => 'No authorization server found');
 
@@ -76,7 +67,6 @@ class OAuthClientHandler is export {
                 $as-body = await $as-resp.body;
                 CATCH {
                     default {
-                        # OIDC fallback
                         my $oidc-resp = await $client.get("$issuer-base/.well-known/openid-configuration");
                         $as-body = await $oidc-resp.body;
                     }
@@ -88,6 +78,39 @@ class OAuthClientHandler is export {
             True
         }
     }
+
+    #| Must be implemented by composing class
+    method get-token(--> Promise) { ... }
+
+    method authorization-header(--> Promise) {
+        start {
+            my $token = await self.get-token;
+            "Bearer {$token.access-token}"
+        }
+    }
+
+    method !cro-client() { # UNCOVERABLE
+        require ::('Cro::HTTP::Client'); # UNCOVERABLE
+        return ::('Cro::HTTP::Client').new; # UNCOVERABLE
+        CATCH { # UNCOVERABLE
+            default { # UNCOVERABLE
+                die X::MCP::OAuth::Discovery.new( # UNCOVERABLE
+                    message => 'Cro::HTTP is required for OAuth' # UNCOVERABLE
+                ); # UNCOVERABLE
+            } # UNCOVERABLE
+        } # UNCOVERABLE
+    } # UNCOVERABLE
+}
+
+class OAuthClientHandler does OAuthDiscoverable is export {
+    has Str $.client-id is rw;
+    has Str $.client-secret is rw;
+    has @.scopes;
+    has &.authorization-callback is required; # Str $url --> Str $code
+    has Str $.redirect-uri = 'http://localhost:8080/callback';
+
+    has ClientRegistrationResponse $.registration is rw;
+    has Str $.pkce-verifier is rw;
 
     method authorization-url(--> Str) {
         die X::MCP::OAuth::Discovery.new(message => 'Must call discover() first')
@@ -190,13 +213,6 @@ class OAuthClientHandler is export {
         }
     }
 
-    method authorization-header(--> Promise) {
-        start {
-            my $token = await self.get-token;
-            "Bearer {$token.access-token}"
-        }
-    }
-
     method register(ClientRegistrationRequest :$request --> Promise) {
         start {
             die X::MCP::OAuth::Discovery.new(message => 'Must call discover() first')
@@ -237,67 +253,16 @@ class OAuthClientHandler is export {
         }
     }
 
-    method !cro-client() { # UNCOVERABLE
-        require ::('Cro::HTTP::Client'); # UNCOVERABLE
-        return ::('Cro::HTTP::Client').new; # UNCOVERABLE
-        CATCH { # UNCOVERABLE
-            default { # UNCOVERABLE
-                die X::MCP::OAuth::Discovery.new( # UNCOVERABLE
-                    message => 'Cro::HTTP is required for OAuth client' # UNCOVERABLE
-                ); # UNCOVERABLE
-            } # UNCOVERABLE
-        } # UNCOVERABLE
-    } # UNCOVERABLE
-
     sub uri-encode(Str $s --> Str) {
         $s.subst(/<-[A..Za..z0..9\-._~]>/, { .Str.encode('utf-8').list.map({ '%' ~ .fmt('%02X') }).join }, :g)
     }
 }
 
 #| OAuth 2.1 client credentials handler for machine-to-machine authentication (SEP-1046)
-class OAuthM2MClient is export {
-    has Str $.resource-url is required;
+class OAuthM2MClient does OAuthDiscoverable is export {
     has Str $.client-id is required;
     has Str $.client-secret is required;
     has @.scopes;
-
-    has TokenResponse $.token is rw;
-    has AuthServerMetadata $.auth-metadata is rw;
-    has ProtectedResourceMetadata $.resource-metadata is rw;
-
-    method discover(--> Promise) {
-        start {
-            my $client = self!cro-client;
-
-            my $resource-url = $!resource-url.subst(/ '/' $ /, '');
-            my $rm-url = "$resource-url/.well-known/oauth-protected-resource";
-            my $rm-resp = await $client.get($rm-url);
-            my $rm-body = await $rm-resp.body;
-            $!resource-metadata = ProtectedResourceMetadata.from-hash(
-                $rm-body ~~ Hash ?? $rm-body !! from-json($rm-body)
-            );
-
-            my $issuer = $!resource-metadata.authorization-servers[0]
-                // die X::MCP::OAuth::Discovery.new(message => 'No authorization server found');
-
-            my $issuer-base = $issuer.subst(/ '/' $ /, '');
-            my $as-body;
-            {
-                my $as-resp = await $client.get("$issuer-base/.well-known/oauth-authorization-server");
-                $as-body = await $as-resp.body;
-                CATCH {
-                    default {
-                        my $oidc-resp = await $client.get("$issuer-base/.well-known/openid-configuration");
-                        $as-body = await $oidc-resp.body;
-                    }
-                }
-            }
-            $!auth-metadata = AuthServerMetadata.from-hash(
-                $as-body ~~ Hash ?? $as-body !! from-json($as-body)
-            );
-            True
-        }
-    }
 
     method authenticate(--> Promise) {
         start {
@@ -341,32 +306,12 @@ class OAuthM2MClient is export {
             }
         }
     }
-
-    method authorization-header(--> Promise) {
-        start {
-            my $token = await self.get-token;
-            "Bearer {$token.access-token}"
-        }
-    }
-
-    method !cro-client() { # UNCOVERABLE
-        require ::('Cro::HTTP::Client'); # UNCOVERABLE
-        return ::('Cro::HTTP::Client').new; # UNCOVERABLE
-        CATCH { # UNCOVERABLE
-            default { # UNCOVERABLE
-                die X::MCP::OAuth::Discovery.new( # UNCOVERABLE
-                    message => 'Cro::HTTP is required for OAuth M2M client' # UNCOVERABLE
-                ); # UNCOVERABLE
-            } # UNCOVERABLE
-        } # UNCOVERABLE
-    } # UNCOVERABLE
 }
 
 #| Enterprise-managed authorization client (SEP-990)
 #| Implements the Identity Assertion Authorization Grant flow for
 #| enterprise IdP policy controls during MCP OAuth flows.
-class OAuthEnterpriseClient is export {
-    has Str $.resource-url is required;
+class OAuthEnterpriseClient does OAuthDiscoverable is export {
     has Str $.client-id is required;
     has Str $.client-secret;
     has @.scopes;
@@ -378,44 +323,7 @@ class OAuthEnterpriseClient is export {
     has Str $.subject-token is rw;          # ID token or SAML assertion
     has Str $.subject-token-type = 'urn:ietf:params:oauth:token-type:id_token';
 
-    has TokenResponse $.token is rw;
-    has AuthServerMetadata $.auth-metadata is rw;
-    has ProtectedResourceMetadata $.resource-metadata is rw;
     has TokenExchangeResponse $.id-jag is rw;
-
-    method discover(--> Promise) {
-        start {
-            my $client = self!cro-client;
-
-            my $resource-url = $!resource-url.subst(/ '/' $ /, '');
-            my $rm-url = "$resource-url/.well-known/oauth-protected-resource";
-            my $rm-resp = await $client.get($rm-url);
-            my $rm-body = await $rm-resp.body;
-            $!resource-metadata = ProtectedResourceMetadata.from-hash(
-                $rm-body ~~ Hash ?? $rm-body !! from-json($rm-body)
-            );
-
-            my $issuer = $!resource-metadata.authorization-servers[0]
-                // die X::MCP::OAuth::Discovery.new(message => 'No authorization server found');
-
-            my $issuer-base = $issuer.subst(/ '/' $ /, '');
-            my $as-body;
-            {
-                my $as-resp = await $client.get("$issuer-base/.well-known/oauth-authorization-server");
-                $as-body = await $as-resp.body;
-                CATCH {
-                    default {
-                        my $oidc-resp = await $client.get("$issuer-base/.well-known/openid-configuration");
-                        $as-body = await $oidc-resp.body;
-                    }
-                }
-            }
-            $!auth-metadata = AuthServerMetadata.from-hash(
-                $as-body ~~ Hash ?? $as-body !! from-json($as-body)
-            );
-            True
-        }
-    }
 
     #| Step 1: Exchange identity assertion for ID-JAG at the IdP (RFC 8693)
     method exchange-token(--> Promise) {
@@ -504,23 +412,4 @@ class OAuthEnterpriseClient is export {
             }
         }
     }
-
-    method authorization-header(--> Promise) {
-        start {
-            my $token = await self.get-token;
-            "Bearer {$token.access-token}"
-        }
-    }
-
-    method !cro-client() { # UNCOVERABLE
-        require ::('Cro::HTTP::Client'); # UNCOVERABLE
-        return ::('Cro::HTTP::Client').new; # UNCOVERABLE
-        CATCH { # UNCOVERABLE
-            default { # UNCOVERABLE
-                die X::MCP::OAuth::Discovery.new( # UNCOVERABLE
-                    message => 'Cro::HTTP is required for OAuth enterprise client' # UNCOVERABLE
-                ); # UNCOVERABLE
-            } # UNCOVERABLE
-        } # UNCOVERABLE
-    } # UNCOVERABLE
 }
