@@ -151,7 +151,7 @@ class Implementation is export {
     method Hash(--> Hash) {
         my %h = :$!name, :$!version;
         %h<title> = $_ with $!title;
-        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
+        %h<icons> = @!icons».Hash if @!icons;
         %h
     }
 
@@ -319,7 +319,7 @@ class ToolResultContent does Content is export {
 
     method Hash(--> Hash) {
         my %h = type => 'tool_result', :$!toolUseId;
-        %h<content> = @!content.map(*.Hash).Array;
+        %h<content> = @!content».Hash;
         %h<isError> = $!isError if $!isError.defined;
         %h<structuredContent> = $_ with $!structuredContent;
         %h<_meta> = $_ with $!meta;
@@ -415,7 +415,7 @@ class Tool is export {
         my %h = :$!name;
         %h<description> = $_ with $!description;
         %h<title> = $_ with $!title;
-        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
+        %h<icons> = @!icons».Hash if @!icons;
         %h<inputSchema> = $_ with $!inputSchema;
         %h<outputSchema> = $_ with $!outputSchema;
         %h<annotations> = $!annotations.Hash if $!annotations;
@@ -443,7 +443,7 @@ class CallToolResult is export {
     has $.structuredContent;  # Optional structured output matching outputSchema
 
     method Hash(--> Hash) {
-        my %h = content => @!content.map(*.Hash).Array, :$!isError;
+        my %h = content => @!content».Hash, :$!isError;
         %h<structuredContent> = $_ with $!structuredContent;
         %h
     }
@@ -463,7 +463,7 @@ class Resource is export {
         my %h = :$!uri, :$!name;
         %h<description> = $_ with $!description;
         %h<title> = $_ with $!title;
-        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
+        %h<icons> = @!icons».Hash if @!icons;
         %h<mimeType> = $_ with $!mimeType;
         %h<annotations> = $!annotations.Hash if $!annotations;
         %h
@@ -493,7 +493,7 @@ class ResourceTemplate is export {
         my %h = :$!uriTemplate, :$!name;
         %h<description> = $_ with $!description;
         %h<title> = $_ with $!title;
-        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
+        %h<icons> = @!icons».Hash if @!icons;
         %h<mimeType> = $_ with $!mimeType;
         %h<annotations> = $!annotations.Hash if $!annotations;
         %h
@@ -551,8 +551,8 @@ class Prompt is export {
         my %h = :$!name;
         %h<description> = $_ with $!description;
         %h<title> = $_ with $!title;
-        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
-        %h<arguments> = @!arguments.map(*.Hash).Array if @!arguments;
+        %h<icons> = @!icons».Hash if @!icons;
+        %h<arguments> = @!arguments».Hash if @!arguments;
         %h
     }
 
@@ -575,7 +575,7 @@ class PromptMessage is export {
         {
             :$!role,
             content => $!content ~~ Positional
-                ?? $!content.map(*.Hash).Array
+                ?? $!content».Hash
                 !! $!content.Hash
         }
     }
@@ -590,7 +590,7 @@ class SamplingMessage is export {
         {
             :$!role,
             content => $!content ~~ Positional
-                ?? $!content.map(*.Hash).Array
+                ?? $!content».Hash
                 !! $!content.Hash
         }
     }
@@ -612,7 +612,7 @@ class ModelPreferences is export {
 
     method Hash(--> Hash) {
         my %h;
-        %h<hints> = @!hints.map(*.Hash).Array if @!hints;
+        %h<hints> = @!hints».Hash if @!hints;
         %h<costPriority> = $_ with $!costPriority;
         %h<speedPriority> = $_ with $!speedPriority;
         %h<intelligencePriority> = $_ with $!intelligencePriority;
@@ -643,7 +643,7 @@ class CreateMessageResult is export {
     method Hash(--> Hash) {
         my %h = :$!model, :$!role,
             content => $!content ~~ Positional
-                ?? $!content.map(*.Hash).Array
+                ?? $!content».Hash
                 !! $!content.Hash;
         %h<stopReason> = $_ with $!stopReason;
         %h<_meta> = $_ with $!meta;
