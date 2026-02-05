@@ -79,23 +79,19 @@ class RegisteredPrompt is export {
 
         # Normalize to array of PromptMessage
         given $result {
-            when MCP::Types::PromptMessage {
-                return [$result];
-            }
-            when Positional {
-                return $result.Array;
-            }
+            when MCP::Types::PromptMessage { [$result] }
+            when Positional { $result.Array }
             when Str {
-                return [MCP::Types::PromptMessage.new(
+                [MCP::Types::PromptMessage.new(
                     role => 'user',
                     content => MCP::Types::TextContent.new(text => $result)
-                )];
+                )]
             }
             default {
-                return [MCP::Types::PromptMessage.new(
+                [MCP::Types::PromptMessage.new(
                     role => 'user',
                     content => MCP::Types::TextContent.new(text => $result.Str)
-                )];
+                )]
             }
         }
     }
