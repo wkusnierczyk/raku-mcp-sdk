@@ -99,32 +99,28 @@ class RegisteredResource is export {
 
         # Normalize result to array of ResourceContents
         given $result {
-            when MCP::Types::ResourceContents {
-                return [$result];
-            }
+            when MCP::Types::ResourceContents { [$result] }
             when Str {
-                return [MCP::Types::ResourceContents.new(
+                [MCP::Types::ResourceContents.new(
                     uri => $!uri,
                     mimeType => $!mimeType // 'text/plain',
                     text => $result
-                )];
+                )]
             }
             when Blob | Buf {
-                return [MCP::Types::ResourceContents.new(
+                [MCP::Types::ResourceContents.new(
                     uri => $!uri,
                     mimeType => $!mimeType // 'application/octet-stream',
                     blob => $result
-                )];
+                )]
             }
-            when Positional {
-                return $result.Array;
-            }
+            when Positional { $result.Array }
             default {
-                return [MCP::Types::ResourceContents.new(
+                [MCP::Types::ResourceContents.new(
                     uri => $!uri,
                     mimeType => 'text/plain',
                     text => $result.Str
-                )];
+                )]
             }
         }
     }
@@ -302,32 +298,28 @@ class RegisteredResourceTemplate is export {
         my $resolved-uri = $uri // $!uri-template;
 
         given $result {
-            when MCP::Types::ResourceContents {
-                return [$result];
-            }
+            when MCP::Types::ResourceContents { [$result] }
             when Str {
-                return [MCP::Types::ResourceContents.new(
+                [MCP::Types::ResourceContents.new(
                     uri => $resolved-uri,
                     mimeType => $!mimeType // 'text/plain',
                     text => $result
-                )];
+                )]
             }
             when Blob | Buf {
-                return [MCP::Types::ResourceContents.new(
+                [MCP::Types::ResourceContents.new(
                     uri => $resolved-uri,
                     mimeType => $!mimeType // 'application/octet-stream',
                     blob => $result
-                )];
+                )]
             }
-            when Positional {
-                return $result.Array;
-            }
+            when Positional { $result.Array }
             default {
-                return [MCP::Types::ResourceContents.new(
+                [MCP::Types::ResourceContents.new(
                     uri => $resolved-uri,
                     mimeType => 'text/plain',
                     text => $result.Str
-                )];
+                )]
             }
         }
     }

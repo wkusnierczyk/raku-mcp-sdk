@@ -114,6 +114,17 @@ Result of a sampling request: C<.role>, C<.content>, C<.model>, C<.stopReason>.
 our constant LATEST_PROTOCOL_VERSION is export = "2025-11-25";
 our constant SUPPORTED_PROTOCOL_VERSIONS is export = <2025-11-25 2025-03-26 2024-11-05>;
 
+#| Coerce typed objects to Hash, pass through Hashes and other values unchanged
+proto sub to-hash($) is export {*}
+multi sub to-hash(Hash $h) { $h }
+multi sub to-hash($x where *.can('Hash')) { $x.Hash }
+multi sub to-hash($x) { $x }
+
+#| Convert a string value to an enum member, returning default if not found
+sub enum-from-value(Mu \enum-type, Str $value, Mu \default) {
+    enum-type.enums.first(*.value eq $value).?key andthen enum-type::{$_} orelse default
+}
+
 #| Icon definition for tools, resources, prompts, and implementations
 class IconDefinition is export {
     has Str $.src is required;
@@ -146,7 +157,7 @@ class Implementation is export {
     method Hash(--> Hash) {
         my %h = :$!name, :$!version;
         %h<title> = $_ with $!title;
-        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
+        %h<icons> = @!icons».Hash if @!icons;
         %h
     }
 
@@ -314,7 +325,7 @@ class ToolResultContent does Content is export {
 
     method Hash(--> Hash) {
         my %h = type => 'tool_result', :$!toolUseId;
-        %h<content> = @!content.map(*.Hash).Array;
+        %h<content> = @!content».Hash;
         %h<isError> = $!isError if $!isError.defined;
         %h<structuredContent> = $_ with $!structuredContent;
         %h<_meta> = $_ with $!meta;
@@ -347,13 +358,7 @@ class TaskExecution is export {
     }
 
     method from-hash(%h --> TaskExecution) {
-        my $ts = do given %h<taskSupport> {
-            when 'forbidden' { TaskForbidden }
-            when 'optional'  { TaskOptional }
-            when 'required'  { TaskRequired }
-            default          { TaskOptional }
-        };
-        self.new(taskSupport => $ts)
+        self.new(taskSupport => enum-from-value(TaskSupport, %h<taskSupport>, TaskOptional))
     }
 }
 
@@ -378,15 +383,7 @@ class Task is export {
     }
 
     method from-hash(%h --> Task) {
-        my $status = do given %h<status> {
-            when 'working'        { TaskWorking }
-            when 'input_required' { TaskInputRequired }
-            when 'completed'      { TaskCompleted }
-            when 'failed'         { TaskFailed }
-            when 'cancelled'      { TaskCancelled }
-            default               { TaskWorking }
-        };
-        my %args = taskId => %h<taskId>, status => $status;
+        my %args = taskId => %h<taskId>, status => enum-from-value(TaskStatus, %h<status>, TaskWorking);
         %args<statusMessage> = $_ with %h<statusMessage>;
         %args<createdAt> = $_ with %h<createdAt>;
         %args<lastUpdatedAt> = $_ with %h<lastUpdatedAt>;
@@ -424,7 +421,7 @@ class Tool is export {
         my %h = :$!name;
         %h<description> = $_ with $!description;
         %h<title> = $_ with $!title;
-        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
+        %h<icons> = @!icons».Hash if @!icons;
         %h<inputSchema> = $_ with $!inputSchema;
         %h<outputSchema> = $_ with $!outputSchema;
         %h<annotations> = $!annotations.Hash if $!annotations;
@@ -452,7 +449,7 @@ class CallToolResult is export {
     has $.structuredContent;  # Optional structured output matching outputSchema
 
     method Hash(--> Hash) {
-        my %h = content => @!content.map(*.Hash).Array, :$!isError;
+        my %h = content => @!content».Hash, :$!isError;
         %h<structuredContent> = $_ with $!structuredContent;
         %h
     }
@@ -472,7 +469,7 @@ class Resource is export {
         my %h = :$!uri, :$!name;
         %h<description> = $_ with $!description;
         %h<title> = $_ with $!title;
-        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
+        %h<icons> = @!icons».Hash if @!icons;
         %h<mimeType> = $_ with $!mimeType;
         %h<annotations> = $!annotations.Hash if $!annotations;
         %h
@@ -502,7 +499,7 @@ class ResourceTemplate is export {
         my %h = :$!uriTemplate, :$!name;
         %h<description> = $_ with $!description;
         %h<title> = $_ with $!title;
-        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
+        %h<icons> = @!icons».Hash if @!icons;
         %h<mimeType> = $_ with $!mimeType;
         %h<annotations> = $!annotations.Hash if $!annotations;
         %h
@@ -560,8 +557,8 @@ class Prompt is export {
         my %h = :$!name;
         %h<description> = $_ with $!description;
         %h<title> = $_ with $!title;
-        %h<icons> = @!icons.map(*.Hash).Array if @!icons;
-        %h<arguments> = @!arguments.map(*.Hash).Array if @!arguments;
+        %h<icons> = @!icons».Hash if @!icons;
+        %h<arguments> = @!arguments».Hash if @!arguments;
         %h
     }
 
@@ -584,7 +581,7 @@ class PromptMessage is export {
         {
             :$!role,
             content => $!content ~~ Positional
-                ?? $!content.map(*.Hash).Array
+                ?? $!content».Hash
                 !! $!content.Hash
         }
     }
@@ -599,7 +596,7 @@ class SamplingMessage is export {
         {
             :$!role,
             content => $!content ~~ Positional
-                ?? $!content.map(*.Hash).Array
+                ?? $!content».Hash
                 !! $!content.Hash
         }
     }
@@ -621,7 +618,7 @@ class ModelPreferences is export {
 
     method Hash(--> Hash) {
         my %h;
-        %h<hints> = @!hints.map(*.Hash).Array if @!hints;
+        %h<hints> = @!hints».Hash if @!hints;
         %h<costPriority> = $_ with $!costPriority;
         %h<speedPriority> = $_ with $!speedPriority;
         %h<intelligencePriority> = $_ with $!intelligencePriority;
@@ -652,7 +649,7 @@ class CreateMessageResult is export {
     method Hash(--> Hash) {
         my %h = :$!model, :$!role,
             content => $!content ~~ Positional
-                ?? $!content.map(*.Hash).Array
+                ?? $!content».Hash
                 !! $!content.Hash;
         %h<stopReason> = $_ with $!stopReason;
         %h<_meta> = $_ with $!meta;
@@ -862,14 +859,8 @@ class ElicitationResponse is export {
     }
 
     method from-hash(%h --> ElicitationResponse) {
-        my $action = do given %h<action> {
-            when 'accept'  { ElicitAccept }
-            when 'decline' { ElicitDecline }
-            when 'cancel'  { ElicitCancel }
-            default        { ElicitCancel }
-        };
         self.new(
-            action => $action,
+            action => enum-from-value(ElicitationAction, %h<action>, ElicitCancel),
             content => %h<content> // {}
         )
     }
