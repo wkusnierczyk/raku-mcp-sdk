@@ -152,7 +152,7 @@ class Implementation is export {
 
     method from-hash(%h --> Implementation) {
         my %args = name => %h<name>, version => %h<version>;
-        %args<title> = %h<title> if %h<title>.defined;
+        %args<title> = $_ with %h<title>;
         my @icons = (%h<icons> // []).map({ IconDefinition.from-hash($_) });
         self.new(|%args, :@icons)
     }
@@ -387,11 +387,11 @@ class Task is export {
             default               { TaskWorking }
         };
         my %args = taskId => %h<taskId>, status => $status;
-        %args<statusMessage> = %h<statusMessage> if %h<statusMessage>.defined;
-        %args<createdAt> = %h<createdAt> if %h<createdAt>.defined;
-        %args<lastUpdatedAt> = %h<lastUpdatedAt> if %h<lastUpdatedAt>.defined;
-        %args<ttl> = %h<ttl> if %h<ttl>.defined;
-        %args<pollInterval> = %h<pollInterval> if %h<pollInterval>.defined;
+        %args<statusMessage> = $_ with %h<statusMessage>;
+        %args<createdAt> = $_ with %h<createdAt>;
+        %args<lastUpdatedAt> = $_ with %h<lastUpdatedAt>;
+        %args<ttl> = $_ with %h<ttl>;
+        %args<pollInterval> = $_ with %h<pollInterval>;
         self.new(|%args)
     }
 
@@ -434,10 +434,10 @@ class Tool is export {
 
     method from-hash(%h --> Tool) {
         my %args = name => %h<name>;
-        %args<description> = %h<description> if %h<description>.defined;
-        %args<title> = %h<title> if %h<title>.defined;
-        %args<inputSchema> = %h<inputSchema> if %h<inputSchema>.defined;
-        %args<outputSchema> = %h<outputSchema> if %h<outputSchema>.defined;
+        %args<description> = $_ with %h<description>;
+        %args<title> = $_ with %h<title>;
+        %args<inputSchema> = $_ with %h<inputSchema>;
+        %args<outputSchema> = $_ with %h<outputSchema>;
         %args<annotations> = %h<annotations> ?? ToolAnnotations.new(|%h<annotations>) !! ToolAnnotations;
         %args<execution> = TaskExecution.from-hash(%h<execution>) if %h<execution>.defined;
         my @icons = (%h<icons> // []).map({ IconDefinition.from-hash($_) });
@@ -480,9 +480,9 @@ class Resource is export {
 
     method from-hash(%h --> Resource) {
         my %args = uri => %h<uri>, name => %h<name>;
-        %args<description> = %h<description> if %h<description>.defined;
-        %args<title> = %h<title> if %h<title>.defined;
-        %args<mimeType> = %h<mimeType> if %h<mimeType>.defined;
+        %args<description> = $_ with %h<description>;
+        %args<title> = $_ with %h<title>;
+        %args<mimeType> = $_ with %h<mimeType>;
         my @icons = (%h<icons> // []).map({ IconDefinition.from-hash($_) });
         self.new(|%args, :@icons)
     }
@@ -510,9 +510,9 @@ class ResourceTemplate is export {
 
     method from-hash(%h --> ResourceTemplate) {
         my %args = uriTemplate => %h<uriTemplate>, name => %h<name>;
-        %args<description> = %h<description> if %h<description>.defined;
-        %args<title> = %h<title> if %h<title>.defined;
-        %args<mimeType> = %h<mimeType> if %h<mimeType>.defined;
+        %args<description> = $_ with %h<description>;
+        %args<title> = $_ with %h<title>;
+        %args<mimeType> = $_ with %h<mimeType>;
         my @icons = (%h<icons> // []).map({ IconDefinition.from-hash($_) });
         self.new(|%args, :@icons)
     }
@@ -567,8 +567,8 @@ class Prompt is export {
 
     method from-hash(%h --> Prompt) {
         my %args = name => %h<name>;
-        %args<description> = %h<description> if %h<description>.defined;
-        %args<title> = %h<title> if %h<title>.defined;
+        %args<description> = $_ with %h<description>;
+        %args<title> = $_ with %h<title>;
         my @icons = (%h<icons> // []).map({ IconDefinition.from-hash($_) });
         my @arguments = (%h<arguments> // []).map({ PromptArgument.new(|$_) });
         self.new(|%args, :@icons, :@arguments)
@@ -717,8 +717,8 @@ class CompletionResult is export {
     method from-hash(%h --> CompletionResult) {
         my @vals = |(%h<values> // []);
         my %args;
-        %args<total> = %h<total> if %h<total>.defined;
-        %args<hasMore> = %h<hasMore> if %h<hasMore>.defined;
+        %args<total> = $_ with %h<total>;
+        %args<hasMore> = $_ with %h<hasMore>;
         self.new(values => @vals, |%args)
     }
 }
@@ -738,8 +738,8 @@ class Extension is export {
 
     method from-hash(%h --> Extension) {
         my %args = name => %h<name>;
-        %args<version> = %h<version> if %h<version>.defined;
-        %args<settings> = %h<settings> if %h<settings>.defined;
+        %args<version> = $_ with %h<version>;
+        %args<settings> = $_ with %h<settings>;
         self.new(|%args)
     }
 }
@@ -774,7 +774,7 @@ class ServerCapabilities is export {
         %args<resources> = %h<resources> ?? ResourcesCapability.new(|%h<resources>) !! ResourcesCapability;
         %args<tools> = %h<tools> ?? ToolsCapability.new(|%h<tools>) !! ToolsCapability;
         %args<completions> = %h<completions> ?? CompletionsCapability.new !! CompletionsCapability;
-        %args<tasks> = %h<tasks> if %h<tasks>.defined;
+        %args<tasks> = $_ with %h<tasks>;
         self.new(|%args)
     }
 }
@@ -792,7 +792,7 @@ class Root is export {
 
     method from-hash(%h --> Root) {
         my %args = uri => %h<uri>;
-        %args<name> = %h<name> if %h<name>.defined;
+        %args<name> = $_ with %h<name>;
         self.new(|%args)
     }
 }
