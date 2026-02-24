@@ -406,10 +406,6 @@ class PKCE is export {
     }
 
     method !base64url(Blob $data --> Str) {
-        my $encoded = MIME::Base64.encode($data, :oneline);
-        $encoded = $encoded.subst('+', '-', :g);
-        $encoded = $encoded.subst('/', '_', :g);
-        $encoded = $encoded.subst('=', '', :g);
-        $encoded
+        MIME::Base64.encode($data, :oneline).trans('+' => '-', '/' => '_', '=' => '')
     }
 }
